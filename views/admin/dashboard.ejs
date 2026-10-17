@@ -1,0 +1,84 @@
+<%- include('../partials/layout-start') %>
+<% const t = totals; const maxDept = Math.max(1, ...byDept.map((d) => d.students)); %>
+<h1>Academic administration</h1>
+
+<section class="hero">
+  <svg class="deco" width="420" height="420" viewBox="0 0 420 420" aria-hidden="true"><circle cx="210" cy="210" r="90"/><circle cx="210" cy="210" r="140"/><circle cx="210" cy="210" r="190"/></svg>
+  <div class="hr">
+    <div style="flex:1 1 360px;position:relative">
+      <div class="name">PICT Academic Console</div>
+      <div class="sub">One database for academics, attendance and people, built from all group modules</div>
+      <div class="tags">
+        <span class="tag ok"><%= fmt.num(t.active_students) %> active students</span>
+        <span class="tag"><%= fmt.num(t.faculty) %> faculty</span>
+        <span class="tag"><%= t.departments %> departments</span>
+      </div>
+    </div>
+    <div class="termbox">
+      <div class="l"><div>Current session · <%= currentSession.session_name %></div>
+        <div><%= fmt.date(currentSession.start_date) %> → <%= fmt.date(currentSession.end_date) %><% if (progress) { %> · <%= progress.pct %>% complete<% } %></div></div>
+      <div class="steps">
+        <% const ci = sessions.findIndex((s) => s.is_current); sessions.forEach((s, i) => { %><div><i class="<%= i === ci ? 'now' : i < ci ? 'done' : '' %>"></i><b class="<%= i === ci ? 'now' : '' %>"><%= s.session_id.slice(2) %></b></div><% }) %>
+      </div>
+      <p>Exactly one current session — enforced by a unique index, switched by a stored procedure</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><small>Programs</small><span><%= t.programs %> · B.Tech + M.Tech</span></div>
+    <div><small>Courses</small><span><%= t.courses %> in catalog</span></div>
+    <div><small>Curriculum</small><span><%= t.placements %> placements</span></div>
+    <div><small>Prerequisites</small><span><%= t.prerequisites %> links · acyclic</span></div>
+    <div><small>Divisions this term</small><span><%= t.divisions %> + <%= t.offerings %> honors sections</span></div>
+  </div>
+</section>
+
+<section class="cards">
+  <div class="card">
+    <div class="hd"><h2>Students by status</h2></div>
+    <div class="note"><%= fmt.num(t.active_students + t.graduated_students + t.inactive_students) %> records</div>
+    <% const all = t.active_students + t.graduated_students + t.inactive_students; %>
+    <div class="stacked"><div style="width:<%= 100 * t.active_students / all %>%;background:var(--navy)"></div><div style="width:<%= 100 * t.graduated_students / all %>%;background:#3DC896"></div><div style="width:<%= 100 * t.inactive_students / all %>%;background:#E9A13B"></div></div>
+    <div class="legend">
+      <div><span class="sw" style="background:var(--navy)"></span>Active<span class="v"><%= fmt.num(t.active_students) %></span></div>
+      <div><span class="sw" style="background:#3DC896"></span>Graduated<span class="v"><%= fmt.num(t.graduated_students) %></span></div>
+      <div><span class="sw" style="background:#E9A13B"></span>Inactive<span class="v"><%= fmt.num(t.inactive_students) %></span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Active students by department</h2></div>
+    <div class="note">Current term enrolment</div>
+    <% for (const d of byDept) { %>
+      <div class="row"><span><%= d.dept_id %></span><div class="bar"><i style="width:<%= 100 * d.students / maxDept %>%"></i></div><b><%= fmt.num(d.students) %></b></div>
+    <% } %>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Teaching activity</h2></div>
+    <div class="note">Last 7 days of recorded attendance<% if (activity && activity.last_date) { %> (to <%= fmt.date(activity.last_date) %>)<% } %></div>
+    <div class="kpi"><%= fmt.num(activity ? activity.week_sessions : 0) %> <small>sessions held</small></div>
+    <div class="sm" style="margin-bottom:14px"><%= fmt.num(activity ? activity.week_cancelled : 0) %> cancelled</div>
+    <div class="hd" style="padding-top:12px;border-top:1px solid var(--line-2)"><h2>Recent activity</h2><a href="/admin/audit">Audit log</a></div>
+    <% if (!recent.length) { %><div class="empty">Nothing recorded yet.</div><% } %>
+    <% for (const r of recent.slice(0, 3)) { %>
+      <div class="item"><span class="dot <%= r.action.includes('FAIL') || r.action.includes('LOCK') ? 'r' : 'b' %>"></span>
+        <div class="t"><div><%= r.action.replaceAll('_', ' ').toLowerCase() %></div><div class="s"><%= r.login_id || 'unknown user' %> · <%= r.entity %><%= r.entity_id ? ' #' + r.entity_id : '' %></div></div>
+        <div class="w"><%= fmt.dateTime(r.occurred_at) %></div></div>
+    <% } %>
+  </div>
+</section>
+
+<section class="card t">
+    <div class="hd"><h2>Departments · <%= currentSession.session_name %></h2><a href="/admin/departments">Manage</a></div>
+    <div class="sc"><table>
+      <thead><tr><th>Dept</th><th class="num">Y1</th><th class="num">Y2</th><th class="num">Y3</th><th class="num">Y4</th><th class="num">Total</th><th>Avg attendance</th><th>Below 75% overall</th></tr></thead>
+      <tbody>
+        <% for (const d of byDept) { %>
+          <tr><td class="nw"><b><%= d.dept_id %></b> <span class="muted"><%= d.dept_name %></span></td>
+            <td class="num"><%= fmt.num(d.y1) %></td><td class="num"><%= fmt.num(d.y2) %></td><td class="num"><%= fmt.num(d.y3) %></td><td class="num"><%= fmt.num(d.y4) %></td>
+            <td class="num"><b><%= fmt.num(d.students) %></b></td>
+            <td><%- include('../partials/pct-bar', { value: d.avg_pct, digits: 1 }) %></td>
+            <td><a class="pill <%= d.shortage_students ? 'o' : 'g' %>" href="/admin/students?dept=<%= d.dept_id %>&status=Active"><%= fmt.num(d.shortage_students) %> students</a></td></tr>
+        <% } %>
+      </tbody>
+    </table></div>
+</section>
+<%- include('../partials/layout-end') %>

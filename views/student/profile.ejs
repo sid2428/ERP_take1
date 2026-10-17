@@ -1,0 +1,45 @@
+<%- include('../partials/layout-start') %>
+<% const p = profile; %>
+<div class="page-head"><h1>Profile</h1><span class="sub">Contact details can be updated here; ask the academic office to correct anything else.</span></div>
+<% if (errors) { %><div class="flash error"><ul class="errors"><% for (const e of errors) { %><li><%= e %></li><% } %></ul></div><% } %>
+<section class="card">
+  <div class="hd"><h2>Academic record</h2></div>
+  <dl class="dl" style="margin-top:10px">
+    <div><dt>Student number</dt><dd><%= p.student_number %></dd></div>
+    <div><dt>Admission number</dt><dd><%= p.admission_number %></dd></div>
+    <div><dt>Program</dt><dd><%= p.program_name %></dd></div>
+    <div><dt>Department</dt><dd><%= p.dept_name %></dd></div>
+    <div><dt>Admission</dt><dd><%= p.admission_type %> · <%= fmt.date(p.admission_date) %></dd></div>
+    <div><dt>Status</dt><dd><%= p.status %></dd></div>
+    <div><dt>Division · roll no.</dt><dd><%= p.division_code ? p.division_code + ' · ' + p.roll_no : '–' %></dd></div>
+    <div><dt>Lab batch</dt><dd><%= p.batch_code || '–' %></dd></div>
+  </dl>
+</section>
+<section class="card">
+  <div class="hd"><h2>Personal details</h2></div>
+  <dl class="dl" style="margin-top:10px">
+    <div><dt>Full name</dt><dd><%= [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' ') %></dd></div>
+    <div><dt>Date of birth</dt><dd><%= fmt.date(p.date_of_birth) %></dd></div>
+    <div><dt>Gender</dt><dd><%= p.gender %></dd></div>
+    <div><dt>Blood group</dt><dd><%= p.blood_group || '–' %></dd></div>
+    <div><dt>Category</dt><dd><%= p.category %></dd></div>
+    <div><dt>Nationality</dt><dd><%= p.nationality %></dd></div>
+    <div><dt>College e-mail</dt><dd><%= p.email %></dd></div>
+    <div><dt>Mobile</dt><dd><%= p.mobile_number %></dd></div>
+  </dl>
+</section>
+<section class="card">
+  <div class="hd"><h2>Contact details</h2></div>
+  <form method="post" action="/student/profile" style="margin-top:10px" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="form-grid">
+      <div class="field"><label for="pe">Personal e-mail</label><input id="pe" type="email" name="personal_email" value="<%= p.personal_email || '' %>" maxlength="120"></div>
+      <div class="field"><label for="am">Alternate mobile</label><input id="am" type="text" inputmode="numeric" name="alternate_mobile" value="<%= p.alternate_mobile || '' %>" maxlength="10"></div>
+      <div class="field"><label for="ds">District</label><input id="ds" type="text" name="district_name" value="<%= p.district_name || '' %>" maxlength="60"></div>
+      <div class="field"><label for="pc">PIN code</label><input id="pc" type="text" inputmode="numeric" name="pincode" value="<%= p.pincode || '' %>" maxlength="6"></div>
+    </div>
+    <div class="field"><label for="ad">Address</label><input id="ad" type="text" name="address" value="<%= p.address || '' %>" maxlength="200"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save contact details</button></div>
+  </form>
+</section>
+<%- include('../partials/layout-end') %>

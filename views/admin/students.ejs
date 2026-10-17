@@ -1,0 +1,29 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Students</h1><span class="sub"><%= fmt.num(pager.total) %> matching records</span></div>
+<form class="filters" method="get" action="/admin/students">
+  <label class="sr-only" for="q">Search</label>
+  <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Name, student no., admission no. or e-mail">
+  <select name="dept" data-autosubmit aria-label="Department"><option value="">All departments</option>
+    <% for (const d of depts) { %><option<%= filters.dept === d ? ' selected' : '' %>><%= d %></option><% } %></select>
+  <select name="year" data-autosubmit aria-label="Year"><option value="">All years</option>
+    <% for (const y of ['1', '2', '3', '4']) { %><option value="<%= y %>"<%= filters.year === y ? ' selected' : '' %>>Year <%= y %></option><% } %></select>
+  <select name="status" data-autosubmit aria-label="Status"><option value="">Any status</option>
+    <% for (const s of ['Active', 'Graduated', 'Inactive']) { %><option<%= filters.status === s ? ' selected' : '' %>><%= s %></option><% } %></select>
+  <button class="btn" type="submit">Search</button>
+  <% if (filters.q || filters.dept || filters.year || filters.status) { %><a class="btn link" href="/admin/students">Clear</a><% } %>
+</form>
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Student no.</th><th>Name</th><th>Dept</th><th>Division</th><th class="num">Roll</th><th>Admission</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="7" class="empty">No students match.</td></tr><% } %>
+      <% for (const s of rows) { %>
+        <tr class="click"><td class="code"><%= s.student_number %></td><td><a href="/admin/students/<%= s.student_id %>"><%= s.name %></a></td>
+          <td><%= s.dept_id %></td><td class="nw"><%= s.division_code || '–' %></td><td class="num"><%= s.roll_no ?? '–' %></td><td><%= s.admission_type %></td>
+          <td><span class="pill <%= s.status === 'Active' ? 'g' : s.status === 'Graduated' ? '' : 'n' %>"><%= s.status %></span></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</section>
+<%- include('../partials/layout-end') %>

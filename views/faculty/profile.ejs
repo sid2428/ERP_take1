@@ -1,0 +1,17 @@
+<%- include('../partials/layout-start') %>
+<% const f = profile; %>
+<div class="page-head"><h1>Profile</h1><span class="sub">Ask the academic office to update these details.</span></div>
+<section class="card">
+  <dl class="dl">
+    <div><dt>Name</dt><dd><%= f.first_name %> <%= f.last_name %></dd></div>
+    <div><dt>Faculty code</dt><dd><%= f.faculty_code %></dd></div>
+    <div><dt>Department</dt><dd><%= f.dept_name %><%= f.is_hod ? ' (HOD)' : '' %></dd></div>
+    <div><dt>Designation</dt><dd><%= f.designation %></dd></div>
+    <div><dt>Qualification</dt><dd><%= f.qualification %></dd></div>
+    <div><dt>Date of joining</dt><dd><%= fmt.date(f.date_of_joining) %></dd></div>
+    <div><dt>E-mail</dt><dd><%= f.email %></dd></div>
+    <div><dt>Mobile</dt><dd><%= f.mobile_number %></dd></div>
+    <div><dt>Status</dt><dd><%= f.status %></dd></div>
+  </dl>
+</section>
+<%- include('../partials/layout-end') %>

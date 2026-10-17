@@ -1,0 +1,30 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Curriculum</h1><span class="sub"><%= profile.program_name %> · <%= profile.program_id %> · <%= profile.total_credits_req %> credits to graduate</span></div>
+<section class="card">
+  <div class="hd"><h2>Semester map</h2><span class="muted">Shared courses are taught by another department; electives are grouped by basket</span></div>
+  <div class="sem-grid" style="margin-top:12px">
+    <% for (const s of semesters) { %>
+      <div class="sem-box<%= profile.semester === s.no ? ' now' : '' %>">
+        <div class="hd">Semester <%= fmt.roman(s.no) %><%= profile.semester === s.no ? ' · current' : '' %></div>
+        <ul>
+          <% if (!s.courses.length) { %><li class="cn">No courses placed</li><% } %>
+          <% for (const c of s.courses) { %>
+            <li><span class="cc"><%= c.course_code %>
+              <% if (c.elective_group) { %><span class="pill <%= c.elective_group === 'H1' ? 'v' : c.course_category === 'OPEN_ELECTIVE' ? 't' : 'o' %>" style="font-size:10px"><%= c.elective_group %></span><% } %>
+              <% if (c.placement_kind !== 'own') { %><span class="pill t" style="font-size:10px">shared</span><% } %></span>
+              <span class="cn"><%= c.course_name %> · <%= fmt.credits(c.credits) %> cr</span>
+              <% if (c.prerequisites) { %><span class="cn">Requires <%= c.prerequisites %></span><% } %></li>
+          <% } %>
+        </ul>
+      </div>
+    <% } %>
+  </div>
+</section>
+<section class="card">
+  <div class="legend" style="margin:0">
+    <div><span class="pill o">E1</span>Professional elective (department basket)</div>
+    <div><span class="pill v">H1</span>Honors course (optional, seat-limited)</div>
+    <div><span class="pill t">O1</span>Open elective offered by another department — choose one</div>
+  </div>
+</section>
+<%- include('../partials/layout-end') %>

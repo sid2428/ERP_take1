@@ -1,0 +1,28 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Audit log</h1><span class="sub">Every sign-in, approval and record change, with who made it and when</span></div>
+<form class="filters" method="get" action="/admin/audit">
+  <select name="action" data-autosubmit aria-label="Action"><option value="">All actions</option>
+    <% for (const a of actions) { %><option<%= filters.action === a ? ' selected' : '' %>><%= a %></option><% } %></select>
+  <label class="sr-only" for="u">User</label>
+  <input id="u" type="search" name="user" value="<%= filters.user %>" placeholder="Login ID">
+  <button class="btn" type="submit">Filter</button>
+  <% if (filters.action || filters.user) { %><a class="btn link" href="/admin/audit">Clear</a><% } %>
+</form>
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Details</th><th>IP</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="6" class="empty">No entries.</td></tr><% } %>
+      <% for (const r of rows) { %>
+        <tr><td class="nw"><%= fmt.dateTime(r.occurred_at) %></td>
+          <td class="nw"><%= r.login_id || '–' %><% if (r.role) { %> <span class="pill n"><%= r.role %></span><% } %></td>
+          <td><span class="pill <%= r.action.includes('FAIL') || r.action.includes('LOCK') || r.action.includes('DISABLE') ? 'r' : '' %>"><%= r.action %></span></td>
+          <td class="nw"><%= r.entity %><%= r.entity_id ? ' #' + r.entity_id : '' %></td>
+          <td class="muted" style="max-width:420px;overflow-wrap:anywhere;font-size:12.5px"><%= r.details ? JSON.stringify(r.details).slice(0, 220) : '' %></td>
+          <td class="code"><%= r.ip || '' %></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</section>
+<%- include('../partials/layout-end') %>

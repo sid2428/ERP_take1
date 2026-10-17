@@ -1,0 +1,17 @@
+<% const c = course; %>
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="form-grid">
+  <div class="field"><label for="cc">Course code</label><input id="cc" type="text" name="course_code" value="<%= c.course_code || '' %>" required maxlength="12" pattern="[A-Za-z0-9]{3,12}"></div>
+  <div class="field" style="grid-column:span 2"><label for="cn">Course name</label><input id="cn" type="text" name="course_name" value="<%= c.course_name || '' %>" required maxlength="120"></div>
+  <div class="field"><label for="dp">Home department</label>
+    <select id="dp" name="dept_id"><% for (const d of depts) { %><option value="<%= d.dept_id %>"<%= c.dept_id === d.dept_id ? ' selected' : '' %>><%= d.dept_id %> · <%= d.dept_name %></option><% } %></select></div>
+  <div class="field"><label for="ct">Type</label>
+    <select id="ct" name="course_type"><% for (const [v, l] of [['TH', 'Theory'], ['LAB', 'Lab'], ['TUT', 'Tutorial']]) { %><option value="<%= v %>"<%= c.course_type === v ? ' selected' : '' %>><%= l %></option><% } %></select></div>
+  <div class="field"><label for="cr">Credits</label><input id="cr" type="number" step="0.5" min="0.5" name="credits" value="<%= c.credits %>" required></div>
+  <div class="field"><label for="lh">Lecture h/week</label><input id="lh" type="number" min="0" max="10" name="lecture_hrs" value="<%= c.lecture_hrs %>" required></div>
+  <div class="field"><label for="th">Tutorial h/week</label><input id="th" type="number" min="0" max="10" name="tutorial_hrs" value="<%= c.tutorial_hrs %>" required></div>
+  <div class="field"><label for="ph">Practical h/week</label><input id="ph" type="number" min="0" max="10" name="practical_hrs" value="<%= c.practical_hrs %>" required></div>
+  <div class="field"><label for="sv">Syllabus version</label><input id="sv" type="text" name="syllabus_version" value="<%= c.syllabus_version %>" required maxlength="10"></div>
+  <div class="field"><label for="ma">Minimum attendance %</label><input id="ma" type="number" min="0" max="100" name="min_attendance_pct" value="<%= c.min_attendance_pct %>" required></div>
+</div>
+<label class="check"><input type="checkbox" name="is_active"<%= c.is_active ? ' checked' : '' %>> Course is active</label>

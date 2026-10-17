@@ -1,0 +1,58 @@
+<%- include('../partials/layout-start') %>
+<% const f = profile; const sel = (a, b) => (a === b ? ' selected' : ''); %>
+<div class="crumbs"><a href="/admin/faculty">Faculty</a> / <%= f.faculty_code %></div>
+<div class="page-head"><h1><%= f.first_name %> <%= f.last_name %></h1>
+  <div class="actions"><span class="pill <%= f.status === 'Active' ? 'g' : 'n' %>"><%= f.status %></span><% if (f.is_hod) { %><span class="pill">HOD</span><% } %>
+    <% if (!editing) { %><a class="btn" href="?edit=1">Edit record</a><% } %></div></div>
+
+<% if (editing) { %>
+<section class="card">
+  <div class="hd"><h2>Edit faculty record</h2></div>
+  <form method="post" action="/admin/faculty/<%= f.faculty_id %>" class="stack" style="margin-top:8px">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="form-grid">
+      <div class="field"><label for="fn">First name</label><input id="fn" type="text" name="first_name" value="<%= f.first_name %>" required></div>
+      <div class="field"><label for="ln">Last name</label><input id="ln" type="text" name="last_name" value="<%= f.last_name %>" required></div>
+      <div class="field"><label for="dg">Designation</label><select id="dg" name="designation"><% for (const g of ['Professor', 'Associate Professor', 'Assistant Professor']) { %><option<%= sel(g, f.designation) %>><%= g %></option><% } %></select></div>
+      <div class="field"><label for="ql">Qualification</label><input id="ql" type="text" name="qualification" value="<%= f.qualification %>" required></div>
+      <div class="field"><label for="em">E-mail</label><input id="em" type="email" name="email" value="<%= f.email %>" required></div>
+      <div class="field"><label for="mo">Mobile</label><input id="mo" type="text" name="mobile_number" value="<%= f.mobile_number %>" required maxlength="10"></div>
+      <div class="field"><label for="st">Employment status</label><select id="st" name="status"><% for (const g of ['Active', 'Inactive']) { %><option<%= sel(g, f.status) %>><%= g %></option><% } %></select>
+        <span class="hint">Inactive faculty cannot be given new classes (database trigger).</span></div>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Save record</button><a class="btn" href="/admin/faculty/<%= f.faculty_id %>">Cancel</a></div>
+  </form>
+</section>
+<% } %>
+
+<div class="grid2">
+  <div class="stack">
+    <section class="card">
+      <dl class="dl">
+        <div><dt>Faculty code</dt><dd><%= f.faculty_code %></dd></div>
+        <div><dt>Department</dt><dd><%= f.dept_name %></dd></div>
+        <div><dt>Designation</dt><dd><%= f.designation %></dd></div>
+        <div><dt>Qualification</dt><dd><%= f.qualification %></dd></div>
+        <div><dt>Joined</dt><dd><%= fmt.date(f.date_of_joining) %></dd></div>
+        <div><dt>E-mail</dt><dd><%= f.email %></dd></div>
+        <div><dt>Mobile</dt><dd><%= f.mobile_number %></dd></div>
+      </dl>
+    </section>
+    <section class="card t">
+      <div class="hd"><h2>Classes this term</h2><span class="muted"><%= classes.length %> assignments</span></div>
+      <div class="sc"><table>
+        <thead><tr><th>Code</th><th>Course</th><th>Class</th><th class="num">Students</th><th class="num">Held</th><th>Avg attendance</th></tr></thead>
+        <tbody>
+          <% if (!classes.length) { %><tr><td colspan="6" class="empty">No classes this term.</td></tr><% } %>
+          <% for (const c of classes) { %>
+            <tr><td class="code"><%= c.course_code %></td><td><%= c.course_name %></td><td class="nw"><%= c.batch_code || c.class_label %></td>
+              <td class="num"><%= c.students %></td><td class="num"><%= c.sessions_held %></td>
+              <td><%- include('../partials/pct-bar', { value: c.avg_pct, min: c.min_attendance_pct }) %></td></tr>
+          <% } %>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+  <%- include('account-card') %>
+</div>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,56 @@
+<%- include('../partials/layout-start') %>
+<% const p = program; %>
+<div class="crumbs"><a href="/admin/programs">Programs</a> / <%= p.program_id %></div>
+<div class="page-head"><h1><%= p.program_name %></h1><span class="sub"><%= p.program_id %> · <%= p.dept_name %> · <%= p.degree_level %> · <%= p.total_semesters %> semesters</span></div>
+
+<section class="card">
+  <div class="hd"><h2>Semester map</h2><span class="muted">Remove a placement with ×; the database rejects semesters beyond the program length</span></div>
+  <div class="sem-grid" style="margin-top:12px">
+    <% for (const s of semesters) { %>
+      <div class="sem-box"><div class="hd">Semester <%= fmt.roman(s.no) %></div>
+        <ul>
+          <% if (!s.courses.length) { %><li class="cn">No courses placed</li><% } %>
+          <% for (const c of s.courses) { %>
+            <li><span class="cc"><a href="/admin/courses/<%= c.course_id %>"><%= c.course_code %></a>
+              <% if (c.elective_group) { %><span class="pill <%= c.elective_group === 'H1' ? 'v' : c.course_category === 'OPEN_ELECTIVE' ? 't' : 'o' %>" style="font-size:10px"><%= c.elective_group %></span><% } %>
+              <form class="inline" method="post" action="/admin/programs/<%= p.program_id %>/curriculum/<%= c.course_id %>/delete" data-confirm="Remove <%= c.course_code %> from semester <%= s.no %>?">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn link" type="submit" title="Remove" aria-label="Remove <%= c.course_code %>">×</button></form></span>
+              <span class="cn"><%= c.course_name %> · <%= fmt.credits(c.credits) %> cr</span></li>
+          <% } %>
+        </ul></div>
+    <% } %>
+  </div>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <div class="hd"><h2>Place a course</h2></div>
+    <form method="post" action="/admin/programs/<%= p.program_id %>/curriculum" class="stack" style="margin-top:8px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1"><label for="cid">Course</label>
+          <select id="cid" name="course_id" required><option value="">Choose a course…</option>
+            <% for (const c of courses) { %><option value="<%= c.course_id %>"><%= c.course_code %> · <%= c.course_name %></option><% } %></select></div>
+        <div class="field"><label for="sem">Semester</label><input id="sem" type="number" name="semester_no" min="1" max="12" value="1" required></div>
+        <div class="field"><label for="cat">Category</label>
+          <select id="cat" name="course_category"><option value="CORE">Core</option><option value="PROF_ELECTIVE">Professional elective</option><option value="OPEN_ELECTIVE">Open elective</option></select></div>
+        <div class="field"><label for="eg">Elective basket</label><input id="eg" type="text" name="elective_group" maxlength="4" placeholder="E1, H1, O1 — blank for core"></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Add to curriculum</button></div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="hd"><h2>Program settings</h2></div>
+    <form method="post" action="/admin/programs/<%= p.program_id %>" class="stack" style="margin-top:8px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field"><label for="pn">Name</label><input id="pn" type="text" name="program_name" value="<%= p.program_name %>" required></div>
+      <div class="form-grid">
+        <div class="field"><label for="cr">Credits to graduate</label><input id="cr" type="number" step="0.5" name="total_credits_req" value="<%= p.total_credits_req %>" required></div>
+        <div class="field"><label for="in">Intake capacity</label><input id="in" type="number" name="intake_capacity" value="<%= p.intake_capacity %>" required></div>
+      </div>
+      <label class="check"><input type="checkbox" name="is_active"<%= p.is_active ? ' checked' : '' %>> Program is active</label>
+      <div class="actions"><button class="btn primary" type="submit">Save</button></div>
+    </form>
+  </section>
+</div>
+<%- include('../partials/layout-end') %>

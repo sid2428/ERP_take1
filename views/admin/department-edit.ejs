@@ -1,0 +1,20 @@
+<%- include('../partials/layout-start') %>
+<div class="crumbs"><a href="/admin/departments">Departments</a> / <%= dept.dept_id %></div>
+<div class="page-head"><h1>Edit <%= dept.dept_name %></h1></div>
+<section class="card" style="max-width:760px">
+  <form method="post" action="/admin/departments/<%= dept.dept_id %>" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="form-grid">
+      <div class="field"><label for="dn">Department name</label><input id="dn" type="text" name="dept_name" value="<%= dept.dept_name %>" required maxlength="100"></div>
+      <div class="field"><label for="hod">Head of department</label>
+        <select id="hod" name="hod_faculty_id" required>
+          <% for (const f of faculty) { %><option value="<%= f.faculty_id %>"<%= f.faculty_id === dept.hod_faculty_id ? ' selected' : '' %>><%= f.faculty_code %> · <%= f.name %> (<%= f.designation %>)</option><% } %>
+        </select></div>
+      <div class="field"><label for="or">Office room</label><input id="or" type="text" name="office_room" value="<%= dept.office_room || '' %>" maxlength="20"></div>
+      <div class="field"><label for="ce">Contact e-mail</label><input id="ce" type="email" name="contact_email" value="<%= dept.contact_email || '' %>" maxlength="100"></div>
+    </div>
+    <label class="check"><input type="checkbox" name="is_active"<%= dept.is_active ? ' checked' : '' %>> Department is active</label>
+    <div class="actions"><button class="btn primary" type="submit">Save changes</button><a class="btn" href="/admin/departments">Cancel</a></div>
+  </form>
+</section>
+<%- include('../partials/layout-end') %>

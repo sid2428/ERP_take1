@@ -1,0 +1,33 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Course catalog</h1><a class="btn primary" href="/admin/courses/new">New course</a></div>
+<form class="filters" method="get" action="/admin/courses">
+  <label class="sr-only" for="q">Search</label>
+  <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Code or name">
+  <select name="dept" data-autosubmit aria-label="Department"><option value="">All departments</option>
+    <% for (const d of depts) { %><option value="<%= d.dept_id %>"<%= filters.dept === d.dept_id ? ' selected' : '' %>><%= d.dept_id %></option><% } %></select>
+  <select name="type" data-autosubmit aria-label="Type"><option value="">All types</option>
+    <% for (const [v, l] of [['TH', 'Theory'], ['LAB', 'Lab'], ['TUT', 'Tutorial']]) { %><option value="<%= v %>"<%= filters.type === v ? ' selected' : '' %>><%= l %></option><% } %></select>
+  <button class="btn" type="submit">Filter</button>
+  <% if (filters.q || filters.dept || filters.type) { %><a class="btn link" href="/admin/courses">Clear</a><% } %>
+</form>
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Code</th><th>Course</th><th>Dept</th><th>Type</th><th>L-T-P</th><th class="num">Cr</th><th class="num">Prereqs</th><th class="num">Unlocks</th><th class="num">Programs</th><th>Regulation</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="10" class="empty">No courses match.</td></tr><% } %>
+      <% for (const c of rows) { %>
+        <tr class="click">
+          <td class="code"><%= c.course_code %></td>
+          <td><a href="/admin/courses/<%= c.course_id %>"><%= c.course_name %></a><% if (c.in_programs > 1) { %> <span class="pill t">shared ×<%= c.in_programs %></span><% } %><% if (!c.is_active) { %> <span class="pill n">inactive</span><% } %></td>
+          <td><%= c.dept_id %></td>
+          <td><span class="pill<%= c.course_type === 'LAB' ? ' g' : c.course_type === 'TUT' ? ' o' : '' %>"><%= c.course_type %></span></td>
+          <td class="nw"><%= c.l_t_p %></td><td class="num"><%= fmt.credits(c.credits) %></td>
+          <td class="num"><%= c.prereqs_needed %></td><td class="num"><%= c.unlocks %></td><td class="num"><%= c.in_programs %></td>
+          <td><%= c.syllabus_version %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</section>
+<%- include('../partials/layout-end') %>

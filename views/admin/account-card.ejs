@@ -1,0 +1,19 @@
+<section class="card">
+  <div class="hd"><h2>Login account</h2></div>
+  <% if (!account) { %><div class="empty">No account exists for this person.</div><% } else { const a = account; const locked = a.locked_until && new Date(a.locked_until) > new Date(); %>
+    <dl class="dl" style="margin:10px 0 14px">
+      <div><dt>Login ID</dt><dd><%= a.login_id %></dd></div>
+      <div><dt>Status</dt><dd><span class="pill <%= !a.is_active ? 'n' : locked ? 'r' : 'g' %>"><%= !a.is_active ? 'Disabled' : locked ? 'Locked' : 'Active' %></span>
+        <% if (a.must_change_password) { %> <span class="pill o">must change password</span><% } %></dd></div>
+      <div><dt>Last sign-in</dt><dd><%= fmt.dateTime(a.last_login_at) %></dd></div>
+      <div><dt>Password changed</dt><dd><%= fmt.dateTime(a.password_changed_at) %></dd></div>
+    </dl>
+    <div class="actions">
+      <form method="post" action="/admin/users/<%= a.user_id %>/reset-password" data-confirm="Issue a temporary password for <%= a.login_id %>? Their current password stops working.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small" type="submit">Reset password</button></form>
+      <% if (locked) { %><form method="post" action="/admin/users/<%= a.user_id %>/unlock"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small" type="submit">Unlock</button></form><% } %>
+      <form method="post" action="/admin/users/<%= a.user_id %>/toggle-active" data-confirm="<%= a.is_active ? 'Disable' : 'Enable' %> sign-in for <%= a.login_id %>?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small<%= a.is_active ? ' danger' : '' %>" type="submit"><%= a.is_active ? 'Disable account' : 'Enable account' %></button></form>
+    </div>
+  <% } %>
+</section>

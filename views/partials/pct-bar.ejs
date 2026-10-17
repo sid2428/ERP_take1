@@ -1,0 +1,4 @@
+<% /* attendance percentage with a bar; colour reflects the minimum (default 75%) */
+  const min = locals.min || 75;
+  const cls = value === null || value === undefined ? '' : value < min ? 'bad' : value < min + 5 ? 'warn' : '';
+%><div class="pc"><%= fmt.pct(value, locals.digits || 0) %><div class="bar"><% if (value !== null && value !== undefined) { %><i class="<%= cls %>" style="width:<%= Math.min(100, value) %>%"></i><% } %></div></div>

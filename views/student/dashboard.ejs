@@ -1,0 +1,129 @@
+<%- include('../partials/layout-start') %>
+<%
+  const p = profile;
+  const fullName = [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' ');
+  const enrolled = p.semester !== null;
+  const overallPct = overall ? overall.overall_pct : null;
+%>
+<h1>Dashboard</h1>
+
+<section class="hero">
+  <svg class="deco" width="420" height="420" viewBox="0 0 420 420" aria-hidden="true"><circle cx="210" cy="210" r="90"/><circle cx="210" cy="210" r="140"/><circle cx="210" cy="210" r="190"/></svg>
+  <div class="hr">
+    <div class="who">
+      <div class="big"><%= fmt.initials(p.first_name + ' ' + p.last_name) %></div>
+      <div style="min-width:0">
+        <div class="name"><%= fullName %></div>
+        <div class="sub"><%= p.program_name %> · <%= p.dept_name %></div>
+        <div class="tags">
+          <span class="tag<%= p.status === 'Active' ? ' ok' : '' %>"><%= p.status %></span>
+          <span class="tag"><%= p.admission_type %> admission</span>
+          <% if (shortage.length) { %><span class="tag warn">Attendance shortage in <%= shortage.length %> course<%= shortage.length > 1 ? 's' : '' %></span><% } %>
+        </div>
+        <div class="kv">
+          <div><small>Student no.</small><span><%= p.student_number %></span></div>
+          <div><small>Admission no.</small><span><%= p.admission_number %></span></div>
+          <% if (enrolled) { %><div><small>Division · roll</small><span><%= p.division_code %> · <%= p.roll_no %></span></div><% } %>
+        </div>
+      </div>
+    </div>
+    <div class="termbox">
+      <% if (enrolled) { %>
+        <div class="l"><div>Semester <%= fmt.roman(p.semester) %> of <%= p.total_semesters %></div>
+          <div><%= currentSession.session_name %><% if (progress) { %> · <%= progress.pct %>% complete · <%= progress.daysLeft %> days left<% } %></div></div>
+        <div class="steps">
+          <% for (let s = 1; s <= p.total_semesters; s++) { %>
+            <div><i class="<%= s < p.semester ? 'done' : s === p.semester ? 'now' : '' %>"></i><b class="<%= s === p.semester ? 'now' : '' %>"><%= fmt.roman(s) %></b></div>
+          <% } %>
+        </div>
+        <p><%= fmt.date(currentSession.start_date) %> → <%= fmt.date(currentSession.end_date) %> · <%= p.total_credits_req %> credits to graduate</p>
+      <% } else { %>
+        <div class="l"><div>Not enrolled this term</div><div><%= currentSession ? currentSession.session_name : '' %></div></div>
+        <p>Your status is <%= p.status %>. Your records and documents remain available.</p>
+      <% } %>
+    </div>
+  </div>
+  <div class="facts">
+    <div><small>Overall attendance</small><span><%= fmt.pct(overallPct, 1) %></span></div>
+    <div><small>Courses this term</small><span><%= courses.length %></span></div>
+    <div><small>Lab batch</small><span><%= p.batch_code || '–' %></span></div>
+    <div><small>Credits this term</small><span><%= fmt.credits(credits.total) %></span></div>
+  </div>
+</section>
+
+<% if (enrolled) { %>
+<section class="cards">
+  <div class="card">
+    <div class="hd"><h2>Overall attendance</h2></div>
+    <div class="note">Orange tick marks the 75% minimum</div>
+    <div class="kpi"><%= fmt.pct(overallPct, 1) %></div>
+    <div class="bar"><% if (overallPct !== null) { %><i class="<%= overallPct < 75 ? 'bad' : overallPct < 80 ? 'warn' : '' %>" style="width:<%= overallPct %>%"></i><% } %><u style="left:75%"></u></div>
+    <div class="sm"><% if (overallPct === null) { %>No sessions recorded yet<% } else if (overallPct >= 75) { %><%= (overallPct - 75).toFixed(1) %> points above minimum · <%= overall.attended %> of <%= overall.total_sessions %> sessions<% } else { %><%= (75 - overallPct).toFixed(1) %> points below minimum<% } %></div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Attendance by course</h2></div>
+    <div class="note"><%= shortage.length ? shortage.length + ' course' + (shortage.length > 1 ? 's' : '') + ' below the minimum' : 'Every course is at or above the minimum' %></div>
+    <% for (const c of courses) { %>
+      <div class="row" title="<%= c.course_code %> · <%= c.course_name %>"><span><%= c.course_name %></span>
+        <div class="bar"><% if (c.attendance_pct !== null) { %><i class="<%= c.attendance_pct < c.min_attendance_pct ? 'bad' : '' %>" style="width:<%= c.attendance_pct %>%"></i><% } %><u style="left:<%= c.min_attendance_pct %>%"></u></div>
+        <b><%= fmt.pct(c.attendance_pct) %></b></div>
+    <% } %>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Credit load</h2></div>
+    <div class="note"><%= courses.length %> courses this semester</div>
+    <div class="kpi"><%= fmt.credits(credits.total) %> <small>credits</small></div>
+    <% if (credits.total > 0) { %>
+    <div class="stacked" style="margin-top:12px"><div style="width:<%= 100 * credits.theory / credits.total %>%;background:var(--navy)"></div><div style="width:<%= 100 * credits.lab / credits.total %>%;background:#3DC896"></div></div>
+    <% } %>
+    <div class="legend">
+      <div><span class="sw" style="background:var(--navy)"></span>Theory &amp; tutorial<span class="v"><%= fmt.credits(credits.theory) %></span></div>
+      <div><span class="sw" style="background:#3DC896"></span>Lab<span class="v"><%= fmt.credits(credits.lab) %></span></div>
+    </div>
+  </div>
+</section>
+
+<div class="grid2">
+  <section class="card t">
+    <div class="hd"><h2>Courses · <%= currentSession.session_name %></h2><a href="/student/curriculum">Full curriculum</a></div>
+    <div class="sc"><table>
+      <thead><tr><th>Code</th><th>Course</th><th>Type</th><th>L-T-P</th><th class="num">Cr</th><th>Faculty</th><th>Attendance</th></tr></thead>
+      <tbody>
+      <% for (const c of courses) { %>
+        <tr>
+          <td class="code"><%= c.course_code %></td>
+          <td><%= c.course_name %><% if (c.is_honors) { %> <span class="pill v">Honors</span><% } %></td>
+          <td><span class="pill<%= c.course_type === 'LAB' ? ' g' : c.course_type === 'TUT' ? ' o' : '' %>"><%= { TH: 'Theory', LAB: 'Lab', TUT: 'Tutorial' }[c.course_type] %></span></td>
+          <td class="nw"><%= fmt.ltp(c.lecture_hrs, c.tutorial_hrs, c.practical_hrs) %></td>
+          <td class="num"><%= fmt.credits(c.credits) %></td>
+          <td class="nw"><%= c.faculty_name || '–' %></td>
+          <td><%- include('../partials/pct-bar', { value: c.attendance_pct, min: c.min_attendance_pct }) %></td>
+        </tr>
+      <% } %>
+      </tbody>
+      <tfoot><tr><td colspan="4">Total this semester</td><td class="num"><%= fmt.credits(credits.total) %></td><td colspan="2">Minimum attendance 75%</td></tr></tfoot>
+    </table></div>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <div class="hd"><h2>Needs attention</h2></div>
+      <% if (shortage.length) { for (const c of shortage) { %>
+        <div class="item"><span class="dot r"></span><div class="t"><div><%= c.course_code %> at <%= fmt.pct(c.attendance_pct, 1) %></div>
+          <div class="s">Attend the next <%= c.sessions_to_recover %> session<%= c.sessions_to_recover === 1 ? '' : 's' %> in a row to reach <%= c.min_attendance_pct %>%</div></div></div>
+      <% } } else { %>
+        <div class="item"><span class="dot g"></span><div class="t"><div>You're all set</div><div class="s">No attendance shortage this term</div></div></div>
+      <% } %>
+    </section>
+    <section class="card">
+      <div class="hd"><h2><%= classDay && classDay.offset === 0 ? 'Today' : 'Next class day' %></h2>
+        <span class="muted"><%= classDay ? fmt.day(classDay.day) : '' %></span></div>
+      <% if (!classDay) { %><div class="empty">No classes scheduled.</div><% } else { for (const t of classDay.rows) { %>
+        <div class="tt-slot"><div class="tt-time"><b><%= fmt.time(t.start_time) %></b><%= fmt.time(t.end_time) %></div>
+          <div class="t"><div><%= t.course_name %></div><div class="s"><%= t.session_type %> · <%= t.room_code %> · <%= t.faculty_name %></div></div></div>
+      <% } } %>
+    </section>
+  </div>
+</div>
+<% } %>
+<%- include('../partials/layout-end') %>

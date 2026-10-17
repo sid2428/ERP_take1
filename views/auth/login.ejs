@@ -1,0 +1,28 @@
+<%- include('../partials/head') %>
+<body>
+<main class="auth">
+  <form class="auth-card" method="post" action="/login" novalidate>
+    <div class="brand"><div class="logo">P</div><div>PICT ERP Portal<small>Students · Faculty · Academic office</small></div></div>
+    <div>
+      <h1>Sign in</h1>
+      <p class="muted" style="margin:6px 0 0">Use your student number, faculty code or admin username.</p>
+    </div>
+    <% if (error) { %><div class="flash error" role="alert"><%= error %></div><% } %>
+    <% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.text %></div><% } %>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="next" value="<%= next %>">
+    <div class="field">
+      <label for="login_id">Login ID</label>
+      <input id="login_id" name="login_id" type="text" value="<%= loginId %>" autocomplete="username" autocapitalize="characters" required autofocus placeholder="e.g. STU202600142">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <span class="hint">First sign-in: your date of birth (or date of joining) as DDMMYYYY.</span>
+    </div>
+    <button class="btn primary" type="submit">Sign in</button>
+    <p class="auth-note">Academic project · synthetic data · not an official PICT system</p>
+  </form>
+</main>
+</body>
+</html>

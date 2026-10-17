@@ -1,0 +1,18 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Programs &amp; curriculum</h1><span class="sub">Semester-by-semester course placements (G2 curriculum, the source of truth)</span></div>
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Program</th><th>Name</th><th>Dept</th><th>Level</th><th class="num">Semesters</th><th class="num">Credits</th><th class="num">Intake</th><th class="num">Placements</th><th class="num">Active students</th></tr></thead>
+    <tbody>
+      <% for (const p of rows) { %>
+        <tr class="click">
+          <td><a href="/admin/programs/<%= p.program_id %>"><b><%= p.program_id %></b></a></td><td><%= p.program_name %><% if (!p.is_active) { %> <span class="pill n">inactive</span><% } %></td>
+          <td><%= p.dept_id %></td><td><span class="pill<%= p.degree_level === 'PG' ? ' v' : '' %>"><%= p.degree_level %></span></td>
+          <td class="num"><%= p.total_semesters %></td><td class="num"><%= p.total_credits_req %></td><td class="num"><%= p.intake_capacity %></td>
+          <td class="num"><%= p.placements %></td><td class="num"><%= fmt.num(p.students) %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,77 @@
+<%- include('../partials/layout-start') %>
+<% const p = profile; const sel = (a, b) => (a === b ? ' selected' : ''); %>
+<div class="crumbs"><a href="/admin/students">Students</a> / <%= p.student_number %></div>
+<div class="page-head"><h1><%= [p.first_name, p.middle_name, p.last_name].filter(Boolean).join(' ') %></h1>
+  <div class="actions"><span class="pill <%= p.status === 'Active' ? 'g' : 'n' %>"><%= p.status %></span>
+    <% if (!editing) { %><a class="btn" href="?edit=1">Edit record</a><% } %></div></div>
+
+<% if (editing) { %>
+<section class="card">
+  <div class="hd"><h2>Edit student record</h2></div>
+  <form method="post" action="/admin/students/<%= p.student_id %>" class="stack" style="margin-top:8px">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="form-grid">
+      <div class="field"><label for="fn">First name</label><input id="fn" type="text" name="first_name" value="<%= p.first_name %>" required></div>
+      <div class="field"><label for="mn">Middle name</label><input id="mn" type="text" name="middle_name" value="<%= p.middle_name || '' %>"></div>
+      <div class="field"><label for="ln">Last name</label><input id="ln" type="text" name="last_name" value="<%= p.last_name %>" required></div>
+      <div class="field"><label for="db">Date of birth</label><input id="db" type="date" name="date_of_birth" value="<%= p.date_of_birth %>" required></div>
+      <div class="field"><label for="gd">Gender</label><select id="gd" name="gender"><% for (const g of ['Male', 'Female', 'Other']) { %><option<%= sel(g, p.gender) %>><%= g %></option><% } %></select></div>
+      <div class="field"><label for="bg">Blood group</label><select id="bg" name="blood_group"><option value="">–</option><% for (const g of ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']) { %><option<%= sel(g, p.blood_group) %>><%= g %></option><% } %></select></div>
+      <div class="field"><label for="ct">Category</label><select id="ct" name="category"><% for (const g of ['General', 'OBC', 'SC', 'ST', 'EWS']) { %><option<%= sel(g, p.category) %>><%= g %></option><% } %></select></div>
+      <div class="field"><label for="st">Status</label><select id="st" name="status"><% for (const g of ['Active', 'Graduated', 'Inactive']) { %><option<%= sel(g, p.status) %>><%= g %></option><% } %></select></div>
+      <div class="field"><label for="em">College e-mail</label><input id="em" type="email" name="email" value="<%= p.email %>" required></div>
+      <div class="field"><label for="pe">Personal e-mail</label><input id="pe" type="email" name="personal_email" value="<%= p.personal_email || '' %>"></div>
+      <div class="field"><label for="mo">Mobile</label><input id="mo" type="text" name="mobile_number" value="<%= p.mobile_number %>" required maxlength="10"></div>
+      <div class="field"><label for="am">Alternate mobile</label><input id="am" type="text" name="alternate_mobile" value="<%= p.alternate_mobile || '' %>" maxlength="10"></div>
+      <div class="field"><label for="ds">District</label><input id="ds" type="text" name="district_name" value="<%= p.district_name || '' %>"></div>
+      <div class="field"><label for="pc">PIN code</label><input id="pc" type="text" name="pincode" value="<%= p.pincode || '' %>" maxlength="6"></div>
+    </div>
+    <div class="field"><label for="ad">Address</label><input id="ad" type="text" name="address" value="<%= p.address || '' %>"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save record</button><a class="btn" href="/admin/students/<%= p.student_id %>">Cancel</a></div>
+  </form>
+</section>
+<% } %>
+
+<div class="grid2">
+  <div class="stack">
+    <section class="card">
+      <div class="hd"><h2>Academic record</h2></div>
+      <dl class="dl" style="margin-top:10px">
+        <div><dt>Student number</dt><dd><%= p.student_number %></dd></div>
+        <div><dt>Admission number</dt><dd><%= p.admission_number %></dd></div>
+        <div><dt>Program</dt><dd><a href="/admin/programs/<%= p.program_id %>"><%= p.program_name %></a></dd></div>
+        <div><dt>Admission</dt><dd><%= p.admission_type %> · <%= fmt.date(p.admission_date) %></dd></div>
+        <div><dt>Division · roll</dt><dd><% if (p.division_id) { %><a href="/admin/sections/divisions/<%= p.division_id %>"><%= p.division_code %></a> · <%= p.roll_no %><% } else { %>–<% } %></dd></div>
+        <div><dt>Lab batch · semester</dt><dd><%= p.batch_code || '–' %> · <%= p.semester ? fmt.roman(p.semester) : '–' %></dd></div>
+      </dl>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Personal &amp; contact</h2></div>
+      <dl class="dl" style="margin-top:10px">
+        <div><dt>Date of birth</dt><dd><%= fmt.date(p.date_of_birth) %></dd></div>
+        <div><dt>Gender · blood group</dt><dd><%= p.gender %> · <%= p.blood_group || '–' %></dd></div>
+        <div><dt>Category</dt><dd><%= p.category %></dd></div>
+        <div><dt>College e-mail</dt><dd><%= p.email %></dd></div>
+        <div><dt>Personal e-mail</dt><dd><%= p.personal_email || '–' %></dd></div>
+        <div><dt>Mobile · alternate</dt><dd><%= p.mobile_number %> · <%= p.alternate_mobile || '–' %></dd></div>
+        <div style="grid-column:1/-1"><dt>Address</dt><dd><%= [p.address, p.district_name, p.pincode].filter(Boolean).join(', ') || '–' %></dd></div>
+      </dl>
+    </section>
+    <section class="card t">
+      <div class="hd"><h2>Courses this term</h2></div>
+      <div class="sc"><table>
+        <thead><tr><th>Code</th><th>Course</th><th>Faculty</th><th class="num">Attended</th><th>Attendance</th></tr></thead>
+        <tbody>
+          <% if (!courses.length) { %><tr><td colspan="5" class="empty">Not enrolled this term.</td></tr><% } %>
+          <% for (const c of courses) { %>
+            <tr><td class="code"><a href="/admin/courses/<%= c.course_id %>"><%= c.course_code %></a></td><td><%= c.course_name %></td><td class="nw"><%= c.faculty_name || '–' %></td>
+              <td class="num"><%= c.total_sessions === null ? '–' : c.attended + ' / ' + c.total_sessions %></td>
+              <td><%- include('../partials/pct-bar', { value: c.attendance_pct, min: c.min_attendance_pct, digits: 1 }) %></td></tr>
+          <% } %>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+  <%- include('account-card') %>
+</div>
+<%- include('../partials/layout-end') %>

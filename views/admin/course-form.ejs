@@ -1,0 +1,10 @@
+<%- include('../partials/layout-start') %>
+<div class="crumbs"><a href="/admin/courses">Course catalog</a> / New</div>
+<div class="page-head"><h1>New course</h1></div>
+<section class="card" style="max-width:900px">
+  <form method="post" action="/admin/courses" class="stack">
+    <%- include('course-fields') %>
+    <div class="actions"><button class="btn primary" type="submit">Create course</button><a class="btn" href="/admin/courses">Cancel</a></div>
+  </form>
+</section>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,37 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Academic sessions</h1><span class="sub">Only one session can be current; switching runs the set_current_session procedure</span></div>
+<div class="grid2">
+  <section class="card t">
+    <div class="sc"><table>
+      <thead><tr><th>Session</th><th>Name</th><th>Dates</th><th class="num">Enrollments</th><th class="num">Classes</th><th>Status</th></tr></thead>
+      <tbody>
+        <% for (const s of rows) { %>
+          <tr>
+            <td><b><%= s.session_id %></b></td><td><%= s.session_name %></td>
+            <td class="nw"><%= fmt.date(s.start_date) %> – <%= fmt.date(s.end_date) %></td>
+            <td class="num"><%= fmt.num(s.enrollments) %></td><td class="num"><%= fmt.num(s.assignments) %></td>
+            <td><% if (s.is_current) { %><span class="pill g">Current</span><% } else { %>
+              <form method="post" action="/admin/sessions/<%= s.session_id %>/current" class="actions" data-confirm="Make <%= s.session_id %> the current session? Dashboards will switch to that term.">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="text" name="confirm" placeholder="type <%= s.session_id %>" aria-label="Type <%= s.session_id %> to confirm" style="width:140px;height:30px">
+                <button class="btn small" type="submit">Make current</button></form><% } %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table></div>
+  </section>
+  <section class="card">
+    <div class="hd"><h2>New session</h2></div>
+    <form method="post" action="/admin/sessions" class="stack" style="margin-top:8px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="form-grid">
+        <div class="field"><label for="sy">Academic year starts</label><input id="sy" type="number" name="start_year" min="2000" max="2100" value="2027" required></div>
+        <div class="field"><label for="tt">Term</label><select id="tt" name="term_type"><option value="ODD">Odd</option><option value="EVEN">Even</option></select></div>
+        <div class="field"><label for="sd">Start date</label><input id="sd" type="date" name="start_date" required></div>
+        <div class="field"><label for="ed">End date</label><input id="ed" type="date" name="end_date" required></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Create session</button></div>
+    </form>
+  </section>
+</div>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,30 @@
+<%- include('../partials/layout-start') %>
+<% const d = division; %>
+<div class="crumbs"><a href="/admin/sections">Divisions &amp; sections</a> / <%= d.division_code %></div>
+<div class="page-head"><h1>Division <%= d.division_code %></h1><span class="sub"><%= d.dept_name %> · year <%= d.year_of_study %> · semester <%= d.semester %> · <%= d.strength %> students</span></div>
+<section class="card t">
+  <div class="hd"><h2>Teaching assignments</h2></div>
+  <div class="sc"><table>
+    <thead><tr><th>Code</th><th>Course</th><th>Type</th><th>Batch</th><th class="num">Per week</th><th>Faculty</th></tr></thead>
+    <tbody>
+      <% for (const t of teaching) { %>
+        <tr><td class="code"><%= t.course_code %></td><td><%= t.course_name %></td>
+          <td><span class="pill<%= t.session_type === 'Lab' ? ' g' : '' %>"><%= t.session_type %></span></td><td><%= t.batch_code || 'whole division' %></td>
+          <td class="num"><%= t.weekly_sessions %></td><td class="nw"><a href="/admin/faculty/<%= t.faculty_id %>"><%= t.faculty_name %></a> <span class="code"><%= t.faculty_code %></span></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<section class="card t">
+  <div class="hd"><h2>Students</h2></div>
+  <div class="sc"><table>
+    <thead><tr><th class="num">Roll</th><th>Student no.</th><th>Name</th><th>Batch</th><th>Overall attendance</th></tr></thead>
+    <tbody>
+      <% for (const s of students) { %>
+        <tr><td class="num"><%= s.roll_no %></td><td class="code"><%= s.student_number %></td><td><a href="/admin/students/<%= s.student_id %>"><%= s.name %></a></td>
+          <td><%= s.batch_code %></td><td><%- include('../partials/pct-bar', { value: s.overall_pct, digits: 1 }) %></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

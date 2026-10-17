@@ -1,0 +1,32 @@
+<%- include('../partials/layout-start') %>
+<% const p = profile; %>
+<div class="crumbs"><a href="/faculty/classes">My classes</a> / <%= p.student_number %></div>
+<div class="page-head"><h1><%= p.first_name %> <%= p.last_name %></h1><span class="sub"><%= p.student_number %> · <%= p.program_name %></span></div>
+<section class="card">
+  <div class="hd"><h2>Academic details</h2><span class="muted">Faculty see academic information for students in their classes only</span></div>
+  <dl class="dl" style="margin-top:10px">
+    <div><dt>Division · roll no.</dt><dd><%= p.division_code ? p.division_code + ' · ' + p.roll_no : '–' %></dd></div>
+    <div><dt>Lab batch</dt><dd><%= p.batch_code || '–' %></dd></div>
+    <div><dt>Semester</dt><dd><%= p.semester ? fmt.roman(p.semester) : '–' %></dd></div>
+    <div><dt>Admission</dt><dd><%= p.admission_type %> · <%= p.admission_year %></dd></div>
+    <div><dt>College e-mail</dt><dd><%= p.email %></dd></div>
+    <div><dt>Status</dt><dd><%= p.status %></dd></div>
+  </dl>
+</section>
+<section class="card t">
+  <div class="hd"><h2>Courses this term</h2></div>
+  <div class="sc"><table>
+    <thead><tr><th>Code</th><th>Course</th><th>Faculty</th><th>Attendance</th></tr></thead>
+    <tbody>
+      <% for (const c of courses) { %>
+        <tr>
+          <td class="code"><%= c.course_code %></td>
+          <td><%= c.course_name %><% if (mine.has(c.course_id)) { %> <span class="pill">Your course</span><% } %></td>
+          <td class="nw"><%= c.faculty_name || '–' %></td>
+          <td><% if (mine.has(c.course_id)) { %><%- include('../partials/pct-bar', { value: c.attendance_pct, min: c.min_attendance_pct, digits: 1 }) %><% } else { %><span class="muted">–</span><% } %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

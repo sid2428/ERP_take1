@@ -1,0 +1,21 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Departments</h1><span class="sub">Every department has an HOD from its own faculty (checked by a database trigger)</span></div>
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Dept</th><th>Name</th><th>HOD</th><th>Office</th><th>Contact</th><th class="num">Est.</th><th class="num">Programs</th><th class="num">Courses</th><th class="num">Faculty</th><th class="num">Active students</th><th></th></tr></thead>
+    <tbody>
+      <% for (const d of rows) { %>
+        <tr>
+          <td><b><%= d.dept_id %></b></td><td><%= d.dept_name %><% if (!d.is_active) { %> <span class="pill n">inactive</span><% } %></td>
+          <td class="nw"><%= d.hod_name || '–' %> <span class="code"><%= d.hod_code || '' %></span></td>
+          <td class="nw"><%= d.office_room || '–' %></td><td><%= d.contact_email || '–' %></td>
+          <td class="num"><%= d.established_year || '–' %></td><td class="num"><%= d.programs %></td><td class="num"><%= d.courses %></td>
+          <td class="num"><a href="/admin/faculty?dept=<%= d.dept_id %>"><%= d.faculty %></a></td>
+          <td class="num"><a href="/admin/students?dept=<%= d.dept_id %>&status=Active"><%= fmt.num(d.students) %></a></td>
+          <td><a class="btn small" href="/admin/departments/<%= d.dept_id %>">Edit</a></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

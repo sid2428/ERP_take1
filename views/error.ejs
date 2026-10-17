@@ -1,0 +1,8 @@
+<%- include('partials/layout-start') %>
+<section class="card" style="max-width:560px;margin:<%= user ? '0' : '15vh auto 0' %>">
+  <div class="kpi"><%= status %></div>
+  <h1 style="margin-top:8px"><%= status === 404 ? 'Page not found' : status === 403 ? 'Access denied' : 'Something went wrong' %></h1>
+  <p class="muted"><%= message %></p>
+  <div class="actions"><a class="btn primary" href="/">Go to my dashboard</a></div>
+</section>
+<%- include('partials/layout-end') %>

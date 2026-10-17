@@ -1,0 +1,56 @@
+<%- include('../partials/layout-start') %>
+<% const c = course; %>
+<div class="crumbs"><a href="/admin/courses">Course catalog</a> / <%= c.course_code %></div>
+<div class="page-head"><h1><%= c.course_code %> · <%= c.course_name %></h1>
+  <span class="sub"><%= c.dept_name %> · <%= c.course_type %> · <%= fmt.ltp(c.lecture_hrs, c.tutorial_hrs, c.practical_hrs) %> · <%= fmt.credits(c.credits) %> credits</span></div>
+
+<section class="cards">
+  <div class="card"><div class="note">Students enrolled this term</div><div class="kpi"><%= fmt.num(teaching.students) %></div></div>
+  <div class="card"><div class="note">Classes this term</div><div class="kpi"><%= teaching.classes %></div><div class="sm">taught by <%= teaching.faculty %> faculty</div></div>
+  <div class="card"><div class="note">Placed in programs</div><div class="kpi"><%= placements.length %></div></div>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <div class="hd"><h2>Course details</h2></div>
+    <form method="post" action="/admin/courses/<%= c.course_id %>" class="stack" style="margin-top:8px">
+      <%- include('course-fields') %>
+      <div class="actions"><button class="btn primary" type="submit">Save changes</button></div>
+    </form>
+  </section>
+  <div class="stack">
+    <section class="card">
+      <div class="hd"><h2>Prerequisites</h2></div>
+      <div class="note">Loops are rejected by a database trigger (recursive check)</div>
+      <% if (!prereqs.length) { %><div class="empty">None.</div><% } %>
+      <% for (const p of prereqs) { %>
+        <div class="item"><div class="t"><div><a href="/admin/courses/<%= p.course_id %>"><%= p.course_code %></a> · <%= p.course_name %></div><div class="s">Minimum grade <%= p.min_grade %></div></div>
+          <form method="post" action="/admin/courses/<%= c.course_id %>/prerequisites/<%= p.course_id %>/delete" data-confirm="Remove prerequisite <%= p.course_code %>?">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small danger" type="submit">Remove</button></form></div>
+      <% } %>
+      <form method="post" action="/admin/courses/<%= c.course_id %>/prerequisites" class="stack" style="margin-top:12px">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="field"><label for="pr">Add prerequisite</label>
+          <select id="pr" name="prereq_course_id" required><option value="">Choose a course…</option>
+            <% for (const x of candidates) { %><option value="<%= x.course_id %>"><%= x.course_code %> · <%= x.course_name %></option><% } %></select></div>
+        <div class="actions">
+          <select name="min_grade" aria-label="Minimum grade" style="width:auto"><% for (const g of ['P', 'C', 'B', 'B+', 'A', 'A+', 'O']) { %><option><%= g %></option><% } %></select>
+          <button class="btn" type="submit">Add</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Unlocks</h2></div>
+      <% if (!unlocks.length) { %><div class="empty">No course requires this one.</div><% } %>
+      <% for (const u of unlocks) { %><div class="item"><div class="t"><a href="/admin/courses/<%= u.course_id %>"><%= u.course_code %></a> · <%= u.course_name %></div></div><% } %>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Curriculum placements</h2></div>
+      <% if (!placements.length) { %><div class="empty">Not placed in any program.</div><% } %>
+      <% for (const p of placements) { %>
+        <div class="item"><div class="t"><div><a href="/admin/programs/<%= p.program_id %>"><%= p.program_id %></a> · semester <%= p.semester_no %></div>
+          <div class="s"><%= p.course_category %><%= p.elective_group ? ' · ' + p.elective_group : '' %> · <%= p.placement_kind %></div></div></div>
+      <% } %>
+    </section>
+  </div>
+</div>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,10 @@
+<div class="pager">
+  <span><% if (pager.total) { %>Showing <%= fmt.num(pager.from) %>–<%= fmt.num(pager.to) %> of <%= fmt.num(pager.total) %><% } else { %>No results<% } %></span>
+  <% if (pager.pages > 1) { %>
+  <span class="actions">
+    <% if (pager.page > 1) { %><a class="btn small" href="<%= qs({ page: pager.page - 1 }) || '?' %>">← Previous</a><% } %>
+    <span>Page <%= pager.page %> of <%= fmt.num(pager.pages) %></span>
+    <% if (pager.page < pager.pages) { %><a class="btn small" href="<%= qs({ page: pager.page + 1 }) %>">Next →</a><% } %>
+  </span>
+  <% } %>
+</div>

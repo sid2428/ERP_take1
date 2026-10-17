@@ -1,0 +1,38 @@
+<%- include('../partials/layout-start') %>
+<div class="crumbs"><a href="/faculty/classes">My classes</a> / <%= cls.course_code %></div>
+<div class="page-head">
+  <h1><%= cls.course_code %> · <%= cls.course_name %></h1>
+  <span class="sub"><%= cls.batch_code || cls.class_label %> · <%= cls.session_type %> · <%= cls.weekly_sessions %>×/week</span>
+</div>
+<section class="cards">
+  <div class="card"><div class="note">Students</div><div class="kpi"><%= rosterSize %></div></div>
+  <div class="card"><div class="note">Sessions held</div><div class="kpi"><%= cls.sessions_held %></div><div class="sm">Last: <%= fmt.shortDate(cls.last_session) %></div></div>
+  <div class="card"><div class="note">Average attendance</div><div class="kpi"><%= fmt.pct(cls.avg_pct, 1) %></div></div>
+  <div class="card"><div class="note">Below <%= cls.min_attendance_pct %>%</div><div class="kpi"><%= cls.below_min %></div></div>
+</section>
+<section class="card t">
+  <div class="hd"><h2>Student list</h2>
+    <div class="chips">
+      <a class="chip-link<%= filter === 'all' ? ' on' : '' %>" href="?">All students</a>
+      <a class="chip-link<%= filter === 'below' ? ' on' : '' %>" href="?filter=below">Below minimum</a>
+    </div>
+  </div>
+  <div class="sc"><table>
+    <thead><tr><th class="num">Roll</th><th>Student no.</th><th>Name</th><th>Batch</th><th class="num">Attended</th><th>Attendance</th><th>To recover</th></tr></thead>
+    <tbody>
+      <% if (!roster.length) { %><tr><td colspan="7" class="empty">No students match.</td></tr><% } %>
+      <% for (const r of roster) { %>
+        <tr>
+          <td class="num"><%= r.roll_no ?? '–' %></td>
+          <td class="code"><%= r.student_number %></td>
+          <td><a href="/faculty/students/<%= r.student_id %>"><%= r.name %></a></td>
+          <td class="nw"><%= r.batch_code || '–' %></td>
+          <td class="num"><%= r.total_sessions === null ? '–' : r.attended + ' / ' + r.total_sessions %></td>
+          <td><%- include('../partials/pct-bar', { value: r.attendance_pct, min: cls.min_attendance_pct, digits: 1 }) %></td>
+          <td><%= r.sessions_to_recover ? r.sessions_to_recover + ' sessions' : '–' %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

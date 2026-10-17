@@ -1,0 +1,38 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Divisions &amp; sections</h1><span class="sub"><%= currentSession.session_name %> · core courses by division (labs by batch), honors by seat-limited section</span></div>
+<form class="filters" method="get" action="/admin/sections">
+  <select name="dept" data-autosubmit aria-label="Department"><option value="">All departments</option>
+    <% for (const d of depts) { %><option value="<%= d.dept_id %>"<%= filters.dept === d.dept_id ? ' selected' : '' %>><%= d.dept_id %></option><% } %></select>
+  <select name="year" data-autosubmit aria-label="Year"><option value="">All years</option>
+    <% for (const y of ['1', '2', '3', '4']) { %><option value="<%= y %>"<%= filters.year === y ? ' selected' : '' %>>Year <%= y %></option><% } %></select>
+  <noscript><button class="btn" type="submit">Filter</button></noscript>
+</form>
+<section class="card t">
+  <div class="hd"><h2>Honors sections (course offerings)</h2><span class="muted">enrolled_count is maintained by a trigger; the seat after the limit is rejected</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Code</th><th>Course</th><th>Sec</th><th>Faculty</th><th>Room</th><th>Seats</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!offerings.length) { %><tr><td colspan="7" class="empty">No sections.</td></tr><% } %>
+      <% for (const o of offerings) { %>
+        <tr><td class="code"><%= o.course_code %></td><td><%= o.course_name %></td><td><%= o.section_name %></td>
+          <td class="nw"><%= o.faculty_name || '–' %></td><td><%= o.room_code || '–' %></td>
+          <td><div class="pc"><%= o.enrolled_count %> / <%= o.max_seats %><div class="bar"><i style="width:<%= 100 * o.enrolled_count / o.max_seats %>%"></i></div></div></td>
+          <td><span class="pill <%= o.status === 'OPEN' ? 'g' : o.status === 'FULL' ? 'r' : 'n' %>"><%= o.status %></span></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<section class="card t">
+  <div class="hd"><h2>Divisions</h2><span class="muted"><%= divisions.length %> shown</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Division</th><th>Dept</th><th class="num">Year</th><th class="num">Semester</th><th class="num">Students</th><th class="num">Batches</th><th>Avg attendance</th></tr></thead>
+    <tbody>
+      <% for (const d of divisions) { %>
+        <tr class="click"><td><a href="/admin/sections/divisions/<%= d.division_id %>"><b><%= d.division_code %></b></a></td><td><%= d.dept_id %></td>
+          <td class="num"><%= d.year_of_study %></td><td class="num"><%= d.semester %></td><td class="num"><%= d.strength %></td><td class="num"><%= d.batches %></td>
+          <td><%- include('../partials/pct-bar', { value: d.avg_pct, digits: 1 }) %></td></tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>
