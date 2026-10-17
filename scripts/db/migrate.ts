@@ -25,7 +25,8 @@ async function main(): Promise<void> {
 
     for (const file of files) {
       const sql = await readFile(path.join(MIGRATIONS_DIR, file), 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
+      // hash with LF line endings so a Windows (CRLF) checkout matches what was applied
+      const checksum = createHash('sha256').update(sql.replace(/\r\n/g, '\n')).digest('hex');
       const previous = applied.get(file);
       if (previous !== undefined) {
         if (previous !== checksum) {

@@ -1,0 +1,5 @@
+# Keep LF line endings in every checkout (migration checksums and shell scripts depend on it)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
