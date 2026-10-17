@@ -16,14 +16,10 @@ and a working web portal for **students, faculty and the academic office**.
 | Phase | Scope | Status |
 |---|---|---|
 | **P0** | Unified schema, data cleanup, curriculum-consistent attendance, bulk loader, integrity checks | ✅ Done |
-| **P1** | Login & security, layout, student/faculty/admin dashboards, academic structure, student & faculty profiles, deployment | ✅ Done |
-| P2 | Timetable page, attendance marking, attendance corrections (Admin approval) | ⏳ Next |
-| P3 | Exams & results (10-point scale), syllabus coverage | Planned |
-| P4 | Fees ledger & receipts, certificates, document wallet (D-Wallet) | Planned |
-| P5 | Notices, grievances, faculty leave, payroll | Planned |
-| P6 | Final testing, hardening, report material | Planned |
+| **P1** | Login & security, layout, student/faculty/admin dashboards, academic structure, profiles, deployment | ✅ Done |
+| Next | Module teams in parallel: Student experience · Faculty & HR · Academic · Attendance · Examination · Fees · Placement · Communication | ⏳ In progress |
 
-The task-by-task plan for every phase is in **[docs/roadmap.md](docs/roadmap.md)**.
+**Who does what:** [docs/work-assignments.md](docs/work-assignments.md) gives each module team its phases, tasks, expectations and start order. History of phases: [docs/roadmap.md](docs/roadmap.md).
 
 ### Database highlights (what the DBMS evaluation should look at)
 - **24 tables, 10 views, 16 triggers and 12 functions/procedures** (after P1) in a dedicated `erp` schema, reached by a least-privilege role (`erp_app`) that can read and write data but cannot change the schema.
