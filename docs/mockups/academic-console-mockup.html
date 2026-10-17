@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Academic Console – ERP Mockup (G2)</title>
+<style>
+/* ===== same design system as the Student Dashboard mockup (batch-wide look) ===== */
+:root{
+  --navy:#1F3A6E; --hero:#16284D; --org:#B25E09; --bg:#F3F5F8; --line:#DDE2EA;
+  --text:#172033; --muted:#5B6578; --faint:#7A8497; --green:#14674A; --blue2:#8FB8FF; --slate:#8A94A8;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums}
+a{color:#1F4FA3;text-decoration:none}
+.shell{display:flex;min-height:100vh}
+/* sidebar */
+.side{flex:0 0 232px;background:#fff;border-right:1px solid var(--line);padding:0 12px 24px}
+.brand{display:flex;align-items:center;gap:10px;height:60px;border-bottom:1px solid #E6E9F0;margin:0 -12px;padding-left:22px}
+.brand .lg{width:28px;height:28px;border-radius:6px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.brand .t{font-weight:600;font-size:15px}
+.brand .s{font-size:11px;color:var(--faint);font-weight:500}
+.nav-label{padding:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--faint)}
+.nav a{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 10px;border-radius:6px;font-size:14px;color:#3B4458;cursor:pointer}
+.nav a svg{flex:none}
+.nav a.on{background:#E9EEF8;color:var(--navy);font-weight:600}
+.sidefoot{margin-top:26px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#FAFBFD;font-size:11.5px;color:var(--muted);line-height:1.5}
+/* header */
+.main{flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;min-height:60px;padding:8px 28px;background:#fff;border-bottom:1px solid var(--line)}
+.search{flex:1 1 240px;max-width:380px;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#F8F9FB}
+.search input{flex:1;border:none;outline:none;background:transparent;font:inherit;color:var(--text);min-width:0}
+.btn{height:36px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;font-weight:500;color:var(--text)}
+.bell{position:relative;width:44px;height:44px;border:none;background:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.badge{position:absolute;top:6px;right:6px;min-width:16px;height:16px;border-radius:8px;background:var(--org);color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.user{display:flex;align-items:center;gap:10px;padding-left:12px;border-left:1px solid var(--line)}
+.user .av{width:32px;height:32px;border-radius:50%;background:#E9EEF8;color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px}
+.user .n{font-weight:600}
+.user .r{font-size:12px;color:var(--muted)}
+/* content */
+main{padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px;max-width:1280px;width:100%}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px}
+.card-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px}
+.card-h h2{font-size:15px;font-weight:600}
+.card-h a{font-size:13px;font-weight:500}
+.card-sub{margin:-8px 16px 0;font-size:12.5px;color:var(--muted)}
+.card-b{padding:14px 16px 16px}
+.grid{display:grid;gap:20px}
+/* hero */
+.hero{position:relative;overflow:hidden;background:var(--hero);border-radius:12px;padding:26px 28px;color:#fff}
+.hero .deco{position:absolute;right:-110px;top:-170px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{padding:3px 10px;border-radius:4px;background:rgba(255,255,255,.12);color:#D6DFF2;font-size:12.5px;font-weight:600}
+.chip.ok{background:rgba(61,200,150,.18);color:#9BE8C8}
+.chip.warn{background:rgba(178,94,9,.25);color:#F0C08A}
+.hero-stats{margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,.14);display:flex;flex-wrap:wrap;gap:16px 32px}
+.hstat{flex:1 1 130px}
+.hstat .k{font-size:12px;color:#9FB0D4}
+.hstat .v{margin-top:2px;font-size:15px;font-weight:600}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{padding:10px 14px;font-size:12px;font-weight:600;color:var(--muted);text-align:left;background:#F8F9FB;white-space:nowrap}
+td{padding:12px 14px;border-top:1px solid #E6E9F0;white-space:nowrap;vertical-align:top}
+td b{font-weight:600}
+.r{text-align:right}
+.tblwrap{overflow-x:auto}
+/* bars & badges */
+.bar{display:flex;align-items:center;gap:10px}
+.bar .tr{width:72px;height:5px;border-radius:3px;background:#E3E7EE}
+.bar .fl{height:5px;border-radius:3px;background:var(--navy)}
+.bar span{width:52px;text-align:right;font-weight:600;font-size:12.5px}
+.pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11.5px;font-weight:600}
+.p-TH{background:#E9EEF8;color:var(--navy)}
+.p-LAB{background:#E7F4EE;color:var(--green)}
+.p-TUT{background:#F7EBDC;color:var(--org)}
+.p-PRJ{background:#EEE9F7;color:#5B3E91}
+.p-open{background:#E7F4EE;color:var(--green)}
+.p-full{background:#FBE3E3;color:#A12323}
+.p-closed{background:#ECEFF4;color:var(--muted)}
+.p-ele{background:#EEE9F7;color:#5B3E91}
+.p-hon{background:#FDF4DC;color:#8A6508}
+.p-shared{background:#E6F2F4;color:#116166}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:5px}
+.tick{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#E7F4EE;color:var(--green);font-size:11px;font-weight:700;flex:none}
+.row{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid #E6E9F0}
+.row:first-child{border-top:none;padding-top:0}
+/* kv */
+.kv{display:flex;align-items:center;gap:8px;font-size:13px}
+.kv .sw{width:10px;height:10px;border-radius:2px;flex:none}
+.kv span.v{margin-left:auto;font-weight:600}
+/* pages */
+.page{display:none}
+.page.on{display:flex;flex-direction:column;gap:20px}
+.stacked{display:flex;height:14px;border-radius:7px;overflow:hidden}
+.semtl{display:flex;gap:6px;margin-top:14px}
+.semchip{flex:1;text-align:center}
+.semchip .b{height:8px;border-radius:4px;background:rgba(255,255,255,.22)}
+.semchip .b.done{background:#fff}
+.semchip .b.cur{background:var(--blue2);box-shadow:0 0 0 2px rgba(143,184,255,.35)}
+.semchip .l{margin-top:6px;font-size:10.5px;color:#9FB0D4;font-weight:500}
+.semchip .l.cur{color:#fff;font-weight:600}
+/* curriculum grid */
+.sem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.sem-box{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.sem-box .hd{background:#F8F9FB;padding:8px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+.sem-box ul{list-style:none;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.sem-box li{font-size:12px;display:flex;flex-direction:column;gap:2px}
+.sem-box li .cc{font-weight:600;color:var(--navy)}
+.sem-box li .cn{color:var(--muted);font-size:11px}
+.slot{border:1px dashed #C4CCDA;border-radius:6px;padding:6px 8px;background:#FAFBFD}
+footer{padding:0 28px 24px;font-size:12px;color:var(--faint)}
+@media(max-width:900px){.side{display:none}}
+</style>
+</head><body>
+<div class="shell">
+
+<aside class="side">
+  <div class="brand"><div class="lg">A</div><div><div class="t">PICT Acad Console</div><div class="s">Group 2 · Academic &amp; Course</div></div></div>
+  <div class="nav">
+    <div class="nav-label">OVERVIEW</div>
+    <a class="on" data-pg="dashboard"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v10H15v-6H9v6H3z"/></svg>Dashboard</a>
+    <div class="nav-label">STRUCTURE</div>
+    <a data-pg="catalog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/></svg>Course catalog</a>
+    <a data-pg="curriculum"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Programs &amp; curriculum</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13M10 21v-6h4v6"/></svg>Departments</a>
+    <div class="nav-label">TERM</div>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4"/></svg>Sessions</a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Sections &amp; seats</a>
+    <div class="nav-label">ACCESS</div>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Roles &amp; access</a>
+  </div>
+  <div class="sidefoot"><b>Contract surface</b><br>v_open_offerings · v_faculty_workload<br>contract check: 18/18 PASS<br>schema: 10 tables · 14 FKs</div>
+</aside>
+
+<div class="main">
+<header>
+  <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7A8497" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input placeholder="Search courses, programs, sections"></label>
+  <div style="flex:1 1 0"></div>
+  <button class="btn">Odd Sem 2026–27 ▾</button>
+  <button class="bell" aria-label="Notifications, 2 new">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B4458" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+    <span class="badge">2</span></button>
+  <div class="user"><div class="av">AS</div><div><div class="n">Academic Section</div><div class="r">admin · G2 console</div></div></div>
+</header>
+
+<!-- ============================================================ DASHBOARD -->
+<main class="page on" id="pg-dashboard">
+  <h1>Academic administration</h1>
+
+  <section class="hero">
+    <svg class="deco" width="420" height="420" viewBox="0 0 420 420" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1.5"><circle cx="210" cy="210" r="90"/><circle cx="210" cy="210" r="140"/><circle cx="210" cy="210" r="190"/></svg>
+    <div style="position:relative;display:flex;flex-wrap:wrap;gap:28px 48px;justify-content:space-between">
+      <div style="flex:1 1 380px">
+        <div style="font-size:24px;font-weight:600;letter-spacing:-.01em;line-height:1.2">Academic &amp; Course module</div>
+        <div style="margin-top:4px;color:#B9C6E3">The module every other group borrows identity from</div>
+        <div class="chips"><span class="chip ok">Contract: ALL PASS (18/18)</span><span class="chip">Soft-delete only</span><span class="chip">7 HODs assigned 7/7</span></div>
+        <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px 32px">
+          <div><div style="font-size:12px;color:#9FB0D4">Schema</div><div style="margin-top:1px;font-weight:600">10 tables · 14 FKs · 11 checks</div></div>
+          <div><div style="font-size:12px;color:#9FB0D4">Logic tier</div><div style="margin-top:1px;font-weight:600">6 triggers · 3 procedures · 5 views</div></div>
+        </div>
+      </div>
+      <div style="flex:1 1 420px;max-width:620px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><div style="font-weight:600;font-size:15px">Current session · Odd 2026–27</div><div style="font-size:12.5px;color:#B9C6E3">1 Jul → 30 Nov 2026 · ~70% complete</div></div>
+        <div class="semtl">
+          <div class="semchip"><div class="b done"></div><div class="l">24-Odd</div></div>
+          <div class="semchip"><div class="b done"></div><div class="l">24-Even</div></div>
+          <div class="semchip"><div class="b done"></div><div class="l">25-Odd</div></div>
+          <div class="semchip"><div class="b done"></div><div class="l">25-Even</div></div>
+          <div class="semchip"><div class="b cur"></div><div class="l cur">26-Odd</div></div>
+          <div class="semchip"><div class="b"></div><div class="l">26-Even</div></div>
+        </div>
+        <div style="margin-top:12px;font-size:12.5px;color:#9FB0D4">Exactly one current session — enforced by guard trigger, not by convention</div>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="k">Departments</div><div class="v">7 engineering</div></div>
+      <div class="hstat"><div class="k">Programs</div><div class="v">14 · B.Tech + M.Tech</div></div>
+      <div class="hstat"><div class="k">Courses</div><div class="v">182 in catalog</div></div>
+      <div class="hstat"><div class="k">Curriculum rows</div><div class="v">223 placements</div></div>
+      <div class="hstat"><div class="k">Prereq links</div><div class="v">133 · acyclic</div></div>
+    </div>
+  </section>
+
+  <section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(270px,1fr))">
+    <section class="card"><div class="card-h"><h2>Course catalog by type</h2></div><div class="card-sub">182 courses · academic-year wide</div><div class="card-b">
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+        <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="182 courses: 147 theory, 28 labs, 7 tutorials">
+          <circle cx="60" cy="60" r="42" fill="none" stroke="#E3E7EE" stroke-width="14"/>
+          <circle cx="60" cy="60" r="42" fill="none" stroke="#1F3A6E" stroke-width="14" stroke-dasharray="213.1 263.9" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="42" fill="none" stroke="#3DC896" stroke-width="14" stroke-dasharray="40.6 263.9" stroke-dashoffset="-213.1" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="42" fill="none" stroke="#E9A13B" stroke-width="14" stroke-dasharray="10.1 263.9" stroke-dashoffset="-253.8" transform="rotate(-90 60 60)"/>
+          <text x="60" y="62" text-anchor="middle" font-size="22" font-weight="600" fill="#172033">182</text>
+          <text x="60" y="78" text-anchor="middle" font-size="11" fill="#5B6578">courses</text>
+        </svg>
+        <div style="flex:1 1 120px;display:flex;flex-direction:column;gap:10px">
+          <div class="kv"><span class="sw" style="background:#1F3A6E"></span><span>Theory</span><span class="v">147</span></div>
+          <div class="kv"><span class="sw" style="background:#3DC896"></span><span>Lab</span><span class="v">28</span></div>
+          <div class="kv"><span class="sw" style="background:#E9A13B"></span><span>Tutorial</span><span class="v">7</span></div>
+          <div style="padding-top:10px;border-top:1px solid #E6E9F0;color:var(--muted);font-size:12.5px">TUT type added via CR-007</div>
+        </div>
+      </div>
+    </div></section>
+
+    <section class="card"><div class="card-h"><h2>Curriculum mix</h2></div><div class="card-sub">223 placements across 7 B.Tech + 7 M.Tech programs</div><div class="card-b">
+      <div class="stacked">
+        <div style="width:68.6%;background:#1F3A6E"></div>
+        <div style="width:12.6%;background:#7C97C9"></div>
+        <div style="width:18.8%;background:#3DC896"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;font-size:13px">
+        <div class="kv"><span class="sw" style="background:#1F3A6E"></span><span>Core</span><span class="v">153</span></div>
+        <div class="kv"><span class="sw" style="background:#7C97C9"></span><span>Prof. elective (baskets E1 · H1 honors)</span><span class="v">28</span></div>
+        <div class="kv"><span class="sw" style="background:#3DC896"></span><span>Open elective (cross-department)</span><span class="v">42</span></div>
+      </div>
+    </div></section>
+
+    <section class="card"><div class="card-h"><h2>Departments &amp; HODs</h2></div><div class="card-sub">deferred HOD loop closed after faculty seed</div><div class="card-b">
+      <svg viewBox="0 0 304 128" width="100%" role="img" aria-label="Programs per department: 2 each">
+        <line x1="26" y1="100" x2="300" y2="100" stroke="#E3E7EE"/>
+        <rect x="34"  y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="72"  y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="110" y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="148" y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="186" y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="224" y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <rect x="262" y="60" width="24" height="40" rx="3" fill="#1F3A6E"/>
+        <text x="46" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">CSE</text>
+        <text x="84" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">IT</text>
+        <text x="122" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">ENTC</text>
+        <text x="160" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">MECH</text>
+        <text x="198" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">CIVIL</text>
+        <text x="236" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">EE</text>
+        <text x="274" y="114" text-anchor="middle" font-size="10.5" fill="#5B6578">AIDS</text>
+      </svg>
+      <div class="kv" style="margin-top:10px"><span class="tick">✓</span><span>HOD assigned</span><span class="v">7 / 7</span></div>
+      <div class="kv" style="margin-top:8px"><span class="tick">✓</span><span>Programs (B.Tech + M.Tech)</span><span class="v">14</span></div>
+    </div></section>
+
+    <section class="card"><div class="card-h"><h2>Seat pressure · current term</h2></div><div class="card-sub">demo sections seeded for the walkthrough</div><div class="card-b">
+      <div class="bar" style="margin-top:10px"><div style="flex:0 0 118px;font-size:12.5px;color:#3B4458;overflow:hidden;text-overflow:ellipsis">CSE331 · DBMS A</div><div class="tr" style="flex:1"><div class="fl" style="width:100%"></div></div><span>64/64</span></div>
+      <div class="bar" style="margin-top:10px"><div style="flex:0 0 118px;font-size:12.5px;color:#3B4458;overflow:hidden;text-overflow:ellipsis">CSE311 · Algo A</div><div class="tr" style="flex:1"><div class="fl" style="width:91%"></div></div><span>58/64</span></div>
+      <div class="bar" style="margin-top:10px"><div style="flex:0 0 118px;font-size:12.5px;color:#3B4458;overflow:hidden;text-overflow:ellipsis">IT111 · Python B</div><div class="tr" style="flex:1"><div class="fl" style="width:94%"></div></div><span>60/64</span></div>
+      <div class="bar" style="margin-top:10px"><div style="flex:0 0 118px;font-size:12.5px;color:#3B4458;overflow:hidden;text-overflow:ellipsis">AIDS111 · AI Fdns A</div><div class="tr" style="flex:1"><div class="fl" style="width:95%"></div></div><span>61/64</span></div>
+      <div class="bar" style="margin-top:10px"><div style="flex:0 0 118px;font-size:12.5px;color:#3B4458;overflow:hidden;text-overflow:ellipsis">ENTC111 · EDC A</div><div class="tr" style="flex:1"><div class="fl" style="width:86%"></div></div><span>55/64</span></div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #E6E9F0;font-size:12.5px;color:#A12323;font-weight:600">1 section FULL — 201st enrollment auto-rejected by trigger</div>
+    </div></section>
+  </section>
+
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+    <section class="card" style="flex:3 1 640px;min-width:0">
+      <div class="card-h"><h2>Sections · Odd Semester 2026–27 (v_open_offerings)</h2><a href="#">Export</a></div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>Code</th><th>Course</th><th>Sec</th><th>Faculty</th><th>Room / slot</th><th class="r">Seats</th><th>Enrolled</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--muted)">CSE331</td><td><b>Database Management Systems</b> <span class="pill p-shared">shared ×3</span></td><td>A</td><td>S. Kulkarni</td><td>A-204 · Mon–Wed–Fri 9:00</td><td class="r">64</td><td><div class="bar"><span>64</span><div class="tr" style="width:64px"><div class="fl" style="width:100%"></div></div></div></td><td><span class="pill p-full">FULL</span></td></tr>
+          <tr><td style="color:var(--muted)">CSE311</td><td><b>Design &amp; Analysis of Algorithms</b></td><td>A</td><td>R. Deshpande</td><td>A-201 · Tue–Thu 11:00</td><td class="r">64</td><td><div class="bar"><span>58</span><div class="tr" style="width:64px"><div class="fl" style="width:91%"></div></div></div></td><td><span class="pill p-open">OPEN</span></td></tr>
+          <tr><td style="color:var(--muted)">IT111</td><td><b>Programming with Python</b></td><td>B</td><td>M. Joshi</td><td>A-302 · Mon–Fri 10:00</td><td class="r">64</td><td><div class="bar"><span>60</span><div class="tr" style="width:64px"><div class="fl" style="width:94%"></div></div></div></td><td><span class="pill p-open">OPEN</span></td></tr>
+          <tr><td style="color:var(--muted)">AIDS11L</td><td><b>Data Science Tools Lab</b> <span class="pill p-LAB">LAB</span></td><td>A</td><td>P. Pawar</td><td>Lab-5 · Wed 2:00–4:00</td><td class="r">32</td><td><div class="bar"><span>31</span><div class="tr" style="width:64px"><div class="fl" style="width:97%"></div></div></div></td><td><span class="pill p-open">OPEN</span></td></tr>
+          <tr><td style="color:var(--muted)">CSE2T1</td><td><b>Data Structures Tutorial</b> <span class="pill p-TUT">TUT</span></td><td>A</td><td>A. Shinde</td><td>A-105 · Fri 11:00</td><td class="r">40</td><td><div class="bar"><span>38</span><div class="tr" style="width:64px"><div class="fl" style="width:95%"></div></div></div></td><td><span class="pill p-open">OPEN</span></td></tr>
+          <tr><td style="color:var(--muted)">EEO1</td><td><b>Energy Conservation &amp; Audit</b> <span class="pill p-ele">Open elect.</span></td><td>A</td><td>V. Ranade</td><td>B-206 · Sat 10:00</td><td class="r">60</td><td><div class="bar"><span>44</span><div class="tr" style="width:64px"><div class="fl" style="width:73%"></div></div></div></td><td><span class="pill p-open">OPEN</span></td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="5" style="padding:12px 14px;border-top:1px solid var(--line);font-weight:600;background:#F8F9FB">This term</td><td class="r" style="padding:12px 14px;border-top:1px solid var(--line);font-weight:600;background:#F8F9FB">328 seats</td><td colspan="2" style="padding:12px 14px;border-top:1px solid var(--line);background:#F8F9FB;color:var(--muted)">enrolled_count is trigger-maintained — never hand-written</td></tr></tfoot>
+      </table></div>
+    </section>
+
+    <div style="flex:1 1 300px;display:flex;flex-direction:column;gap:20px;min-width:0">
+      <section class="card">
+        <div class="card-h"><h2>Guardrails (DB-enforced)</h2></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:4px">
+          <div class="row"><span class="tick">✓</span><div><div style="font-weight:500">Exactly one current session</div><div style="font-size:12.5px;color:var(--muted)">guard triggers + sp_set_current_session</div></div></div>
+          <div class="row"><span class="tick">✓</span><div><div style="font-weight:500">Capacity at 201st enrollment</div><div style="font-size:12.5px;color:var(--muted)">“offering is already FULL” — BEFORE trigger</div></div></div>
+          <div class="row"><span class="tick">✓</span><div><div style="font-weight:500">Prerequisite cycles rejected</div><div style="font-size:12.5px;color:var(--muted)">sp_add_prereq · recursive walk + SIGNAL</div></div></div>
+          <div class="row"><span class="tick">✓</span><div><div style="font-weight:500">Only ACTIVE faculty assigned</div><div style="font-size:12.5px;color:var(--muted)">sp_assign_faculty checks employment status</div></div></div>
+          <div style="padding-top:10px;border-top:1px solid #E6E9F0;color:var(--muted);font-size:13px">All five rejections captured in execution proof §C</div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Needs attention</h2></div>
+        <div class="card-b">
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:4px 0 12px"><span class="dot" style="background:var(--org)"></span><div style="flex:1"><div style="font-weight:500">R2027 syllabus draft — 3 courses pending dept sign-off</div><a href="#" style="font-size:13px">Review syllabus_version</a></div></div>
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:4px 0 12px"><span class="dot" style="background:var(--org)"></span><div style="flex:1"><div style="font-weight:500">Even 2026–27 session window to be published</div><a href="#" style="font-size:13px">Prepare sp_set_current_session</a></div></div>
+          <div style="padding-top:10px;border-top:1px solid #E6E9F0;color:var(--muted);font-size:13px">No orphaned FKs · no unpaid-integration group blocked</div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Integration load order</h2><a href="#">Contract §5</a></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:4px">
+          <div class="row"><span class="tick">✓</span><div><b>1.</b>&nbsp;G2 masters (depts → programs → courses → sessions)</div></div>
+          <div class="row"><span class="tick">✓</span><div><b>2.</b>&nbsp;G6 faculty</div></div>
+          <div class="row"><span class="tick">✓</span><div><b>3.</b>&nbsp;G2 closes HOD loop + opens sections</div></div>
+          <div class="row"><span class="tick">✓</span><div><b>4.</b>&nbsp;G1 students &amp; enrollments (our triggers ride along)</div></div>
+          <div class="row"><span class="tick">✓</span><div><b>5.</b>&nbsp;G3 / G4 / G5 / G7 attach behind</div></div>
+          <div style="padding-top:10px;border-top:1px solid #E6E9F0;color:var(--muted);font-size:13px">Zero deadlocks — circular FK resolved by choreography, not by luck</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ COURSE CATALOG -->
+<main class="page" id="pg-catalog">
+  <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px">
+    <h1>Course catalog</h1><span style="color:var(--muted);font-size:13px">182 courses · one identity each — shared subjects are placed, never duplicated</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    <button class="btn" style="background:var(--navy);color:#fff;border-color:var(--navy)">All 7 depts</button>
+    <button class="btn">CSE</button><button class="btn">IT</button><button class="btn">ENTC</button><button class="btn">MECH</button><button class="btn">CIVIL</button><button class="btn">EE</button><button class="btn">AIDS</button>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+    <section class="card" style="flex:3 1 640px;min-width:0">
+      <div class="card-h"><h2>Courses (sample of 12)</h2><a href="#">Open in spreadsheet</a></div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>Code</th><th>Course</th><th>Dept</th><th>Type</th><th>L-T-P</th><th class="r">Cr</th><th>Prereq</th><th>Regulation</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--muted)">CSE111</td><td><b>Programming Fundamentals with C</b> <span class="pill p-shared">shared ×3</span></td><td>CSE</td><td><span class="pill p-TH">TH</span></td><td>3-0-2</td><td class="r">4.0</td><td>—</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">CSE2T1</td><td><b>Data Structures Tutorial</b></td><td>CSE</td><td><span class="pill p-TUT">TUT</span></td><td>0-1-0</td><td class="r">1.0</td><td>CSE121</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">CSE21L</td><td><b>Data Structures Lab</b></td><td>CSE</td><td><span class="pill p-LAB">LAB</span></td><td>0-0-3</td><td class="r">1.5</td><td>CSE111</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">CSE331</td><td><b>Database Management Systems</b> <span class="pill p-shared">shared ×3</span></td><td>CSE</td><td><span class="pill p-TH">TH</span></td><td>3-0-2</td><td class="r">4.0</td><td>CSE221</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">CSEH1</td><td><b>Distributed Computing &amp; Consensus</b> <span class="pill p-hon">Honors H1</span></td><td>CSE</td><td><span class="pill p-TH">TH</span></td><td>4-0-0</td><td class="r">4.0</td><td>CSE411</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">IT31L</td><td><b>Web Development Lab</b></td><td>IT</td><td><span class="pill p-LAB">LAB</span></td><td>0-0-3</td><td class="r">1.5</td><td>IT211</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">AIDSO1</td><td><b>AI for Everyone</b> <span class="pill p-ele">Open → 6 depts</span></td><td>AIDS</td><td><span class="pill p-TH">TH</span></td><td>3-0-0</td><td class="r">3.0</td><td>—</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">ENTC111</td><td><b>Electronic Devices &amp; Circuits</b> <span class="pill p-shared">shared ×2</span></td><td>ENTC</td><td><span class="pill p-TH">TH</span></td><td>3-0-2</td><td class="r">4.0</td><td>—</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">MECH111</td><td><b>Engineering Graphics</b> <span class="pill p-shared">shared ×2</span></td><td>MECH</td><td><span class="pill p-TH">TH</span></td><td>3-0-2</td><td class="r">4.0</td><td>—</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">CIVL11L</td><td><b>Materials Testing Lab</b></td><td>CIVIL</td><td><span class="pill p-LAB">LAB</span></td><td>0-0-3</td><td class="r">1.5</td><td>CIVL111</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">EE2T1</td><td><b>Electrical Circuits Tutorial</b></td><td>EE</td><td><span class="pill p-TUT">TUT</span></td><td>0-1-0</td><td class="r">1.0</td><td>EE121</td><td>R2024</td></tr>
+          <tr><td style="color:var(--muted)">MECH510</td><td><b>Advanced Manufacturing</b> <span class="pill p-TH" style="background:#E4EAF5">PG</span></td><td>MECH</td><td><span class="pill p-TH">TH</span></td><td>4-0-0</td><td class="r">4.0</td><td>MECH311</td><td>R2024</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <div style="flex:1 1 300px;display:flex;flex-direction:column;gap:20px;min-width:0">
+      <section class="card">
+        <div class="card-h"><h2>Spotlight: shared courses</h2></div>
+        <div class="card-sub">one row, one identity — many departments</div>
+        <div class="card-b">
+          <div style="border:1px solid #CFE3E5;background:#F2F9FA;border-radius:8px;padding:12px">
+            <div style="font-weight:600;color:#116166">CSE111 · Programming Fundamentals with C</div>
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+              <div>→ <b>BTECH-CSE</b> · sem 1 · CORE</div>
+              <div>→ <b>BTECH-IT</b> · sem 1 · CORE</div>
+              <div>→ <b>BTECH-AIDS</b> · sem 1 · CORE</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:13px;color:var(--muted)">Same pattern: <b>CSE331</b> → CSE+IT+AIDS · <b>ENTC111</b> → +EE · <b>MECH111</b> → +CIVIL. Credits &amp; grades never split across duplicate rows.</div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-h"><h2>Elective baskets</h2></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+          <div class="kv"><span class="pill p-ele">O1</span><span>Open electives — offered to the <i>other six</i> depts</span><span class="v">42 seats placed</span></div>
+          <div class="kv"><span class="pill p-hon">H1</span><span>Honors — 2 advanced courses per dept, sem 7–8</span><span class="v">14</span></div>
+          <div class="kv"><span class="pill p-ele" style="background:#E9EEF8;color:var(--navy)">E1</span><span>Prof. electives — dept’s own basket, sem 7–8</span><span class="v">14</span></div>
+          <div style="padding-top:8px;border-top:1px solid #E6E9F0;color:var(--muted)">Baskets are enforced by a CHECK pairing category ⇄ elective_group</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ CURRICULUM -->
+<main class="page" id="pg-curriculum">
+  <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px">
+    <h1>Programs &amp; curriculum</h1><span style="color:var(--muted);font-size:13px">semester-by-semester placement, enforced by composite PK</span>
+  </div>
+  <section class="hero" style="padding:20px 24px">
+    <div style="position:relative;display:flex;flex-wrap:wrap;gap:20px 40px;align-items:center">
+      <div style="flex:1 1 320px"><div style="font-size:20px;font-weight:600">B.Tech (Computer Science &amp; Engineering)</div>
+        <div style="margin-top:4px;color:#B9C6E3;font-size:13px">program_id: BTECH-CSE · dept CSE · UG</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 28px">
+        <div><div style="font-size:11.5px;color:#9FB0D4">Duration</div><div style="font-weight:600">4 yrs · 8 sems</div></div>
+        <div><div style="font-size:11.5px;color:#9FB0D4">Graduation credits</div><div style="font-weight:600">170</div></div>
+        <div><div style="font-size:11.5px;color:#9FB0D4">Intake</div><div style="font-weight:600">120</div></div>
+        <div><div style="font-size:11.5px;color:#9FB0D4">Curriculum rows</div><div style="font-weight:600">27</div></div>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>BTECH-CSE · semester map</h2><a href="#">Full print view</a></div>
+    <div class="card-b">
+      <div class="sem-grid">
+        <div class="sem-box"><div class="hd">Sem 1</div><ul>
+          <li><span class="cc">CSE111</span><span class="cn">Prog. Fundamentals with C</span></li>
+          <li><span class="cc">CSE131</span><span class="cn">Digital Electronics</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 2</div><ul>
+          <li><span class="cc">CSE121</span><span class="cn">Discrete Structures</span></li>
+          <li><span class="cc">CSE11L</span><span class="cn">Computing Workshop Lab</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 3</div><ul>
+          <li><span class="cc">CSE211</span><span class="cn">Data Structures</span></li>
+          <li><span class="cc">CSE231</span><span class="cn">Computer Org. &amp; Arch.</span></li>
+          <li><span class="cc">CSE21L</span><span class="cn">Data Structures Lab</span></li>
+          <li><span class="cc">CSE2T1</span><span class="cn">DS Tutorial</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 4</div><ul>
+          <li><span class="cc">CSE221</span><span class="cn">Object Oriented Programming</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 5</div><ul>
+          <li><span class="cc">CSE311</span><span class="cn">Design &amp; Analysis of Algo.</span></li>
+          <li><span class="cc">CSE331</span><span class="cn">DBMS <span class="pill p-shared" style="font-size:10px">shared</span></span></li>
+          <li><span class="cc">CSE31L</span><span class="cn">DBMS Lab</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 6</div><ul>
+          <li><span class="cc">CSE321</span><span class="cn">Operating Systems</span></li>
+          <li><div class="slot"><span class="cn"><b>Open-elective slot (O1)</b> — choose 1 of 6 courses offered by IT/ENTC/MECH/CIVIL/EE/AIDS</span></div></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 7</div><ul>
+          <li><span class="cc">CSE411</span><span class="cn">Computer Networks</span></li>
+          <li><span class="cc">CSE431</span><span class="cn">Machine Learning</span></li>
+          <li><span class="cc">CSE41L</span><span class="cn">Machine Learning Lab</span></li>
+          <li><span class="cc">CSE415</span><span class="cn">Elective E1: Deep Learning</span></li>
+          <li><span class="cc">CSEH1</span><span class="cn">Honors: Distributed Computing</span></li></ul></div>
+        <div class="sem-box"><div class="hd">Sem 8</div><ul>
+          <li><span class="cc">CSE421</span><span class="cn">Compiler Design</span></li>
+          <li><span class="cc">CSE425</span><span class="cn">Elective E1: Cloud Computing</span></li>
+          <li><span class="cc">CSEH2</span><span class="cn">Honors: Compiler Optimizations</span></li></ul></div>
+      </div>
+    </div>
+  </section>
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+    <section class="card" style="flex:3 1 520px;min-width:0">
+      <div class="card-h"><h2>Prerequisite chain · sample</h2><span style="font-size:12.5px;color:var(--muted)">133 links, all strictly downward</span></div>
+      <div class="card-b">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px">
+          <span class="pill p-TH" style="font-size:12px">CSE111</span><span style="color:var(--faint)">→ required for →</span>
+          <span class="pill p-TH" style="font-size:12px">CSE211</span><span style="color:var(--faint)">→</span>
+          <span class="pill p-TH" style="font-size:12px">CSE311</span><span style="color:var(--faint)">→</span>
+          <span class="pill p-TH" style="font-size:12px">CSE411</span>
+        </div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;margin-top:12px">
+          <span class="pill p-TH" style="font-size:12px">CSE221</span><span style="color:var(--faint)">→ required for →</span>
+          <span class="pill p-TH" style="font-size:12px">CSE331 · DBMS</span><span style="color:var(--faint)">&nbsp;·&nbsp; min grade “P”</span>
+        </div>
+        <div style="margin-top:14px;padding:10px 12px;border-radius:8px;background:#FBEAEA;color:#A12323;font-size:12.5px;font-weight:500">
+          Attempt CSE411 → before → CSE111: <b>ERROR 1644 “G2: prerequisite cycle detected”</b> — sp_add_prereq blocks it before insert
+        </div>
+      </div>
+    </section>
+    <section class="card" style="flex:1 1 300px;min-width:0">
+      <div class="card-h"><h2>All programs</h2></div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>Program</th><th>Level</th><th class="r">Sem</th><th class="r">Cr</th><th class="r">Intake</th></tr></thead>
+        <tbody>
+          <tr><td><b>BTECH-CSE</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-AIDS</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-IT</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-ENTC</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-MECH</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-CIVIL</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>BTECH-EE</b></td><td>UG</td><td class="r">8</td><td class="r">170</td><td class="r">120</td></tr>
+          <tr><td><b>MTECH-* × 7</b></td><td>PG</td><td class="r">4</td><td class="r">80</td><td class="r">24</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+</main>
+
+<footer>Group 2 · Academic &amp; Course module — mockup aligned to executed schema (10 tables · 14 FKs · 11 checks · 6 triggers · 3 procedures · 5 views) · contract check 18/18 PASS · MySQL 8 / MariaDB</footer>
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+// tab switcher (self-contained; works offline)
+document.querySelectorAll('.nav a[data-pg]').forEach(function(a){
+  a.addEventListener('click', function(){
+    document.querySelectorAll('.nav a[data-pg]').forEach(function(x){x.classList.remove('on')});
+    a.classList.add('on');
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
+    document.getElementById('pg-'+a.dataset.pg).classList.add('on');
+    window.scrollTo(0,0);
+  });
+});
+</script>
+</body></html>
