@@ -47,6 +47,14 @@ studentRouter.get('/curriculum', async (req, res) => {
   res.render('student/curriculum', { title: 'Curriculum', nav: 'curriculum', profile, semesters });
 });
 
+studentRouter.get('/offerings', async (req, res) => {
+  const profile = await getStudentProfile(req.user!.studentId!);
+  if (!profile) throw notFound('Student record');
+  const courses = await getStudentCourses(req.user!.studentId!);
+  const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
+  res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits });
+});
+
 studentRouter.get('/profile', async (req, res) => {
   const profile = await getStudentProfile(req.user!.studentId!);
   if (!profile) throw notFound('Student record');

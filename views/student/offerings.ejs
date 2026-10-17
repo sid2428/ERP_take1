@@ -1,0 +1,29 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Course offerings</h1><span class="sub"><%= profile.program_name %> · Semester <%= fmt.roman(profile.semester) %> · <%= courses.length %> courses · <%= fmt.credits(totalCredits) %> credits</span></div>
+<section class="card">
+  <div class="hd"><h2>Courses this semester</h2><span class="muted">Your enrolled courses with their teacher and weekly hours</span></div>
+  <% if (!courses.length) { %>
+    <p class="muted" style="margin-top:12px">No courses are enrolled for the current session.</p>
+  <% } else { %>
+  <div style="overflow-x:auto;margin-top:12px">
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Course</th><th>Type</th><th>Credits</th><th>L-T-P hrs</th><th>Teacher</th></tr>
+      </thead>
+      <tbody>
+        <% for (const c of courses) { %>
+          <tr>
+            <td><%= c.course_code %><% if (c.is_honors) { %> <span class="pill v" style="font-size:10px">Honors</span><% } %></td>
+            <td><%= c.course_name %></td>
+            <td><%= c.course_type %></td>
+            <td><%= fmt.credits(c.credits) %></td>
+            <td><%= c.lecture_hrs %>-<%= c.tutorial_hrs %>-<%= c.practical_hrs %></td>
+            <td><%= c.faculty_name || 'To be assigned' %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</section>
+<%- include('../partials/layout-end') %>

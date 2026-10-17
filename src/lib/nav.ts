@@ -7,7 +7,12 @@ export interface NavGroup { label: string; items: NavItem[]; }
 export const NAV: Record<Role, NavGroup[]> = {
   student: [
     { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' }] },
-    { label: 'ACADEMICS', items: [{ key: 'curriculum', label: 'Curriculum', href: '/student/curriculum', icon: 'list' }] },
+    {
+      label: 'ACADEMICS', items: [
+        { key: 'curriculum', label: 'Curriculum', href: '/student/curriculum', icon: 'list' },
+        { key: 'offerings', label: 'Course offerings', href: '/student/offerings', icon: 'book' },
+      ],
+    },
     { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' }] },
   ],
   faculty: [
