@@ -1,13 +1,29 @@
 <%- include('../partials/layout-start') %>
 <% const p = program; %>
 <div class="crumbs"><a href="/admin/programs">Programs</a> / <%= p.program_id %></div>
-<div class="page-head"><h1><%= p.program_name %></h1><span class="sub"><%= p.program_id %> · <%= p.dept_name %> · <%= p.degree_level %> · <%= p.total_semesters %> semesters</span></div>
+<div class="page-head">
+  <h1><%= p.program_name %></h1>
+  <span class="sub"><%= p.program_id %> · <%= p.dept_name %> · <%= p.degree_level %> · <%= p.total_semesters %> semesters</span>
+</div>
+
+<% if (creditDifference !== 0) { %>
+  <div class="flash error" role="alert">
+    <strong>Credit requirement mismatch:</strong> Placed courses total <strong><%= fmt.credits(totalPlacedCredits) %></strong> credits, but the program requires <strong><%= fmt.credits(totalCreditsReq) %></strong> credits. Difference: <strong><%= creditDifference > 0 ? '+' : '' %><%= fmt.credits(creditDifference) %> credits</strong> (<%= creditDifference < 0 ? fmt.credits(Math.abs(creditDifference)) + ' credits short' : fmt.credits(creditDifference) + ' credits in excess' %>).
+  </div>
+<% } %>
 
 <section class="card">
-  <div class="hd"><h2>Semester map</h2><span class="muted">Remove a placement with ×; the database rejects semesters beyond the program length</span></div>
+  <div class="hd">
+    <h2>Semester map</h2>
+    <span class="muted">Placed: <%= fmt.credits(totalPlacedCredits) %> / <%= fmt.credits(totalCreditsReq) %> credits · Remove placement with ×</span>
+  </div>
   <div class="sem-grid" style="margin-top:12px">
     <% for (const s of semesters) { %>
-      <div class="sem-box"><div class="hd">Semester <%= fmt.roman(s.no) %></div>
+      <div class="sem-box">
+        <div class="hd">
+          <span>Semester <%= fmt.roman(s.no) %></span>
+          <span class="pill n" style="font-size:11px"><%= fmt.credits(s.credits) %> cr</span>
+        </div>
         <ul>
           <% if (!s.courses.length) { %><li class="cn">No courses placed</li><% } %>
           <% for (const c of s.courses) { %>
@@ -17,9 +33,57 @@
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn link" type="submit" title="Remove" aria-label="Remove <%= c.course_code %>">×</button></form></span>
               <span class="cn"><%= c.course_name %> · <%= fmt.credits(c.credits) %> cr</span></li>
           <% } %>
-        </ul></div>
+        </ul>
+      </div>
     <% } %>
   </div>
+</section>
+
+<section class="card">
+  <div class="hd">
+    <h2>Prerequisite graph</h2>
+    <span class="muted">Course dependency flow by semester (arrows indicate prerequisite → course)</span>
+  </div>
+  <% if (!graph.nodes.length) { %>
+    <div class="empty">No courses placed in this program yet.</div>
+  <% } else { %>
+    <div class="sc" style="margin-top:12px; padding-bottom:8px">
+      <svg width="<%= graph.width %>" height="<%= graph.height %>" viewBox="0 0 <%= graph.width %> <%= graph.height %>" style="display:block; min-width:<%= graph.width %>px; font-family:inherit;">
+        <defs>
+          <marker id="prereq-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#1F4FA3" />
+          </marker>
+        </defs>
+        <!-- Column headers & vertical divider guides -->
+        <% for (const col of graph.columns) { %>
+          <text x="<%= col.x + col.width / 2 %>" y="24" text-anchor="middle" font-size="12" font-weight="600" fill="#5B6578">Semester <%= fmt.roman(col.semester) %></text>
+          <line x1="<%= col.x + col.width + 25 %>" y1="12" x2="<%= col.x + col.width + 25 %>" y2="<%= graph.height - 12 %>" stroke="#EEF0F5" stroke-dasharray="4" />
+        <% } %>
+        <!-- Prerequisite dependency edges -->
+        <% for (const e of graph.edges) { %>
+          <path d="<%= e.d %>" fill="none" stroke="#8FB8FF" stroke-width="2" marker-end="url(#prereq-arrow)">
+            <title><%= e.fromCode %> → <%= e.toCode %> (Min grade: <%= e.minGrade %>)</title>
+          </path>
+        <% } %>
+        <!-- Course nodes -->
+        <% for (const n of graph.nodes) { %>
+          <g transform="translate(<%= n.x %>, <%= n.y %>)">
+            <a href="/admin/courses/<%= n.courseId %>">
+              <rect width="<%= n.width %>" height="<%= n.height %>" rx="6" fill="#fff" stroke="#DDE2EA" stroke-width="1.5">
+                <title><%= n.code %> · <%= n.name %> (<%= fmt.credits(n.credits) %> credits)</title>
+              </rect>
+              <text x="10" y="20" font-size="12" font-weight="600" fill="#1F3A6E"><%= n.code %></text>
+              <text x="<%= n.width - 10 %>" y="20" text-anchor="end" font-size="11" fill="#5B6578"><%= fmt.credits(n.credits) %> cr</text>
+              <text x="10" y="36" font-size="10" fill="#7A8497"><%= n.name.length > 17 ? n.name.slice(0, 16) + '…' : n.name %></text>
+            </a>
+          </g>
+        <% } %>
+      </svg>
+    </div>
+    <% if (!graph.edges.length) { %>
+      <div class="sm muted" style="margin-top:6px">No prerequisite dependencies between the placed courses of this program.</div>
+    <% } %>
+  <% } %>
 </section>
 
 <div class="grid2">

@@ -6,6 +6,7 @@ import { audit } from '../../lib/audit.js';
 import { notFound } from '../../lib/http-error.js';
 import { pageInfo, parsePage, withQuery } from '../../lib/pagination.js';
 import { getCurriculum } from '../../queries/shared-queries.js';
+import { buildPrereqGraph, getProgramPrerequisites } from '../../queries/academic-queries.js';
 import { handleForm, idParam, nullIfEmpty } from './helpers.js';
 
 export const academicRouter = Router();
@@ -65,17 +66,40 @@ academicRouter.get('/programs', async (_req, res) => {
 });
 
 academicRouter.get('/programs/:id', async (req, res) => {
-  const program = await queryOne<Record<string, unknown> & { total_semesters: number; program_name: string }>(
+  const program = await queryOne<Record<string, unknown> & { total_semesters: number; program_name: string; total_credits_req: number | string }>(
     'SELECT p.*, d.dept_name FROM program p JOIN department d USING (dept_id) WHERE program_id = $1', [req.params.id]);
   if (!program) throw notFound('Program');
-  const [rows, courses] = await Promise.all([
-    getCurriculum(req.params.id as string),
+  const programId = req.params.id as string;
+  const [rows, courses, prereqs] = await Promise.all([
+    getCurriculum(programId),
     query(`SELECT course_id, course_code, course_name FROM course
            WHERE is_active AND course_id NOT IN (SELECT course_id FROM program_curriculum WHERE program_id = $1)
-           ORDER BY course_code`, [req.params.id]),
+           ORDER BY course_code`, [programId]),
+    getProgramPrerequisites(programId),
   ]);
-  const semesters = Array.from({ length: program.total_semesters }, (_, i) => ({ no: i + 1, courses: rows.filter((r) => r.semester_no === i + 1) }));
-  res.render('admin/program-detail', { title: program.program_name, nav: 'programs', program, semesters, courses });
+
+  const semesters = Array.from({ length: program.total_semesters }, (_, i) => {
+    const semCourses = rows.filter((r) => r.semester_no === i + 1);
+    const credits = semCourses.reduce((sum, c) => sum + Number(c.credits), 0);
+    return { no: i + 1, courses: semCourses, credits };
+  });
+
+  const totalPlacedCredits = rows.reduce((sum, r) => sum + Number(r.credits), 0);
+  const totalCreditsReq = Number(program.total_credits_req);
+  const creditDifference = Math.round((totalPlacedCredits - totalCreditsReq) * 10) / 10;
+  const graph = buildPrereqGraph(semesters, prereqs);
+
+  res.render('admin/program-detail', {
+    title: program.program_name,
+    nav: 'programs',
+    program,
+    semesters,
+    courses,
+    totalPlacedCredits,
+    totalCreditsReq,
+    creditDifference,
+    graph,
+  });
 });
 
 const programSchema = z.object({
