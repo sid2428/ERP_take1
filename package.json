@@ -1,0 +1,54 @@
+{
+  "name": "pict-erp-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PICT Student ERP Portal — DBMS course project integrating the group databases (Express + EJS + TypeScript on PostgreSQL)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/src/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "tsx scripts/db/migrate.ts",
+    "db:load": "tsx scripts/db/load.ts",
+    "db:verify": "tsx scripts/db/verify.ts",
+    "data:build": "python scripts/data/build_dataset.py",
+    "data:users": "tsx scripts/db/build-users.ts",
+    "db:app-password": "tsx scripts/db/app-password.ts",
+    "supabase:app-password": "tsx --env-file=.env.supabase scripts/db/app-password.ts",
+    "supabase:migrate": "tsx --env-file=.env.supabase scripts/db/migrate.ts",
+    "supabase:load": "tsx --env-file=.env.supabase scripts/db/load.ts",
+    "supabase:verify": "tsx --env-file=.env.supabase scripts/db/verify.ts",
+    "db:check": "tsx scripts/db/check-connection.ts",
+    "supabase:check": "tsx --env-file=.env.supabase scripts/db/check-connection.ts",
+    "supabase:app-url": "tsx --env-file=.env.supabase scripts/db/app-url.ts"
+  },
+  "dependencies": {
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^18.0.8",
+    "ejs": "^7.0.1",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.1",
+    "pg-copy-streams": "^7.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "@types/pg-copy-streams": "^1.2.5",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

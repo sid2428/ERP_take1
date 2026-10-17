@@ -1,0 +1,32 @@
+# Dependencies & build output
+node_modules/
+dist/
+.vercel/
+
+# Secrets — never commit (see .env.example / CREDENTIALS.example.md)
+CREDENTIALS.md
+.env
+.env.*
+!.env.example
+
+# Raw group datasets (large; kept locally, not in git)
+*.csv
+*.zip
+attendance_dataset/
+
+# Generated data pipeline output
+data/generated/
+data/reports/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+.vercel
