@@ -1,0 +1,14 @@
+# Only the app is deployed; datasets, pipeline and tests stay local.
+*.csv
+*.zip
+attendance_dataset/
+data/
+scripts/
+tests/
+migrations/
+*.sql
+docs/
+.env
+.env.*
+dist/
+node_modules/
