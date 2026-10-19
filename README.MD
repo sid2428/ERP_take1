@@ -11,7 +11,7 @@ and a working web portal for **students, faculty and the academic office**.
 
 ---
 
-## What works today
+## What work today
 
 | Phase | Scope | Status |
 |---|---|---|
