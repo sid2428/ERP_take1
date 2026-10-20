@@ -165,3 +165,89 @@ export function buildPrereqGraph(
     edges,
   };
 }
+
+
+
+
+
+
+
+// ---- T3-2: elective selection (student side). APPEND this block to src/queries/academic-queries.ts ----
+
+export interface ElectiveWindowRow {
+  window_id: number;
+  academic_session_id: string;
+  semester_no: number;
+  elective_group: 'O1' | 'H1';
+  status: 'Scheduled' | 'Open' | 'Closed' | 'Allocated';
+  opens_at: Date;
+  closes_at: Date;
+  max_choices: number;
+  is_open: boolean;
+}
+
+export interface ElectiveOfferingRow {
+  offering_id: number;
+  course_code: string;
+  course_name: string;
+  credits: number;
+  dept_id: string;
+  section_name: string;
+  max_seats: number;
+  enrolled_count: number;
+  preference_rank: number | null;
+}
+
+export interface ElectiveResultRow {
+  merit_position: number;
+  merit_basis: string;
+  choice_got: number | null;
+  course_code: string | null;
+  course_name: string | null;
+  section_name: string | null;
+  outcome: 'Allocated' | 'No seat';
+}
+
+/** Windows this student may use: active student whose program places that elective group in that semester. */
+export function getStudentElectiveWindows(studentId: number): Promise<ElectiveWindowRow[]> {
+  return query<ElectiveWindowRow>(`
+    SELECT w.window_id, w.academic_session_id, w.semester_no, w.elective_group, w.status,
+           w.opens_at, w.closes_at, w.max_choices,
+           (w.status = 'Open' AND now() BETWEEN w.opens_at AND w.closes_at) AS is_open
+    FROM elective_window w
+    JOIN student s ON s.student_id = $1 AND s.status = 'Active'
+    WHERE w.status <> 'Scheduled'
+      AND EXISTS (SELECT 1 FROM program_curriculum pc
+                   WHERE pc.program_id = s.program_id AND pc.elective_group = w.elective_group
+                     AND pc.semester_no = w.semester_no)
+    ORDER BY w.closes_at DESC
+  `, [studentId]);
+}
+
+/** Offerings in the window that belong to the student's own program curriculum, with their current ranking. */
+export function getStudentElectiveOfferings(windowId: number, studentId: number): Promise<ElectiveOfferingRow[]> {
+  return query<ElectiveOfferingRow>(`
+    SELECT o.offering_id, c.course_code, c.course_name, c.credits::float8 AS credits, c.dept_id,
+           o.section_name, o.max_seats, o.enrolled_count, p.preference_rank
+    FROM elective_window w
+    JOIN elective_window_offering wo ON wo.window_id = w.window_id
+    JOIN course_offering o ON o.offering_id = wo.offering_id
+    JOIN course c ON c.course_id = o.course_id
+    JOIN student s ON s.student_id = $2
+    LEFT JOIN elective_preference p
+           ON p.window_id = w.window_id AND p.offering_id = o.offering_id AND p.student_id = s.student_id
+    WHERE w.window_id = $1
+      AND EXISTS (SELECT 1 FROM program_curriculum pc
+                   WHERE pc.program_id = s.program_id AND pc.course_id = o.course_id
+                     AND pc.elective_group = w.elective_group AND pc.semester_no = w.semester_no)
+    ORDER BY c.course_code, o.section_name
+  `, [windowId, studentId]);
+}
+
+export async function getStudentElectiveResult(windowId: number, studentId: number): Promise<ElectiveResultRow | null> {
+  const rows = await query<ElectiveResultRow>(`
+    SELECT merit_position, merit_basis, choice_got, course_code, course_name, section_name, outcome
+    FROM v_student_elective_result WHERE window_id = $1 AND student_id = $2
+  `, [windowId, studentId]);
+  return rows[0] ?? null;
+}

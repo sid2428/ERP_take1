@@ -1,0 +1,66 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Elective selection</h1><span class="sub">Rank your choices. When the window closes, seats are given in merit order.</span></div>
+
+<% if (!windows.length) { %>
+<section class="card"><p class="muted">No elective window is open for your program right now.</p></section>
+<% } %>
+
+<% for (const w of windows) { %>
+<% const when = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); %>
+<section class="card" style="margin-bottom:16px">
+  <div class="hd">
+    <h2><%= w.elective_group === 'O1' ? 'Open elective' : 'Honors' %> · Semester <%= w.semester_no %> · <%= w.academic_session_id %></h2>
+    <span class="pill <%= w.is_open || w.status === 'Allocated' ? 'g' : '' %>"><%= w.is_open ? 'Open' : w.status %></span>
+  </div>
+  <p class="muted">Choices accepted from <%= when(w.opens_at) %> to <%= when(w.closes_at) %> · rank up to <%= w.max_choices %></p>
+
+  <% if (w.result) { %>
+    <% if (w.result.outcome === 'Allocated') { %>
+    <p><b>You got <%= w.result.course_code %> – <%= w.result.course_name %></b> (section <%= w.result.section_name %>), your choice #<%= w.result.choice_got %>.</p>
+    <% } else { %>
+    <p><b>No seat could be given</b> from your choices. Please contact the academic office.</p>
+    <% } %>
+    <p class="muted">Your merit position was <%= w.result.merit_position %> (<%= w.result.merit_basis === 'CGPA' ? 'by CGPA' : 'by attendance' %>).</p>
+  <% } %>
+
+  <% if (!w.offerings.length) { %>
+    <p class="muted">No electives have been listed for you in this window yet.</p>
+  <% } else if (w.is_open) { %>
+    <form method="post" action="/student/electives/<%= w.window_id %>" class="stack" style="margin-top:8px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="form-grid">
+        <% for (let rank = 1; rank <= w.max_choices; rank++) { %>
+        <% const chosen = w.offerings.find((o) => o.preference_rank === rank); %>
+        <div class="field">
+          <label for="c<%= w.window_id %>-<%= rank %>">Choice <%= rank %></label>
+          <select id="c<%= w.window_id %>-<%= rank %>" name="choice<%= rank %>">
+            <option value="">— none —</option>
+            <% for (const o of w.offerings) { %>
+            <option value="<%= o.offering_id %>" <%= chosen && chosen.offering_id === o.offering_id ? 'selected' : '' %>>
+              <%= o.course_code %> – <%= o.course_name %> (<%= o.section_name %>, <%= o.max_seats %> seats)
+            </option>
+            <% } %>
+          </select>
+        </div>
+        <% } %>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Save my choices</button></div>
+    </form>
+  <% } else { %>
+    <div class="sc"><table>
+      <thead><tr><th>Course</th><th>Section</th><th class="num">Seats</th><th>Your choice</th></tr></thead>
+      <tbody>
+        <% for (const o of w.offerings) { %>
+        <tr>
+          <td><b><%= o.course_code %></b> <%= o.course_name %></td>
+          <td><%= o.section_name %></td>
+          <td class="num"><%= o.enrolled_count %> / <%= o.max_seats %></td>
+          <td><%= o.preference_rank ? '#' + o.preference_rank : '—' %></td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+<% } %>
+<%- include('../partials/layout-end') %>
