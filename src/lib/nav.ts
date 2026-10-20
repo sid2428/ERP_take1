@@ -30,6 +30,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'courses', label: 'Course catalog', href: '/admin/courses', icon: 'book' },
         { key: 'sessions', label: 'Academic sessions', href: '/admin/sessions', icon: 'calendar' },
         { key: 'sections', label: 'Divisions & sections', href: '/admin/sections', icon: 'users' },
+        { key: 'electives', label: 'Electives', href: '/admin/electives', icon: 'list' },
       ],
     },
     {
