@@ -5,7 +5,8 @@ import { hasDatabase, inRollback, one } from './helpers.js';
 /** Personal notices a user can see, newest first. */
 const inbox = async (db: pg.Client, userId: number) =>
   (await db.query<{ title: string; body: string; link: string | null }>(
-    `SELECT title, body, link FROM v_user_notices WHERE user_id = $1 AND is_personal ORDER BY notice_id DESC`, [userId])).rows;
+    `SELECT title, body, link FROM v_user_notices WHERE user_id = $1 AND is_personal
+     ORDER BY COALESCE(notification_id, notice_id) DESC`, [userId])).rows;
 
 async function people(db: pg.Client) {
   const student = await one<{ user_id: number; student_id: number }>(db,
@@ -69,10 +70,52 @@ describe.skipIf(!hasDatabase)('T8 automatic notices', () => {
     await inRollback(async (db) => {
       const p = await people(db);
       const n = await one<{ id: number }>(db, `SELECT notify_user($1, 'Just for you', 'Only this person receives it.', 'General') AS id`, [p.student.user_id]);
-      const reach = await one<{ recipients: number }>(db, 'SELECT recipients FROM v_notice_reach WHERE notice_id = $1', [n.id]);
-      expect(reach.recipients).toBe(1);
-      const seen = await db.query('SELECT user_id FROM v_user_notices WHERE notice_id = $1', [n.id]);
+      const seen = await db.query('SELECT user_id FROM v_user_notices WHERE item_type = \'notification\' AND notification_id = $1', [n.id]);
       expect(seen.rows).toEqual([{ user_id: p.student.user_id }]);
+    });
+  });
+
+  it('supports the assignment notify contract and preserves legacy personal read state', async () => {
+    await inRollback(async (db) => {
+      const p = await people(db);
+      await db.query('CALL notify($1, $2, $3, $4)', [p.student.user_id, 'test', 'Contract message', '/student']);
+      const current = await one<{ notification_id: number; is_read: boolean; link: string }>(db,
+        `SELECT notification_id, is_read, link FROM v_user_notices
+         WHERE user_id = $1 AND item_type = 'notification' AND notification_kind = 'test'`, [p.student.user_id]);
+      expect(current).toMatchObject({ is_read: false, link: '/student' });
+      await db.query('UPDATE notification SET read_at = now() WHERE notification_id = $1', [current.notification_id]);
+      expect((await one<{ is_read: boolean }>(db,
+        'SELECT is_read FROM v_user_notices WHERE user_id = $1 AND notification_id = $2', [p.student.user_id, current.notification_id])).is_read).toBe(true);
+
+      const legacy = await one<{ notice_id: number }>(db,
+        `SELECT post_notice(NULL, 'Legacy personal', 'A migrated personal notice.', 'General', $1::jsonb) AS notice_id`,
+        [JSON.stringify([{ user_id: p.student.user_id }])]);
+      await db.query('INSERT INTO notice_read (notice_id, user_id) VALUES ($1, $2)', [legacy.notice_id, p.student.user_id]);
+      await db.query(`INSERT INTO notification
+        (user_id, kind, title, text, category, legacy_notice_id, read_at)
+        VALUES ($1, 'legacy', 'Legacy personal', 'A migrated personal notice.', 'General', $2, now())`,
+        [p.student.user_id, legacy.notice_id]);
+      const migrated = await one<{ notification_id: number; is_read: boolean }>(db,
+        'SELECT notification_id, is_read FROM v_user_notices WHERE user_id = $1 AND title = $2', [p.student.user_id, 'Legacy personal']);
+      expect(migrated.is_read).toBe(true);
+      expect((await db.query('SELECT 1 FROM v_user_notices WHERE user_id = $1 AND notice_id = $2', [p.student.user_id, legacy.notice_id])).rows).toHaveLength(0);
+    });
+  });
+
+  it('rejects invalid notify data and ignores inactive or unknown recipients', async () => {
+    await inRollback(async (db) => {
+      const p = await people(db);
+      await db.query('SAVEPOINT invalid_link');
+      await expect(db.query('CALL notify($1, $2, $3, $4)', [p.student.user_id, 'bad', 'External', 'https://example.com'])).rejects.toThrow(/internal portal/);
+      await db.query('ROLLBACK TO SAVEPOINT invalid_link');
+      await db.query('SAVEPOINT invalid_kind');
+      await expect(db.query('CALL notify($1, $2, $3, $4)', [p.student.user_id, '', 'Message', null])).rejects.toThrow(/kind/);
+      await db.query('ROLLBACK TO SAVEPOINT invalid_kind');
+      await db.query('CALL notify($1, $2, $3, $4)', [999999999, 'test', 'Nobody receives this', null]);
+      const inactive = await one<{ user_id: number }>(db, `SELECT user_id FROM app_user WHERE is_active ORDER BY user_id LIMIT 1`);
+      await db.query('UPDATE app_user SET is_active = false WHERE user_id = $1', [inactive.user_id]);
+      await db.query('CALL notify($1, $2, $3, $4)', [inactive.user_id, 'test', 'Inactive receives nothing', null]);
+      expect((await db.query(`SELECT 1 FROM notification WHERE kind = 'test' AND text IN ('Nobody receives this', 'Inactive receives nothing')`)).rows).toHaveLength(0);
     });
   });
 

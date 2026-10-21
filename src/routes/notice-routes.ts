@@ -13,8 +13,8 @@ import { forbidden, notFound } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { actAs } from '../queries/grievance-queries.js';
 import {
-  NOTICE_CATEGORIES, alertsFor, audienceLabel, boardFor, categoryPill, markAllRead, markRead, noticeFor, postNotice, reachOf,
-  targetsOf, teachingDivisions, type NoticeKind,
+  NOTICE_CATEGORIES, alertsFor, audienceLabel, boardFor, categoryPill, legacyNoticeFor, markAllRead, markNotificationRead,
+  markRead, notificationFor, noticeFor, postNotice, reachOf, targetsOf, teachingDivisions, type NoticeKind,
 } from '../queries/notice-queries.js';
 import { idParam } from './admin/helpers.js';
 
@@ -166,10 +166,30 @@ noticeRouter.post('/:id/withdraw', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------- detail
-/** Open what a personal notice is about (e.g. the grievance), marking the notice read on the way. */
+/** Open a dedicated notification, marking it read on the way. */
+noticeRouter.get('/notification/:id/go', async (req, res) => {
+  const id = idParam(req.params.id);
+  const n = await notificationFor(req.user!.userId, id);
+  if (!n) throw notFound('Notification');
+  if (!n.is_read) await markNotificationRead(pool, req.user!.userId, id);
+  res.redirect(n.link ?? `${base(req)}/notification/${id}`);
+});
+
+noticeRouter.get('/notification/:id', async (req, res) => {
+  const id = idParam(req.params.id);
+  const n = await notificationFor(req.user!.userId, id);
+  if (!n) throw notFound('Notification');
+  if (!n.is_read) await markNotificationRead(pool, req.user!.userId, id);
+  res.render('shared/notice-detail', {
+    title: n.title, nav: req.user!.role === 'admin' ? 'inbox' : 'notices', base: base(req), n, categoryPill,
+    isPoster: false, audience: 'Personal notification', reach: undefined, withdrawnAt: null,
+  });
+});
+
+/** Open a legacy personal notice URL, marking the preserved notice read on the way. */
 noticeRouter.get('/:id/go', async (req, res) => {
   const id = idParam(req.params.id);
-  const n = await noticeFor(req.user!.userId, id);
+  const n = await noticeFor(req.user!.userId, id) ?? await legacyNoticeFor(req.user!.userId, id);
   if (!n) throw notFound('Notice');
   if (!n.is_read) await markRead(pool, req.user!.userId, id);
   res.redirect(n.link ?? `${base(req)}/${id}`);
@@ -178,7 +198,7 @@ noticeRouter.get('/:id/go', async (req, res) => {
 noticeRouter.get('/:id', async (req, res) => {
   const id = idParam(req.params.id);
   const user = req.user!;
-  let n = await noticeFor(user.userId, id);
+  let n = await noticeFor(user.userId, id) ?? await legacyNoticeFor(user.userId, id);
   // faculty can still open their own notices after withdrawing them or when they are not in the audience
   const own = n ? null : await queryOne<{ notice_id: number }>('SELECT notice_id FROM notice WHERE notice_id = $1 AND posted_by = $2', [id, user.userId]);
   if (!n && !own) throw notFound('Notice');

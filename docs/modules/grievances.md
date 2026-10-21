@@ -1,6 +1,10 @@
 # Grievances (T8-2)
 
 Students and faculty raise grievances with the academic office and follow them to a decision.
+
+Personal event notifications are stored by `migrations/083-notifications.sql` in `notification`
+through the assignment contract `notify(user_id, kind, text, link)`. The grievance triggers
+preserve the recipient sets below; the event and grievance change commit together.
 The admin sees every grievance in one queue, can hand one to a faculty member, replies in a shared
 comment trail, and closes it as **Resolved** (approved) or **Rejected**, always with a note.
 
@@ -90,6 +94,20 @@ CALL erp.resolve_grievance(7, 1, 'Resolved', 'Projector replaced on 21 Oct.');
 | Faculty | `/faculty/grievances`, `/new`, `/:id` | **Assigned to me** + raised by me, raise one, detail + replies |
 | Admin | `/admin/grievances` | queue (default Open + In progress) with status/category/role/search filters, totals, per-category stats |
 | Admin | `/admin/grievances/:id` | detail, replies, **Resolve / Reject** with a note, assign by faculty code (suggestions from the raiser's department, HOD first), mark In progress |
+
+## Notification events
+
+| Event | Recipients | Link |
+|---|---|---|
+| Creation | Every active admin | `/admin/grievances/:id` |
+| Assignment | Assigned faculty and raiser | Role-specific grievance path |
+| Open → In progress without assignment | Raiser | Raiser grievance path |
+| Reply | Every other participant: raiser, assigned faculty account and active admins; author excluded | Recipient role-specific path |
+| Resolution or rejection | Raiser and assigned faculty, when present | Role-specific grievance path |
+
+`notify_user(...)` remains only as a backward-compatible adapter for older callers; the current
+grievance triggers call `notify(...)` directly. Notification IDs are distinct from notice IDs, and
+the inbox uses an explicit item type when navigating them.
 
 ## Seed data
 

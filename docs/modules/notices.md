@@ -1,12 +1,13 @@
 # Notices and in-app notifications (T8-3)
 
-T8 provides one unified notice system for announcements, personal event updates, and live status
-alerts. Students, faculty, and admins see a role-specific bell in the authenticated top bar. The
-bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the current user's
-unread stored-notice count.
+T8 combines an audience-targeted announcement system with dedicated personal notifications and
+live status alerts. Students, faculty, and admins see a role-specific bell in the authenticated top
+bar. The bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the
+current user's unread count across announcements and dedicated notifications.
 
-Migration: `migrations/081-notices.sql` and `migrations/082-automatic-notices.sql` · Seed:
-`scripts/db/seed-notices.ts` · Routes: `src/routes/notice-routes.ts`,
+Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`, and
+`migrations/083-notifications.sql` · Seed: `scripts/db/seed-notices.ts` · Routes:
+`src/routes/notice-routes.ts`,
 `src/routes/admin/notice-routes.ts` · Queries: `src/queries/notice-queries.ts` · Tests:
 `tests/db/notice.test.ts`, `tests/db/automatic-notice.test.ts`, `tests/app/notice.test.ts`
 
@@ -29,18 +30,22 @@ reaches a person when any target matches them:
 | `notice` | `notice_id` primary key | title, body, category, importance, poster, expiry, withdrawal, optional internal link and source |
 | `notice_target` | `target_id` primary key | audience filters or one personal `user_id` |
 | `notice_read` | composite primary key `(user_id, notice_id)` | read timestamp |
+| `notification` | `notification_id` primary key | one recipient's personal event message, kind, text, internal link, timestamps and read state |
 
 `v_user_audience` resolves active accounts to role, department, year, and division. The
-`v_user_notices` view resolves recipients, removes withdrawn/expired notices, and joins each user's
-read state. It returns one row per user/notice even when multiple targets match, so filtered boards
-do not duplicate notices.
+`v_user_notices` view combines live announcements with unexpired dedicated notifications and joins
+each user's read state. Its appended `item_type`, `notification_id`, and `notification_kind` columns
+are the discriminator; routes never infer the record type from a numeric ID. Announcement rows with
+only personal targets are backfilled into `notification` and omitted from the combined view, while
+mixed group/personal notices remain in `notice` so no group recipient is lost.
 
 ## Rules and enforcement
 
 The database enforces posting permissions, faculty teaching-division restrictions, target validity,
-at-least-one-audience, immutable posted notices, final withdrawal, expiry constraints, and
-recipient-only read tracking. Route forms also validate fields with Zod. Portal writes run in a
-transaction and add the relevant `NOTICE_*` audit record.
+at-least-one-audience, immutable posted notices, final withdrawal, expiry constraints, valid
+notification recipients/messages/links, and recipient-only read tracking. Route forms also validate
+fields with Zod. Portal writes run in a transaction and add the relevant `NOTICE_*` audit record;
+database-triggered grievance notifications remain atomic with the grievance transaction.
 
 The database objects responsible for these rules are:
 
@@ -57,8 +62,9 @@ The key views and matching function are:
   account. Student year/division values come from the current-session section; faculty department
   values come from the faculty record.
 * `v_user_notices` returns live, recipient-filtered notices with read state. Migration 082 adds
-  `link`, `source`, and `is_personal`. A personal row is identified when the notice has a personal
-  `user_id` target.
+  `link`, `source`, and `is_personal`; migration 083 appends `item_type`, `notification_id`, and
+  `notification_kind` and unions in dedicated notifications. A personal announcement row is
+  identified when the notice has a personal `user_id` target.
 * `v_notice_reach` returns `(notice_id, recipients, reads)`. Group targets are counted from grouped
   audience rows; personal targets add only named people not already covered by a group target.
 * `notice_target_matches(t notice_target, a v_user_audience) -> boolean` matches optional role,
@@ -77,13 +83,14 @@ JOIN erp.v_user_audience AS a ON a.user_id = $1
 WHERE t.notice_id = $2;
 ```
 
-`notice_read` is only for stored notices. `user_alerts(user_id)` returns live attendance/fee status
-alerts and does not create read rows; an alert disappears when its underlying condition is fixed.
+`notice_read` is only for `notice` rows. Dedicated notifications store `read_at` on their own row,
+with one row per recipient. `user_alerts(user_id)` returns live attendance/fee status alerts and
+does not create read rows; an alert disappears when its underlying condition is fixed.
 
 ## Current functions and query contracts
 
-Migrations 081 and 082 create functions and triggers, not SQL procedures; the portal and other
-modules call the function contracts below with bound parameters.
+Migrations 081–083 create the database contracts below. The portal and other modules call them with
+bound parameters.
 
 `v_user_notices(user_id)` is the read-state and recipient contract:
 
@@ -109,9 +116,28 @@ safe internal links. For example, a T5 caller may bind a current-session target 
 `[{"role":"student","dept_id":"CSE","year_of_study":3}]` only after resolving that audience;
 the example is not a production-ready ID fixture.
 
-`notify_user(user_id, title, body, category, link = NULL, source = NULL) -> notice_id` creates a
-stored personal notice for one active account through the same notice tables. Personal notices expire
-after 60 days. The current grievance triggers call it for assignment, replies, and closure events.
+`notify(user_id, kind, text, link)` is the assignment-compliant procedure. It is a no-op for a
+missing or inactive recipient, rejects invalid message data and external links, and stores a
+notification atomically with a 60-day expiry. The five-argument overload additionally accepts a
+`notice_category` so grievance events retain the existing category filters.
+
+```sql
+-- The required four-argument contract; bind an active app_user ID and a validated internal path.
+CALL erp.notify($1, $2, $3, $4);
+
+-- T8 grievance trigger form, retaining the category used by the existing board filters.
+CALL erp.notify($1, $2, $3, $4, $5::erp.notice_category);
+```
+
+The `notification` table also keeps a display title, category, optional poster, expiry, and
+`legacy_notice_id` solely to preserve the existing UI and historical personal notices. Its primary
+key is `notification_id`; `user_id` is the recipient foreign key. A partial unread index supports
+the bell count, and the internal-link check accepts only portal paths beginning with `/`.
+
+`notify_user(user_id, title, body, category, link = NULL, source = NULL) -> notification_id` is a
+backward-compatible adapter for verified old callers. It now writes `notification`, preserves the
+old title/body/category/source/expiry behavior, and returns the dedicated notification ID. New
+grievance triggers call `notify(...)` directly.
 
 ```sql
 -- Bind an existing active app_user ID and a validated internal path, or NULL for no action.
@@ -144,21 +170,23 @@ recipient, withdrawal, expiry, and read rules without materializing other users'
 
 | Who | URL | Behaviour |
 |---|---|---|
-| Student | `/student/notices`, `/:id`, `/:id/go` | announcements/personal filter, category filter, read state, mark-all-read, safe personal navigation |
-| Faculty | `/faculty/notices`, `/new`, `/:id`, `/:id/go` | same inbox plus Posted by me, taught-division posting and withdrawal |
-| Admin | `/admin/inbox`, `/:id`, `/:id/go` | current user's inbox and personal alerts; bell destination |
+| Student | `/student/notices`, `/:id`, `/notification/:id`, `/notification/:id/go` | announcements/personal filter, category filter, read state, mark-all-read, safe personal navigation |
+| Faculty | `/faculty/notices`, `/new`, `/:id`, `/notification/:id`, `/notification/:id/go` | same inbox plus Posted by me, taught-division posting and withdrawal |
+| Admin | `/admin/inbox`, `/:id`, `/notification/:id`, `/notification/:id/go` | current user's inbox and personal alerts; bell destination |
 | Admin | `/admin/notices`, `/new`, `/:id` | announcement management, reach/read counts, state/category/kind filters, withdrawal |
 
 The shared board accepts `kind=all`, `kind=announcements`, or `kind=personal` and a `category`
 parameter. Switching either filter preserves the other. Mark-all-read applies to the selected kind
 and category and never writes another user's rows. Opening a permitted notice marks it read; `/go`
-then redirects to its stored internal link. Guessed IDs are checked through `v_user_notices` and
-return 404 for non-recipients.
+then redirects to its stored internal link. Dedicated notification IDs use the explicit
+`/notification/:id` route; legacy numeric notice URLs remain supported. Guessed IDs are checked
+through the combined view and return 404 for non-recipients. A notification without a link opens
+its accessible detail page instead.
 
 ## Grievance notification events
 
-Migration 082 implements these database-triggered events; all use `notify_user(...)` and source
-`'grievance'`:
+Migration 083 redefines these database-triggered events; all use `notify(...)`, kind `grievance`,
+and commit atomically with the grievance change:
 
 | Trigger/event | Recipients | Stored link and detail |
 |---|---|---|
@@ -176,24 +204,26 @@ both resolution and rejection, with the status text reflected in each message.
 
 | Source | Event | Current implementation | Next step |
 |---|---|---|---|
-| T4 Attendance | student falls below required attendance | Implemented live alert through `user_alerts(user_id)` using `v_student_attendance_by_course`; called by the notice board/dashboard | Confirm this satisfies the shared notification requirement; do not add duplicate triggers without agreement |
+| T4 Attendance | student falls below required attendance | Implemented live alert through `user_alerts(user_id)` using `v_student_attendance_by_course`; called by the notice board/dashboard. No T4 event caller to `notify(...)` exists. | Decide whether the live alert satisfies the shared notification requirement before adding a stored event |
 | T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist | Verify the real publication workflow calls the relevant helper |
-| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists | Verify compatibility with the real T6 view and fee screen |
+| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition or stored-notification caller was found | Verify compatibility with the real T6 view and fee screen |
 | T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
 | T2 Faculty | leave/request decision | No caller found in the repository | Coordinate when the event/API exists |
 | T7 Placement | new drive published | No caller found in the repository | Coordinate when the event/API exists |
-| T8 Grievances | creation, assignment, reply, resolution/rejection | Implemented by database triggers in `migrations/082-automatic-notices.sql` through `notify_user(...)`; covered by T8 tests | Preserve and extend when grievance events change |
+| T8 Grievances | creation, assignment, reply, resolution/rejection | Implemented by database triggers redefined in `migrations/083-notifications.sql` through `notify(...)`; covered by T8 database/app tests | Preserve and extend when grievance events change |
 
-## Architectural decision still required
+## Architecture and migration compatibility
 
-The original assignment names a separate `notification` table and `notify(user_id, kind, text,
-link)` procedure. The current repository instead uses the existing audience-targeted `notice` system,
-with `notify_user(user_id, title, body, category, link, source)` for personal notices. T8-3 keeps
-that unified design to avoid duplicate storage, conflicting read state, and parallel contracts.
+The assignment-compliant dedicated `notification` table and `notify(user_id, kind, text, link)`
+procedure are implemented in migration 083 for T0 review. `notice` remains the announcement and
+audience-targeting system; `notification` is one recipient per row for personal events. The combined
+`v_user_notices` contract and explicit item discriminator let the existing bell, filters and routes
+serve both without numeric-ID collisions.
 
-This is an explicit T0/project-team decision, not an assertion that the named `notification` contract
-has been implemented. If exact assignment compliance requires a separate table, it should be designed
-and coordinated as a future migration after overlap, callers, and read semantics are agreed.
+Migration 083 backfills historical notices whose complete audience was personal, including their
+title, body, link, timestamps and `notice_read` state. It does not delete old notice rows or read
+rows. Mixed group/personal notices remain in `notice` to avoid losing group recipients. The old
+`notify_user(...)` function remains as a safe compatibility adapter.
 
 ## Seed and demo
 
