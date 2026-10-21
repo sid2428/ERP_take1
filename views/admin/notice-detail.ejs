@@ -1,0 +1,36 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1><%= n.title %></h1><span class="sub"><a href="/admin/notices">← Notices</a></span></div>
+<div class="grid2">
+<section class="card">
+  <div class="hd">
+    <div><% if (n.is_important) { %><span class="pill r">Important</span> <% } %><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span></div>
+    <span class="muted"><%= fmt.dateTime(n.posted_at) %></span>
+  </div>
+  <div class="notice-body"><%= n.body %></div>
+  <p class="note" style="margin:16px 0 0">Posted by <%= n.posted_by_name %><% if (n.expires_at) { %> · shown until <%= fmt.dateTime(n.expires_at) %><% } %></p>
+</section>
+<div class="stack">
+  <section class="card">
+    <div class="hd"><h2>Reach</h2>
+      <% if (n.withdrawn_at) { %><span class="pill r">Withdrawn</span><% } else if (n.expires_at && new Date(n.expires_at) < new Date()) { %><span class="pill n">Expired</span><% } else { %><span class="pill g">Live</span><% } %></div>
+    <dl class="dl">
+      <div><dt>Audience</dt><dd><%= audience %></dd></div>
+      <div><dt>Recipients</dt><dd><%= fmt.num(reach ? reach.recipients : 0) %></dd></div>
+      <div><dt>Read by</dt><dd><%= fmt.num(reach ? reach.reads : 0) %><% if (reach && reach.recipients) { %> <span class="muted">(<%= fmt.pct(100 * reach.reads / reach.recipients, 1) %>)</span><% } %></dd></div>
+    </dl>
+  </section>
+  <section class="card">
+    <% if (n.withdrawn_at) { %>
+      <p class="muted">Withdrawn on <%= fmt.dateTime(n.withdrawn_at) %><%= n.withdrawn_by_name ? ' by ' + n.withdrawn_by_name : '' %>. Nobody sees it any more.</p>
+    <% } else { %>
+      <div class="hd"><h2>Withdraw</h2></div>
+      <p class="note">Removes the notice from every board. This cannot be undone.</p>
+      <form method="post" action="/admin/notices/<%= n.notice_id %>/withdraw" data-confirm="Withdraw this notice for everyone?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn danger" type="submit">Withdraw notice</button>
+      </form>
+    <% } %>
+  </section>
+</div>
+</div>
+<%- include('../partials/layout-end') %>

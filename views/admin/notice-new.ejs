@@ -1,0 +1,53 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Post a notice</h1><span class="sub"><a href="/admin/notices">← Notices</a></span></div>
+<div class="grid2">
+<section class="card">
+  <form method="post" action="/admin/notices" class="stack audience">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <%- include('../partials/notice-fields') %>
+
+    <fieldset class="field" style="border:0;padding:0;margin:0">
+      <legend style="font-weight:600;margin-bottom:6px">Send to</legend>
+      <div class="choice">
+        <label><input type="radio" name="audience" value="everyone" checked> Everyone</label>
+        <label><input type="radio" name="audience" value="role"> A role</label>
+        <label><input type="radio" name="audience" value="department"> A department</label>
+        <label><input type="radio" name="audience" value="year"> A year</label>
+        <label><input type="radio" name="audience" value="division"> Divisions</label>
+      </div>
+    </fieldset>
+
+    <div class="form-grid when when-role">
+      <div class="field"><label for="ar">Role</label>
+        <select id="ar" name="role"><option value="student">All students</option><option value="faculty">All faculty</option><option value="admin">Admin</option></select></div>
+    </div>
+    <div class="form-grid when when-department">
+      <div class="field"><label for="ad">Department</label>
+        <select id="ad" name="dept_id"><% for (const d of departments) { %><option value="<%= d.dept_id %>"><%= d.dept_id %> – <%= d.dept_name %></option><% } %></select></div>
+      <div class="field"><label for="adr">Who in it</label>
+        <select id="adr" name="dept_role"><option value="">Students and faculty</option><option value="student">Students only</option><option value="faculty">Faculty only</option></select></div>
+    </div>
+    <div class="form-grid when when-year">
+      <div class="field"><label for="ay">Year of study</label>
+        <select id="ay" name="year"><option value="1">First year</option><option value="2">Second year</option><option value="3">Third year</option><option value="4">Final year</option></select></div>
+      <div class="field"><label for="ayd">Department</label>
+        <select id="ayd" name="year_dept_id"><option value="">All departments</option><% for (const d of departments) { %><option value="<%= d.dept_id %>"><%= d.dept_id %></option><% } %></select></div>
+    </div>
+    <div class="form-grid when when-division">
+      <div class="field" style="grid-column:1/-1"><label for="adv">Division codes</label>
+        <input id="adv" type="text" name="division_codes" list="div-list" placeholder="e.g. CSE-Y2-A, CSE-Y2-B" autocomplete="off">
+        <datalist id="div-list"><% for (const d of divisions) { %><option value="<%= d.division_code %>"><% } %></datalist>
+        <span class="hint">Separate several codes with commas. Only students of these divisions (this term) receive it.</span></div>
+    </div>
+
+    <div class="actions"><button class="btn primary" type="submit">Post notice</button><a class="btn link" href="/admin/notices">Cancel</a></div>
+  </form>
+</section>
+<section class="card">
+  <div class="hd"><h2>Who receives it</h2></div>
+  <div class="item"><div class="t"><div>Year and division</div><div class="s">Reach students only, based on their division this term.</div></div></div>
+  <div class="item"><div class="t"><div>Department</div><div class="s">Students of the department's programs and its faculty.</div></div></div>
+  <div class="item"><div class="t"><div>After posting</div><div class="s">You see how many people it reached and how many have read it. Notices cannot be edited; withdraw and re-post to correct one.</div></div></div>
+</section>
+</div>
+<%- include('../partials/layout-end') %>
