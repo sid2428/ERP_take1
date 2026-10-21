@@ -43,7 +43,12 @@ export const NAV: Record<Role, NavGroup[]> = {
     },
   ],
   admin: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' },
+        { key: 'inbox', label: 'Inbox', href: '/admin/inbox', icon: 'bell' },
+      ],
+    },
     {
       label: 'ACADEMIC STRUCTURE', items: [
         { key: 'departments', label: 'Departments', href: '/admin/departments', icon: 'building' },

@@ -7,6 +7,7 @@
     <span class="muted"><%= fmt.dateTime(n.posted_at) %></span>
   </div>
   <div class="notice-body"><%= n.body %></div>
+  <% if (n.link) { %><div class="actions" style="margin-top:14px"><a class="btn primary" href="<%= n.link %>">Open →</a></div><% } %>
   <p class="note" style="margin:16px 0 0">Posted by <%= n.posted_by_name || 'Academic office' %><% if (n.expires_at) { %> · shown until <%= fmt.dateTime(n.expires_at) %><% } %></p>
 </section>
 <% if (isPoster) { %>

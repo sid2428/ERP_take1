@@ -1,5 +1,21 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Notices</h1><span class="sub">Announcements from the academic office<%= isFaculty ? ' and your department' : ' and your teachers' %></span></div>
+<div class="page-head"><h1><%= isAdmin ? 'Inbox' : 'Notices' %></h1><span class="sub"><%= isAdmin ? 'Alerts for you: new grievances and replies, plus notices addressed to the admin' : 'Announcements and updates for you from the academic office' + (isFaculty ? '' : ' and your teachers') %></span></div>
+
+<% if (alerts.length) { %>
+<section class="card" style="margin-bottom:16px">
+  <div class="hd"><h2>Needs your attention</h2></div>
+  <% for (const a of alerts) { %>
+  <div class="item">
+    <span class="dot <%= a.severity === 'high' ? 'r' : '' %>"></span>
+    <div class="t">
+      <div><%= a.title %></div>
+      <div class="s notice-body"><%= a.body %></div>
+    </div>
+    <% if (a.link) { %><div class="w"><a href="<%= a.link %>">View →</a></div><% } %>
+  </div>
+  <% } %>
+</section>
+<% } %>
 
 <% if (isFaculty) { %>
 <section class="card t" style="margin-bottom:16px">
@@ -24,7 +40,7 @@
 
 <section class="card">
   <div class="hd">
-    <h2>Notice board</h2>
+    <h2><%= isAdmin ? 'For you' : 'Notice board' %></h2>
     <% if (unread) { %>
     <form method="post" action="<%= base %>/read-all"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small" type="submit">Mark all read (<%= unread %>)</button></form>
     <% } %>
@@ -38,10 +54,12 @@
   <div class="notice<%= n.is_read ? '' : ' unread' %>">
     <div class="title">
       <% if (n.is_important) { %><span class="pill r">Important</span> <% } %>
-      <a href="<%= base %>/<%= n.notice_id %>"><%= n.title %></a>
+      <% if (n.is_personal) { %><span class="pill v">For you</span> <% } %>
+      <a href="<%= base %>/<%= n.notice_id %><%= n.link ? '/go' : '' %>"><%= n.title %></a>
       <% if (!n.is_read) { %><span class="dot b inline" title="Unread"></span><% } %>
     </div>
-    <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %></div>
+    <% if (n.is_personal) { %><div class="meta notice-body"><%= n.body %></div><% } %>
+    <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %><% if (n.link) { %> · <a href="<%= base %>/<%= n.notice_id %>/go">Open →</a><% } %></div>
   </div>
   <% } %>
 </section>
