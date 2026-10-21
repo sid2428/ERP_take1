@@ -30,3 +30,5 @@ Thumbs.db
 .idea/
 
 .vercel
+data/**/*.csv
+data/**/*.xlsx

@@ -1,10 +1,11 @@
 <%- include('head') %>
 <body>
 <div class="app">
-<% if (user) { %>
+<% const currentUser = typeof user === 'undefined' ? null : user; %>
+<% if (currentUser) { %>
 <aside class="side" id="sidebar" aria-label="Main navigation">
-  <a class="brand" href="/"><div class="logo">P</div><div>PICT <%= { student: 'Student Portal', faculty: 'Faculty Portal', admin: 'Academic Console' }[user.role] %></div></a>
-  <% for (const group of NAV[user.role]) { %>
+  <a class="brand" href="/"><div class="logo">P</div><div>PICT <%= { student: 'Student Portal', faculty: 'Faculty Portal', admin: 'Academic Console' }[currentUser.role] %></div></a>
+  <% for (const group of NAV[currentUser.role]) { %>
     <div class="grp"><%= group.label %></div>
     <% for (const item of group.items) { %>
       <a class="nav-link<%= nav === item.key ? ' on' : '' %>" href="<%= item.href %>"<%- nav === item.key ? ' aria-current="page"' : '' %>><%- include('icon', { name: item.icon }) %><%= item.label %></a>
@@ -13,10 +14,10 @@
 </aside>
 <% } %>
 <div class="col">
-<% if (user) { %>
+<% if (currentUser) { %>
 <header class="top">
   <button class="menu-btn" type="button" data-menu aria-controls="sidebar" aria-expanded="false"><%- include('icon', { name: 'menu', size: 18 }) %><span class="sr-only">Menu</span></button>
-  <% if (user.role === 'admin') { %>
+  <% if (currentUser.role === 'admin') { %>
     <form class="search" action="/admin/students" method="get" role="search">
       <%- include('icon', { name: 'search', size: 15 }) %>
       <label class="sr-only" for="top-search">Search students</label>
@@ -27,11 +28,11 @@
   <% if (currentSession) { %><span class="term" title="Current academic session"><%= currentSession.session_name %></span><% } %>
   <details class="me-menu">
     <summary class="me">
-      <div class="av"><%= fmt.initials(user.displayName) %></div>
-      <div class="who-text"><strong><%= user.displayName %></strong><small><%= user.loginId %></small></div>
+      <div class="av"><%= fmt.initials(currentUser.displayName) %></div>
+      <div class="who-text"><strong><%= currentUser.displayName %></strong><small><%= currentUser.loginId %></small></div>
     </summary>
     <div class="drop">
-      <a href="/<%= user.role %><%= user.role === 'admin' ? '' : '/profile' %>"><%= user.role === 'admin' ? 'Dashboard' : 'My profile' %></a>
+      <a href="/<%= currentUser.role %><%= currentUser.role === 'admin' ? '' : '/profile' %>"><%= currentUser.role === 'admin' ? 'Dashboard' : 'My profile' %></a>
       <a href="/account/password">Change password</a>
       <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit">Sign out</button></form>
     </div>
@@ -39,4 +40,6 @@
 </header>
 <% } %>
 <main id="content">
-<% if (flash) { %><div class="flash <%= flash.type %>" role="status"><%= flash.text %></div><% } %>
+<% if (typeof flash !== 'undefined' && flash) { %>
+  <div class="flash <%= flash.type %>" role="status"><%= flash.text %></div>
+<% } %>
