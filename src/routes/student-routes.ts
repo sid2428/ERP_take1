@@ -1,3 +1,4 @@
+import { getStudentSyllabusCoverage } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { friendlyDbError, query, queryOne, pool } from '../db.js';
@@ -52,7 +53,8 @@ studentRouter.get('/offerings', async (req, res) => {
   if (!profile) throw notFound('Student record');
   const courses = await getStudentCourses(req.user!.studentId!);
   const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
-  res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits });
+  const coverage = await getStudentSyllabusCoverage(req.user!.studentId!);
+  res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits, coverage });
 });
 
 studentRouter.get('/profile', async (req, res) => {
