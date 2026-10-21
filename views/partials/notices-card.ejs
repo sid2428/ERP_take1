@@ -1,0 +1,17 @@
+<%# Dashboard card: latest notices for this user. Locals: notices ({ latest, unread }), noticeBase %>
+<div class="card">
+  <div class="hd"><h2>Notices</h2><% if (notices.unread) { %><span class="pill o"><%= notices.unread %> unread</span><% } %></div>
+  <% if (!notices.latest.length) { %>
+    <p class="empty">No notices for you right now.</p>
+  <% } %>
+  <% for (const n of notices.latest) { %>
+  <div class="item">
+    <div class="t">
+      <div><a href="<%= noticeBase %>/<%= n.notice_id %>"><%= n.is_important ? '★ ' : '' %><%= n.title %></a><% if (!n.is_read) { %> <span class="dot b inline" title="Unread"></span><% } %></div>
+      <div class="s"><%= n.category %> · <%= n.posted_by_name %></div>
+    </div>
+    <div class="w"><%= fmt.shortDate(n.posted_at) %></div>
+  </div>
+  <% } %>
+  <div style="margin-top:10px"><a href="<%= noticeBase %>">All notices →</a></div>
+</div>

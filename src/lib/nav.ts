@@ -6,7 +6,12 @@ export interface NavGroup { label: string; items: NavItem[]; }
 /** Sidebar per role. Only modules that are built appear here (no dead links). */
 export const NAV: Record<Role, NavGroup[]> = {
   student: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' },
+        { key: 'notices', label: 'Notices', href: '/student/notices', icon: 'bell' },
+      ],
+    },
     {
       label: 'ACADEMICS', items: [
         { key: 'curriculum', label: 'Curriculum', href: '/student/curriculum', icon: 'list' },
@@ -23,7 +28,12 @@ export const NAV: Record<Role, NavGroup[]> = {
     },
   ],
   faculty: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' },
+        { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
+      ],
+    },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
     {
       label: 'RECORDS', items: [
@@ -50,7 +60,12 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'faculty', label: 'Faculty', href: '/admin/faculty', icon: 'briefcase' },
       ],
     },
-    { label: 'COMMUNICATION', items: [{ key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' }] },
+    {
+      label: 'COMMUNICATION', items: [
+        { key: 'notices', label: 'Notices', href: '/admin/notices', icon: 'bell' },
+        { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },
+      ],
+    },
     { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },
   ],
 };
