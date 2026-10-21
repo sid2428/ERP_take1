@@ -247,3 +247,19 @@ input[readonly] { background: var(--surface-2); color: var(--muted); }
 .thread .body { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .thread .sys { padding: 6px 0; }
 .thread .sys .pill { font-size: 11px; }
+
+/* ---------- notices ---------- */
+.dot.inline { display: inline-block; margin: 0 0 1px 4px; vertical-align: middle; }
+.notice { padding: 14px 0; border-top: 1px solid var(--line-2); }
+.notice:first-of-type { border-top: 0; padding-top: 4px; }
+.notice .meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.notice.unread .title { font-weight: 600; }
+.notice-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+/* audience picker: show only the fields of the chosen audience (no script needed) */
+.audience .when { display: none; }
+.audience:has(input[value=role]:checked) .when-role,
+.audience:has(input[value=department]:checked) .when-department,
+.audience:has(input[value=year]:checked) .when-year,
+.audience:has(input[value=division]:checked) .when-division { display: grid; }
+.choice { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.choice label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }

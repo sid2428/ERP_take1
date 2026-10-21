@@ -8,19 +8,23 @@ import { flash } from '../middleware/auth.js';
 import { getCurriculum, getStudentCourses, getStudentProfile, getStudentTimetable, nextClassDay } from '../queries/shared-queries.js';
 import { getStudentElectiveOfferings, getStudentElectiveResult, getStudentElectiveWindows } from '../queries/academic-queries.js';
 import { grievanceRouter } from './grievance-routes.js';
+import { noticeRouter } from './notice-routes.js';
+import { noticeSummary } from '../queries/notice-queries.js';
 
 export const studentRouter = Router();
 studentRouter.use('/grievances', grievanceRouter);
+studentRouter.use('/notices', noticeRouter);
 
 studentRouter.get('/', async (req, res) => {
   const studentId = req.user!.studentId!;
-  const [profile, courses, timetable, overall] = await Promise.all([
+  const [profile, courses, timetable, overall, notices] = await Promise.all([
     getStudentProfile(studentId),
     getStudentCourses(studentId),
     getStudentTimetable(studentId),
     queryOne<{ total_sessions: number; attended: number; overall_pct: number | null }>(
       `SELECT total_sessions, attended, overall_pct FROM v_student_attendance_overall
         WHERE student_id = $1 AND academic_session_id = current_session_id()`, [studentId]),
+    noticeSummary(req.user!.userId),
   ]);
   if (!profile) throw notFound('Student record');
 
@@ -33,7 +37,7 @@ studentRouter.get('/', async (req, res) => {
   }, { total: 0, theory: 0, lab: 0 });
 
   res.render('student/dashboard', {
-    title: 'Dashboard', nav: 'dashboard', profile, courses, overall, credits,
+    title: 'Dashboard', nav: 'dashboard', profile, courses, overall, credits, notices, noticeBase: '/student/notices',
     progress: session ? termProgress(session.start_date, session.end_date, today) : null,
     shortage: courses.filter((c) => c.eligibility === 'Shortage'),
     classDay: nextClassDay(timetable, isoWeekday(today)),
