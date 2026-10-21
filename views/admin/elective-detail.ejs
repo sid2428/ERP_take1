@@ -1,0 +1,102 @@
+<%- include('../partials/layout-start') %>
+<% const when = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); %>
+<div class="page-head">
+<h1><%= w.elective_group === 'O1' ? 'Open elective' : 'Honors' %> · Semester <%= w.semester_no %> · <%= w.academic_session_id %></h1>
+<span class="sub"><a href="/admin/electives">← All windows</a></span>
+</div>
+
+<section class="card" style="margin-bottom:16px">
+<div class="hd"><h2>Window</h2><span class="pill <%= w.status === 'Open' || w.status === 'Allocated' ? 'g' : '' %>"><%= w.status %></span></div>
+<p class="muted">Choices accepted <%= when(w.opens_at) %> to <%= when(w.closes_at) %> · up to <%= w.max_choices %> choices per student<% if (w.allocated_at) { %> · allocated <%= when(w.allocated_at) %><% } %></p>
+<div class="actions">
+<% if (w.status === 'Scheduled' || w.status === 'Closed') { %>
+<form method="post" action="/admin/electives/<%= w.window_id %>/open"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn primary" type="submit">Open window</button></form>
+<% } %>
+<% if (w.status === 'Open') { %>
+<form method="post" action="/admin/electives/<%= w.window_id %>/close" data-confirm="Close the window? Students will no longer be able to change their choices."><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn primary" type="submit">Close window</button></form>
+<% } %>
+<% if (w.status === 'Closed') { %>
+<form method="post" action="/admin/electives/<%= w.window_id %>/allocate" data-confirm="Allocate seats now? This can only be done once."><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn primary" type="submit">Allocate seats</button></form>
+<% } %>
+</div>
+</section>
+
+<section class="card t" style="margin-bottom:16px">
+<div class="hd"><h2>Offerings and seats</h2></div>
+<div class="sc"><table>
+<thead><tr><th>Course</th><th>Section</th><th class="num">Seats</th><th class="num">Filled</th><th class="num">Applicants</th><th class="num">1st choice</th><th class="num">Allocated</th><th>Status</th></tr></thead>
+<tbody>
+<% if (!summary.length) { %><tr><td colspan="8" class="muted">No offerings in this window yet.</td></tr><% } %>
+<% for (const r of summary) { %>
+<tr>
+<td><b><%= r.course_code %></b> <%= r.course_name %></td>
+<td><%= r.section_name %></td>
+<td class="num"><%= r.max_seats %></td>
+<td class="num"><%= r.enrolled_count %></td>
+<td class="num"><%= r.applicants %></td>
+<td class="num"><%= r.first_choice_applicants %></td>
+<td class="num"><%= r.allocated %></td>
+<td><span class="pill <%= r.offering_status === 'FULL' ? '' : 'g' %>"><%= r.offering_status %></span></td>
+</tr>
+<% } %>
+</tbody>
+</table></div>
+</section>
+
+<% if (w.status !== 'Allocated') { %>
+<div class="grid2" style="margin-bottom:16px">
+<section class="card">
+<div class="hd"><h2>Add an existing offering</h2></div>
+<% if (!available.length) { %>
+<p class="muted">No other offerings of <%= w.academic_session_id %> match this elective type and semester.</p>
+<% } else { %>
+<form method="post" action="/admin/electives/<%= w.window_id %>/offerings" class="stack" style="margin-top:8px">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="field"><label for="ao">Offering</label>
+<select id="ao" name="offering_id">
+<% for (const o of available) { %><option value="<%= o.offering_id %>"><%= o.course_code %> – <%= o.course_name %> (<%= o.section_name %>, <%= o.max_seats %> seats)</option><% } %>
+</select></div>
+<div class="actions"><button class="btn" type="submit">Add to window</button></div>
+</form>
+<% } %>
+</section>
+<section class="card">
+<div class="hd"><h2>Create a new offering</h2></div>
+<form method="post" action="/admin/electives/<%= w.window_id %>/new-offering" class="stack" style="margin-top:8px">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="form-grid">
+<div class="field"><label for="nc">Course</label>
+<select id="nc" name="course_id">
+<% for (const c of courses) { %><option value="<%= c.course_id %>"><%= c.course_code %> – <%= c.course_name %></option><% } %>
+</select></div>
+<div class="field"><label for="ns">Section</label><input id="ns" type="text" name="section_name" maxlength="5" value="E1" required></div>
+<div class="field"><label for="nm">Seats</label><input id="nm" type="number" name="max_seats" min="1" max="500" value="60" required></div>
+</div>
+<div class="actions"><button class="btn" type="submit">Create and add</button></div>
+</form>
+</section>
+</div>
+<% } %>
+
+<% if (allocations.length) { %>
+<section class="card t">
+<div class="hd"><h2>Allocation result (merit order)</h2></div>
+<div class="sc"><table>
+<thead><tr><th class="num">Merit</th><th>Student</th><th>Name</th><th class="num">Score</th><th>Based on</th><th>Got</th><th>Choice</th></tr></thead>
+<tbody>
+<% for (const a of allocations) { %>
+<tr>
+<td class="num"><%= a.merit_position %></td>
+<td><%= a.student_number %></td>
+<td><%= a.student_name %></td>
+<td class="num"><%= a.merit_score === null ? '—' : a.merit_score %></td>
+<td><%= a.merit_basis === 'CGPA' ? 'CGPA' : 'Attendance %' %></td>
+<td><%= a.course_code || 'No seat' %></td>
+<td><%= a.preference_rank ? '#' + a.preference_rank : '—' %></td>
+</tr>
+<% } %>
+</tbody>
+</table></div>
+</section>
+<% } %>
+<%- include('../partials/layout-end') %>

@@ -1,0 +1,71 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Grievances</h1><span class="sub">Everything students and faculty raise arrives here. Assign, reply, then resolve or reject.</span></div>
+
+<div class="cards" style="margin-bottom:16px">
+  <section class="card"><div class="hd"><h2>Open</h2><span class="pill o">new</span></div><div class="kpi"><%= fmt.num(totals.open) %></div><p class="note">Waiting for the office to pick up</p></section>
+  <section class="card"><div class="hd"><h2>In progress</h2></div><div class="kpi"><%= fmt.num(totals.in_progress) %></div><p class="note">Being worked on or assigned</p></section>
+  <section class="card"><div class="hd"><h2>Closed</h2></div><div class="kpi"><%= fmt.num(totals.resolved + totals.rejected) %> <small><%= fmt.num(totals.resolved) %> resolved · <%= fmt.num(totals.rejected) %> rejected</small></div><p class="note">All time</p></section>
+</div>
+
+<form class="filters" method="get" action="/admin/grievances">
+  <label class="sr-only" for="fs">Status</label>
+  <select id="fs" name="status" data-autosubmit>
+    <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Open + In progress</option>
+    <option value=""<%= filters.status === '' ? ' selected' : '' %>>All statuses</option>
+    <% for (const s of statuses) { %><option<%= filters.status === s ? ' selected' : '' %>><%= s %></option><% } %>
+  </select>
+  <label class="sr-only" for="fc">Category</label>
+  <select id="fc" name="category" data-autosubmit><option value="">All categories</option>
+    <% for (const c of categories) { %><option<%= filters.category === c ? ' selected' : '' %>><%= c %></option><% } %></select>
+  <label class="sr-only" for="fr">Raised by</label>
+  <select id="fr" name="role" data-autosubmit><option value="">Students and faculty</option>
+    <option value="student"<%= filters.role === 'student' ? ' selected' : '' %>>Students</option>
+    <option value="faculty"<%= filters.role === 'faculty' ? ' selected' : '' %>>Faculty</option></select>
+  <label class="sr-only" for="fq">Search</label>
+  <input id="fq" type="search" name="q" value="<%= filters.q %>" placeholder="No., subject, name or login">
+  <button class="btn" type="submit">Filter</button>
+  <% if (filters.status !== 'active' || filters.category || filters.role || filters.q) { %><a class="btn link" href="/admin/grievances">Clear</a><% } %>
+</form>
+
+<section class="card t" style="margin-bottom:16px">
+  <div class="sc"><table>
+    <thead><tr><th>No.</th><th>Subject</th><th>Raised by</th><th>Category</th><th>Assigned to</th><th class="num">Age</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="7" class="empty">No grievances match.</td></tr><% } %>
+      <% for (const g of rows) { %>
+      <tr>
+        <td class="nw"><a href="/admin/grievances/<%= g.grievance_id %>"><b>#<%= g.grievance_id %></b></a></td>
+        <td><a href="/admin/grievances/<%= g.grievance_id %>"><%= g.subject %></a><% if (g.comment_count) { %> <span class="muted" style="font-size:12.5px">· <%= g.comment_count %> <%= g.comment_count === 1 ? 'reply' : 'replies' %></span><% } %></td>
+        <td class="nw"><%= g.raised_by_name %><div class="muted" style="font-size:12.5px"><%= g.raised_by_login %> · <%= g.raised_by_role %></div></td>
+        <td><%= g.category %></td>
+        <td class="nw"><%= g.assigned_name || '–' %></td>
+        <td class="num nw"><%= g.age_days %> d</td>
+        <td><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</section>
+
+<section class="card t">
+  <div class="hd"><h2>By category</h2></div>
+  <p class="note">Average resolution time counts resolved grievances only (from v_grievance_resolution_stats)</p>
+  <div class="sc"><table>
+    <thead><tr><th>Category</th><th class="num">Open</th><th class="num">In progress</th><th class="num">Resolved</th><th class="num">Rejected</th><th class="num">Avg days to resolve</th><th class="num">Oldest open (days)</th></tr></thead>
+    <tbody>
+      <% for (const s of stats) { %>
+      <tr>
+        <td><a href="/admin/grievances?status=&category=<%= encodeURIComponent(s.category) %>"><%= s.category %></a></td>
+        <td class="num"><%= s.open %></td>
+        <td class="num"><%= s.in_progress %></td>
+        <td class="num"><%= s.resolved %></td>
+        <td class="num"><%= s.rejected %></td>
+        <td class="num"><%= s.avg_days_to_resolve === null ? '–' : s.avg_days_to_resolve %></td>
+        <td class="num"><%= s.oldest_open_days === null ? '–' : s.oldest_open_days %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

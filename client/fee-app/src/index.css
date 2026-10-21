@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-page font-sans text-sm text-ink; font-variant-numeric: tabular-nums; line-height: 1.45; margin: 0; }
+button { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #1F4FA3; outline-offset: 2px; }

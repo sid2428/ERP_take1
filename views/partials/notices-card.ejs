@@ -1,0 +1,25 @@
+<%# Dashboard card: latest notices for this user. Locals: notices ({ latest, unread }), noticeBase %>
+<div class="card">
+  <div class="hd"><h2><%= noticeBase.endsWith('/inbox') ? 'Inbox' : 'Notices' %></h2><% if (notices.unread) { %><span class="pill o"><%= notices.unread %> unread</span><% } %></div>
+  <% for (const a of notices.alerts) { %>
+  <div class="item">
+    <span class="dot <%= a.severity === 'high' ? 'r' : '' %>"></span>
+    <div class="t"><div><a href="<%= a.link || noticeBase %>"><%= a.title %></a></div>
+      <div class="s"><%= a.kind === 'fees' ? a.body : 'See the courses on your notices page' %></div></div>
+  </div>
+  <% } %>
+  <% if (!notices.latest.length && !notices.alerts.length) { %>
+    <p class="empty">No notices for you right now.</p>
+  <% } %>
+  <% for (const n of notices.latest) { %>
+  <% const itemPath = n.item_type === 'notification' ? `${noticeBase}/notification/${n.notification_id}` : `${noticeBase}/${n.notice_id}`; %>
+  <div class="item">
+    <div class="t">
+      <div><a href="<%= itemPath %><%= n.link ? '/go' : '' %>"><%= n.is_important ? '★ ' : '' %><%= n.title %></a><% if (!n.is_read) { %> <span class="dot b inline" title="Unread"></span><% } %></div>
+      <div class="s"><%= n.category %> · <%= n.posted_by_name %></div>
+    </div>
+    <div class="w"><%= fmt.shortDate(n.posted_at) %></div>
+  </div>
+  <% } %>
+  <div style="margin-top:10px"><a href="<%= noticeBase %>"><%= noticeBase.endsWith('/inbox') ? 'Open inbox' : 'All notices' %> →</a></div>
+</div>

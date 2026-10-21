@@ -1,0 +1,20 @@
+<%# Title, body, category, importance and expiry: shared by the faculty and admin post forms. Locals: categories %>
+<div class="field">
+  <label for="nt">Title</label>
+  <input id="nt" type="text" name="title" minlength="5" maxlength="150" required placeholder="e.g. Thursday lab moved to A-204">
+</div>
+<div class="field">
+  <label for="nb">Notice</label>
+  <textarea id="nb" name="body" rows="7" minlength="10" maxlength="5000" required></textarea>
+</div>
+<div class="form-grid">
+  <div class="field">
+    <label for="nc">Category</label>
+    <select id="nc" name="category"><% for (const c of categories) { %><option><%= c %></option><% } %></select>
+  </div>
+  <div class="field">
+    <label for="ne">Show until (optional)</label>
+    <input id="ne" type="date" name="expires_on">
+  </div>
+</div>
+<label class="check"><input type="checkbox" name="is_important"> Mark as important (pinned to the top)</label>

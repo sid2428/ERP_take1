@@ -1,0 +1,30 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>#<%= g.grievance_id %> · <%= g.subject %></h1><span class="sub"><a href="<%= base %>">← Grievances</a></span></div>
+<div class="grid2">
+<div class="stack" style="gap:0">
+  <section class="card" style="margin-bottom:16px">
+    <div class="hd"><h2>Details</h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
+    <dl class="dl" style="margin-bottom:14px">
+      <div><dt>Category</dt><dd><%= g.category %></dd></div>
+      <div><dt>Raised by</dt><dd><%= g.raised_by_name %> (<%= g.raised_by_login %>)</dd></div>
+      <div><dt>Raised on</dt><dd><%= fmt.dateTime(g.created_at) %></dd></div>
+      <div><dt>Handled by</dt><dd><%= g.assigned_name ? g.assigned_name : 'Academic office' %></dd></div>
+    </dl>
+    <div class="thread"><div class="body"><%= g.description %></div></div>
+  </section>
+  <%- include('../partials/grievance-thread') %>
+</div>
+<section class="card">
+  <div class="hd"><h2>Progress</h2></div>
+  <% const steps = ['Open', 'In progress', g.status === 'Rejected' ? 'Rejected' : 'Resolved'];
+     const at = steps.indexOf(g.status); %>
+  <% steps.forEach((s, i) => { %>
+  <div class="item"><div class="t"><div><span class="pill <%= i <= at ? statusPill(s) : 'n' %>"><%= s %></span></div>
+    <div class="s"><%= i < at ? 'Done' : i === at ? 'Current' : 'Pending' %></div></div></div>
+  <% }) %>
+  <p class="note" style="margin-top:12px">
+    <% if (g.resolved_at) { %>Closed after <%= g.age_days %> days.<% } else { %>Open for <%= g.age_days %> days.<% } %>
+  </p>
+</section>
+</div>
+<%- include('../partials/layout-end') %>

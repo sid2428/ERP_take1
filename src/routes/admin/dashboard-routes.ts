@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { query, queryOne } from '../../db.js';
 import { termProgress, todayIso } from '../../lib/format.js';
+import { noticeSummary } from '../../queries/notice-queries.js';
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get('/', async (_req, res) => {
-  const [totals, byDept, sessions, recent, activity] = await Promise.all([
+dashboardRouter.get('/', async (req, res) => {
+  const [totals, byDept, sessions, recent, activity, notices] = await Promise.all([
     queryOne<Record<string, number>>(`
       SELECT (SELECT count(*) FROM student WHERE status = 'Active')    AS active_students,
              (SELECT count(*) FROM student WHERE status = 'Graduated') AS graduated_students,
@@ -43,10 +44,11 @@ dashboardRouter.get('/', async (_req, res) => {
              count(*) FILTER (WHERE session_status = 'Conducted')::int AS week_sessions,
              count(*) FILTER (WHERE session_status = 'Cancelled')::int AS week_cancelled
       FROM attendance_session WHERE session_date > (SELECT d FROM last) - 7`),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   const current = res.locals.currentSession as { start_date: string; end_date: string } | undefined;
   res.render('admin/dashboard', {
-    title: 'Academic administration', nav: 'dashboard', totals, byDept, recent, activity,
+    title: 'Academic administration', nav: 'dashboard', totals, byDept, recent, activity, notices, noticeBase: '/admin/inbox',
     sessions: sessions.reverse(),
     progress: current ? termProgress(current.start_date, current.end_date, todayIso()) : null,
   });

@@ -1,0 +1,48 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Notices</h1><span class="sub">Post to everyone, a role, a department, a year or specific divisions</span></div>
+
+<form class="filters" method="get" action="/admin/notices">
+  <label class="sr-only" for="fs">Status</label>
+  <select id="fs" name="state" data-autosubmit>
+    <option value="">All notices</option>
+    <option value="live"<%= filters.state === 'live' ? ' selected' : '' %>>Live</option>
+    <option value="expired"<%= filters.state === 'expired' ? ' selected' : '' %>>Expired</option>
+    <option value="withdrawn"<%= filters.state === 'withdrawn' ? ' selected' : '' %>>Withdrawn</option>
+  </select>
+  <label class="sr-only" for="fk">Kind</label>
+  <select id="fk" name="kind" data-autosubmit>
+    <option value="">Announcements</option>
+    <option value="personal"<%= filters.kind === 'personal' ? ' selected' : '' %>>Automatic personal alerts</option>
+  </select>
+  <label class="sr-only" for="fc">Category</label>
+  <select id="fc" name="category" data-autosubmit><option value="">All categories</option>
+    <% for (const c of categories) { %><option<%= filters.category === c ? ' selected' : '' %>><%= c %></option><% } %></select>
+  <label class="sr-only" for="fq">Search</label>
+  <input id="fq" type="search" name="q" value="<%= filters.q %>" placeholder="Title">
+  <button class="btn" type="submit">Filter</button>
+  <% if (filters.state || filters.category || filters.q || filters.kind) { %><a class="btn link" href="/admin/notices">Clear</a><% } %>
+  <span style="flex:1"></span>
+  <a class="btn primary" href="/admin/notices/new">Post a notice</a>
+</form>
+
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Notice</th><th>Audience</th><th>Posted by</th><th>Posted</th><th class="num">Read</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="6" class="empty">No notices match.</td></tr><% } %>
+      <% for (const r of rows) { %>
+      <tr>
+        <td><% if (r.is_important) { %><span class="pill r">Important</span> <% } %><a href="/admin/notices/<%= r.notice_id %>"><%= r.title %></a>
+          <div class="muted" style="font-size:12.5px"><span class="pill <%= categoryPill(r.category) %>"><%= r.category %></span></div></td>
+        <td style="max-width:260px"><%= r.audience %></td>
+        <td class="nw"><%= r.posted_by_name %><% if (r.posted_by_role) { %> <span class="pill n"><%= r.posted_by_role %></span><% } %></td>
+        <td class="nw"><%= fmt.date(r.posted_at) %></td>
+        <td class="num nw"><%= r.reach ? `${fmt.num(r.reach.reads)} / ${fmt.num(r.reach.recipients)}` : '–' %></td>
+        <td><% if (r.withdrawn_at) { %><span class="pill r">Withdrawn</span><% } else if (r.expires_at && new Date(r.expires_at) < new Date()) { %><span class="pill n">Expired</span><% } else { %><span class="pill g">Live</span><% } %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+  <%- include('../partials/pager') %>
+</section>
+<%- include('../partials/layout-end') %>

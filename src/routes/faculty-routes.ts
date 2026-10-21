@@ -3,8 +3,13 @@ import { isoWeekday, termProgress, todayIso } from '../lib/format.js';
 import { forbidden, notFound } from '../lib/http-error.js';
 import { getAssignment, getFacultyClasses, getFacultyProfile, getRoster, teachesStudent } from '../queries/faculty-queries.js';
 import { getFacultyTimetable, getStudentCourses, getStudentProfile, nextClassDay } from '../queries/shared-queries.js';
+import { grievanceRouter } from './grievance-routes.js';
+import { noticeRouter } from './notice-routes.js';
+import { noticeSummary } from '../queries/notice-queries.js';
 
 export const facultyRouter = Router();
+facultyRouter.use('/grievances', grievanceRouter);
+facultyRouter.use('/notices', noticeRouter);
 
 function idParam(value: string | undefined): number {
   const n = Number(value);
@@ -14,8 +19,9 @@ function idParam(value: string | undefined): number {
 
 facultyRouter.get('/', async (req, res) => {
   const facultyId = req.user!.facultyId!;
-  const [profile, classes, timetable] = await Promise.all([
+  const [profile, classes, timetable, notices] = await Promise.all([
     getFacultyProfile(facultyId), getFacultyClasses(facultyId), getFacultyTimetable(facultyId),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   if (!profile) throw notFound('Faculty record');
 
@@ -35,7 +41,7 @@ facultyRouter.get('/', async (req, res) => {
   const today = todayIso();
 
   res.render('faculty/dashboard', {
-    title: 'Dashboard', nav: 'dashboard', profile, classes,
+    title: 'Dashboard', nav: 'dashboard', profile, classes, notices, noticeBase: '/faculty/notices',
     stats: {
       classes: classes.length,
       weeklyHours: timetable.reduce((h, t) => h + t.periods, 0),

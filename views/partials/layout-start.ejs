@@ -26,6 +26,12 @@
   <% } %>
   <div class="sp"></div>
   <% if (currentSession) { %><span class="term" title="Current academic session"><%= currentSession.session_name %></span><% } %>
+  <% if (notificationHref) { const unread = Number(notificationUnreadCount || 0); const unreadLabel = unread > 99 ? '99+' : String(unread); %>
+    <a class="notification-link" href="<%= notificationHref %>" title="Notifications<%= unread ? `, ${unread} unread` : '' %>" aria-label="Notifications, <%= unread ? `${unread} unread` : 'no unread notifications' %>">
+      <%- include('icon', { name: 'bell', size: 19 }) %>
+      <% if (unread > 0) { %><span class="notification-badge" aria-hidden="true"><%= unreadLabel %></span><% } %>
+    </a>
+  <% } %>
   <details class="me-menu">
     <summary class="me">
       <div class="av"><%= fmt.initials(currentUser.displayName) %></div>

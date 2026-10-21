@@ -1,0 +1,78 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1><%= isAdmin ? 'Inbox' : 'Notices' %></h1><span class="sub"><%= isAdmin ? 'Alerts for you: new grievances and replies, plus notices addressed to the admin' : 'Announcements and updates for you from the academic office' + (isFaculty ? '' : ' and your teachers') %></span></div>
+
+<% if (alerts.length) { %>
+<section class="card" style="margin-bottom:16px">
+  <div class="hd"><h2>Needs your attention</h2></div>
+  <% for (const a of alerts) { %>
+  <div class="item">
+    <span class="dot <%= a.severity === 'high' ? 'r' : '' %>"></span>
+    <div class="t">
+      <div><%= a.title %></div>
+      <div class="s notice-body"><%= a.body %></div>
+    </div>
+    <% if (a.link) { %><div class="w"><a href="<%= a.link %>">View →</a></div><% } %>
+  </div>
+  <% } %>
+</section>
+<% } %>
+
+<% if (isFaculty) { %>
+<section class="card t" style="margin-bottom:16px">
+  <div class="hd"><h2>Posted by me</h2><a class="btn primary small" href="<%= base %>/new">Post a notice</a></div>
+  <div class="sc"><table>
+    <thead><tr><th>Notice</th><th>Audience</th><th>Posted</th><th class="num">Read</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!mine.length) { %><tr><td colspan="5" class="empty">You have not posted any notices. You can post to the divisions you teach.</td></tr><% } %>
+      <% for (const m of mine) { %>
+      <tr>
+        <td><a href="<%= base %>/<%= m.notice_id %>"><%= m.title %></a></td>
+        <td><%= m.audience %></td>
+        <td class="nw"><%= fmt.date(m.posted_at) %></td>
+        <td class="num nw"><%= m.reach ? `${fmt.num(m.reach.reads)} / ${fmt.num(m.reach.recipients)}` : '–' %></td>
+        <td><% if (m.withdrawn_at) { %><span class="pill r">Withdrawn</span><% } else if (m.expires_at && new Date(m.expires_at) < new Date()) { %><span class="pill n">Expired</span><% } else { %><span class="pill g">Live</span><% } %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<% } %>
+
+<section class="card">
+  <div class="hd">
+    <h2><%= isAdmin ? 'For you' : 'Notice board' %></h2>
+    <% if (unread) { %>
+    <form method="post" action="<%= base %>/read-all">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <% if (category) { %><input type="hidden" name="category" value="<%= category %>"><% } %>
+      <% if (kind !== 'all') { %><input type="hidden" name="kind" value="<%= kind %>"><% } %>
+      <button class="btn small" type="submit">Mark all read (<%= unread %>)</button>
+    </form>
+    <% } %>
+  </div>
+  <div class="chips" style="margin:4px 0 8px" aria-label="Notice type">
+    <a class="chip-link<%= kind === 'all' ? ' on' : '' %>" href="<%= filterHref('all') %>"<%- kind === 'all' ? ' aria-current="page"' : '' %>>All</a>
+    <a class="chip-link<%= kind === 'announcements' ? ' on' : '' %>" href="<%= filterHref('announcements') %>"<%- kind === 'announcements' ? ' aria-current="page"' : '' %>>Announcements</a>
+    <a class="chip-link<%= kind === 'personal' ? ' on' : '' %>" href="<%= filterHref('personal') %>"<%- kind === 'personal' ? ' aria-current="page"' : '' %>>Personal updates</a>
+  </div>
+  <div class="chips" style="margin:4px 0 8px" aria-label="Notice category">
+    <a class="chip-link<%= category === '' ? ' on' : '' %>" href="<%= categoryHref('') %>"<%- category === '' ? ' aria-current="page"' : '' %>>All categories</a>
+    <% for (const c of categories) { %><a class="chip-link<%= category === c ? ' on' : '' %>" href="<%= categoryHref(c) %>"<%- category === c ? ' aria-current="page"' : '' %>><%= c %></a><% } %>
+  </div>
+  <% if (!notices.length) { %><p class="empty">No <%= kind === 'personal' ? 'personal updates' : kind === 'announcements' ? 'announcements' : 'notices' %><%= category ? ' in ' + category : '' %> right now.</p><% } %>
+  <% for (const n of notices) { %>
+  <% const itemPath = n.item_type === 'notification' ? `${base}/notification/${n.notification_id}` : `${base}/${n.notice_id}`; %>
+  <div class="notice<%= n.is_read ? '' : ' unread' %>">
+    <div class="title">
+      <% if (n.is_important) { %><span class="pill r">Important</span> <% } %>
+      <% if (n.is_personal) { %><span class="pill v">For you</span> <% } %>
+      <a href="<%= itemPath %><%= n.link ? '/go' : '' %>"><%= n.title %></a>
+      <% if (!n.is_read) { %><span class="dot b inline" title="Unread"></span><% } %>
+    </div>
+    <% if (n.is_personal) { %><div class="meta notice-body"><%= n.body %></div><% } %>
+    <% if (n.is_personal) { %><div class="meta"><span class="pill <%= n.is_read ? 'n' : 'o' %>"><%= n.is_read ? 'Read' : 'Unread' %></span></div><% } %>
+    <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %><% if (n.link) { %> · <a href="<%= itemPath %>/go">Open →</a><% } %></div>
+  </div>
+  <% } %>
+</section>
+<%- include('../partials/layout-end') %>

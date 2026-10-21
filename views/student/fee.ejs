@@ -1,0 +1,9 @@
+<%- include('../partials/layout-start') %>
+
+<link rel="stylesheet" href="/static/fee-app/assets/index.css">
+<div id="fee-root" data-csrf="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+  <noscript>This page needs JavaScript to load.</noscript>
+</div>
+<script type="module" src="/static/fee-app/assets/index.js"></script>
+
+<%- include('../partials/layout-end') %>

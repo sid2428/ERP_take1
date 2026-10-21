@@ -1,0 +1,30 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Post a notice</h1><span class="sub"><a href="<%= base %>">← Notices</a></span></div>
+<div class="grid2">
+<section class="card">
+  <form method="post" action="<%= base %>" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <%- include('../partials/notice-fields') %>
+    <fieldset class="field" style="border:0;padding:0;margin:0">
+      <legend style="font-weight:600;margin-bottom:6px">Send to</legend>
+      <% if (!divisions.length) { %>
+        <p class="muted">You are not teaching any division this term, so you cannot post notices.</p>
+      <% } %>
+      <div class="choice">
+        <% for (const d of divisions) { %>
+        <label><input type="checkbox" name="division_ids" value="<%= d.division_id %>"> <%= d.division_code %> <span class="muted">(<%= d.students %> students)</span></label>
+        <% } %>
+      </div>
+      <span class="hint">You can post to the divisions you teach this term.</span>
+    </fieldset>
+    <div class="actions"><button class="btn primary" type="submit"<%= divisions.length ? '' : ' disabled' %>>Post notice</button><a class="btn link" href="<%= base %>">Cancel</a></div>
+  </form>
+</section>
+<section class="card">
+  <div class="hd"><h2>Before you post</h2></div>
+  <div class="item"><div class="t"><div>Notices cannot be edited</div><div class="s">To correct one, withdraw it and post a new notice.</div></div></div>
+  <div class="item"><div class="t"><div>Important</div><div class="s">Important notices stay at the top of students' boards.</div></div></div>
+  <div class="item"><div class="t"><div>Show until</div><div class="s">After this date the notice disappears from boards. Leave it empty to keep it.</div></div></div>
+</section>
+</div>
+<%- include('../partials/layout-end') %>
