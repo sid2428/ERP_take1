@@ -100,3 +100,38 @@ reads (~0.9 MB). It runs only when `notice` is empty. Re-run it after `npm run d
    Post a notice to one of the divisions they teach; only those divisions are offered.
 4. Back as **admin**: the list shows reads / recipients; open the faculty notice and **Withdraw** it.
    It disappears from the students' boards. *Audit log* shows `NOTICE_POST` and `NOTICE_WITHDRAW`.
+
+## Automatic notices and alerts (`migrations/082-automatic-notices.sql`)
+
+The portal tells people what they would expect to hear without anyone posting by hand.
+
+**Personal notices** (stored, addressed to one account through a `user_id` target, with an **Open →** link):
+
+| Event | Who is told | Link |
+|---|---|---|
+| Grievance raised | the admin (Inbox) | `/admin/grievances/:id` |
+| Grievance assigned | the faculty member, and the raiser ("being handled") | their grievance page |
+| Moved to In progress without assignment | the raiser | `/…/grievances/:id` |
+| New reply | every other participant (raiser, assignee, admin) | their grievance page |
+| Resolved / rejected | the raiser (with the note), and the assignee | their grievance page |
+
+These are posted by triggers on `grievance` and `grievance_comment` through
+**`notify_user(user_id, title, body, category, link, source)`**, which any module can call. Personal
+notices expire after 60 days. Opening one through `/…/notices/:id/go` marks it read and jumps to the link.
+
+**Live status alerts** (computed by **`user_alerts(user_id)`** each time, never stored; shown under
+*Needs your attention* on the board and on the dashboard card, and they disappear once fixed):
+
+| Alert | Source |
+|---|---|
+| Attendance below the minimum in N courses, with sessions needed per course | `v_student_attendance_by_course` (T4) |
+| Fees pending / overdue with the amount and due date | `v_student_fee_status` (T6 contract): switches on automatically once T6 creates it |
+
+**Exam hooks for T5** (important notices to students, optionally one department and year):
+```sql
+SELECT erp.post_exam_timetable_notice('End-semester timetable published', 'Exams start on 24 Nov.', 'CSE', 3::smallint);
+SELECT erp.post_results_notice('Semester V results published', 'Check the results page.', 'CSE', 3::smallint);
+```
+
+Admin: personal alerts are kept out of the announcements list (filter *Automatic personal alerts*),
+and the admin's own alerts are in **Inbox** (`/admin/inbox`) and on the admin dashboard.

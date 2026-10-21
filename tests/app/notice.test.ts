@@ -25,7 +25,11 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
   let taught: { id: number; code: string };
   let notTaught: { id: number; code: string };
 
-  const cleanup = () => db.query(`DELETE FROM notice WHERE title LIKE '[test]%'`);
+  const cleanup = async () => {
+    await db.query(`DELETE FROM notice WHERE title LIKE '[test]%' OR (source = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
+                      (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%'))`);
+    await db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
+  };
   const idFrom = (location: string | undefined) => Number(/\/notices\/(\d+)$/.exec(location ?? '')?.[1]);
   const reach = async (id: number) =>
     (await db.query<{ recipients: number; reads: number }>('SELECT recipients, reads FROM v_notice_reach WHERE notice_id = $1', [id])).rows[0]!;
@@ -140,6 +144,44 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     const other = await db.query<{ notice_id: number }>(`SELECT notice_id FROM notice WHERE title = '[test] Everyone notice'`);
     const res = await postForm(faculty, '/faculty/notices', `/faculty/notices/${other.rows[0]!.notice_id}/withdraw`, {});
     expect(res.status).toBe(404);
+  });
+
+  it('shows live status alerts on the board and the dashboard', async () => {
+    const short = await db.query<{ n: number }>(`
+      SELECT count(*)::int AS n FROM v_student_attendance_by_course v JOIN student s USING (student_id)
+      WHERE s.student_number = $1 AND v.academic_session_id = current_session_id() AND v.eligibility = 'Shortage'`, [STUDENT]);
+    const n = short.rows[0]!.n;
+    const board = await student.get('/student/notices');
+    if (n > 0) {
+      expect(board.text).toContain('Needs your attention');
+      expect(board.text).toContain(`Attendance below the minimum in ${n} course`);
+      expect((await student.get('/student')).text).toContain(`Attendance below the minimum in ${n} course`);
+    } else {
+      expect(board.text).not.toContain('Needs your attention');
+    }
+  });
+
+  it('a new grievance lands in the admin inbox and opens the grievance', async () => {
+    const raised = await postForm(student, '/student/grievances/new', '/student/grievances', {
+      category: 'Exam', subject: '[test] Marks missing', description: 'My in-sem marks for one course are missing.',
+    });
+    const gid = Number(/\/grievances\/(\d+)$/.exec(raised.headers.location ?? '')?.[1]);
+    const inbox = await admin.get('/admin/inbox');
+    expect(inbox.status).toBe(200);
+    expect(inbox.text).toContain(`New grievance #${gid}: [test] Marks missing`);
+    const { rows } = await db.query<{ notice_id: number }>(
+      `SELECT notice_id FROM notice WHERE link = $1 AND title LIKE 'New grievance%'`, [`/admin/grievances/${gid}`]);
+    const go = await admin.get(`/admin/inbox/${rows[0]!.notice_id}/go`);
+    expect(go.status).toBe(302);
+    expect(go.headers.location).toBe(`/admin/grievances/${gid}`);
+    const read = await db.query('SELECT 1 FROM notice_read r JOIN app_user u USING (user_id) WHERE u.role = $1 AND r.notice_id = $2',
+      ['admin', rows[0]!.notice_id]);
+    expect(read.rows).toHaveLength(1);
+    // the student cannot open the admin's personal notice
+    expect((await student.get(`/student/notices/${rows[0]!.notice_id}`)).status).toBe(404);
+    // the admin's reply reaches the student as a personal notice
+    await postForm(admin, `/admin/grievances/${gid}`, `/admin/grievances/${gid}/comments`, { body: 'Checking with the exam cell.' });
+    expect((await student.get('/student/notices')).text).toContain(`New reply on grievance #${gid}`);
   });
 
   it('admin can withdraw; the notice leaves every board', async () => {
