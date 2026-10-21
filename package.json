@@ -25,7 +25,9 @@
     "supabase:verify": "tsx --env-file=.env.supabase scripts/db/verify.ts",
     "db:check": "tsx scripts/db/check-connection.ts",
     "supabase:check": "tsx --env-file=.env.supabase scripts/db/check-connection.ts",
-    "supabase:app-url": "tsx --env-file=.env.supabase scripts/db/app-url.ts"
+    "supabase:app-url": "tsx --env-file=.env.supabase scripts/db/app-url.ts",
+    "build:client": "npm --prefix client/fee-app install && npm --prefix client/fee-app run build",
+    "dev:client": "npm --prefix client/fee-app run build -- --watch"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
