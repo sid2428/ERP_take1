@@ -13,6 +13,11 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'offerings', label: 'Course offerings', href: '/student/offerings', icon: 'book' },
       ],
     },
+    {
+      label: 'FINANCE', items: [
+        { key: 'fee', label: 'Fees & D-Wallet', href: '/student/fee', icon: 'wallet' },
+      ],
+    },
     { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' }] },
   ],
   faculty: [
