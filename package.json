@@ -25,6 +25,8 @@
     "supabase:verify": "tsx --env-file=.env.supabase scripts/db/verify.ts",
     "db:seed-grievances": "tsx scripts/db/seed-grievances.ts",
     "supabase:seed-grievances": "tsx --env-file=.env.supabase scripts/db/seed-grievances.ts",
+    "db:seed-notices": "tsx scripts/db/seed-notices.ts",
+    "supabase:seed-notices": "tsx --env-file=.env.supabase scripts/db/seed-notices.ts",
     "db:check": "tsx scripts/db/check-connection.ts",
     "supabase:check": "tsx --env-file=.env.supabase scripts/db/check-connection.ts",
     "supabase:app-url": "tsx --env-file=.env.supabase scripts/db/app-url.ts",
