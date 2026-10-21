@@ -17,6 +17,7 @@ export const NAV: Record<Role, NavGroup[]> = {
     {
       label: 'RECORDS', items: [
         { key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' },
+        { key: 'fee', label: 'Fees & D-Wallet', href: '/student/fee', icon: 'wallet' },
         { key: 'grievances', label: 'Grievances', href: '/student/grievances', icon: 'alert' },
       ],
     },
