@@ -1,0 +1,43 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Elective windows</h1><span class="sub">Open a window, let students rank their choices, close it and allocate seats by merit</span></div>
+<% const when = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); %>
+<div class="grid2">
+<section class="card t">
+<div class="sc"><table>
+<thead><tr><th>Window</th><th>Session</th><th>Choices open</th><th class="num">Offerings</th><th class="num">Applicants</th><th>Status</th></tr></thead>
+<tbody>
+<% if (!windows.length) { %><tr><td colspan="6" class="muted">No windows yet. Create one on the right.</td></tr><% } %>
+<% for (const w of windows) { %>
+<tr>
+<td><a href="/admin/electives/<%= w.window_id %>"><b><%= w.elective_group === 'O1' ? 'Open elective' : 'Honors' %></b> · Sem <%= w.semester_no %></a></td>
+<td><%= w.academic_session_id %></td>
+<td class="nw"><%= when(w.opens_at) %> – <%= when(w.closes_at) %></td>
+<td class="num"><%= w.offerings %></td>
+<td class="num"><%= w.applicants %></td>
+<td><span class="pill <%= w.status === 'Open' || w.status === 'Allocated' ? 'g' : '' %>"><%= w.status %></span></td>
+</tr>
+<% } %>
+</tbody>
+</table></div>
+</section>
+<section class="card">
+<div class="hd"><h2>New window</h2></div>
+<form method="post" action="/admin/electives" class="stack" style="margin-top:8px">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="form-grid">
+<div class="field"><label for="ws">Session the electives run in</label>
+<select id="ws" name="academic_session_id">
+<% for (const s of sessions) { %><option value="<%= s.session_id %>"><%= s.session_id %></option><% } %>
+</select></div>
+<div class="field"><label for="wg">Type</label>
+<select id="wg" name="elective_group"><option value="O1">Open elective (O1)</option><option value="H1">Honors (H1)</option></select></div>
+<div class="field"><label for="wn">Semester</label><input id="wn" type="number" name="semester_no" min="1" max="12" value="6" required></div>
+<div class="field"><label for="wm">Choices per student</label><input id="wm" type="number" name="max_choices" min="1" max="5" value="3" required></div>
+<div class="field"><label for="wo">Choices open</label><input id="wo" type="datetime-local" name="opens_at" required></div>
+<div class="field"><label for="wc">Choices close</label><input id="wc" type="datetime-local" name="closes_at" required></div>
+</div>
+<div class="actions"><button class="btn primary" type="submit">Create window</button></div>
+</form>
+</section>
+</div>
+<%- include('../partials/layout-end') %>
