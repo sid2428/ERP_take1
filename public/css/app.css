@@ -44,6 +44,9 @@ svg.i { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: rou
 .term { height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; font-weight: 500; white-space: nowrap; }
 .me { display: flex; align-items: center; gap: 10px; padding-left: 12px; border-left: 1px solid var(--line); line-height: 1.25; }
 .me small { display: block; font-size: 12px; color: var(--muted); }
+.notification-link { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; color: var(--text-2); flex: none; }
+.notification-link:hover { background: var(--bg); text-decoration: none; }
+.notification-badge { position: absolute; top: -2px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; line-height: 17px; text-align: center; }
 .av { width: 32px; height: 32px; border-radius: 50%; background: var(--blue-bg); color: var(--navy); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex: none; }
 .me-menu { position: relative; }
 .me-menu summary { list-style: none; cursor: pointer; }

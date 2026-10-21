@@ -12,6 +12,7 @@ import { currentUser, homeFor, requireLogin, requireRole } from './middleware/au
 import { csrf } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { sessionMiddleware } from './middleware/session.js';
+import { unreadNoticeCount } from './queries/notice-queries.js';
 import { adminRouter } from './routes/admin/index.js';
 import { authRouter } from './routes/auth-routes.js';
 import { facultyRouter } from './routes/faculty-routes.js';
@@ -65,6 +66,19 @@ export function createApp(): express.Express {
     res.locals.currentSession = await queryOne<{ session_id: string; session_name: string; start_date: string; end_date: string }>(
       'SELECT session_id, session_name, start_date, end_date FROM academic_session WHERE is_current');
     res.locals.nav = null;
+    next();
+  });
+
+  // Shared header data: one focused count query per authenticated page request. Anonymous pages
+  // never touch the notice view, and pages with a dashboard notice card reuse this local.
+  app.use(async (req, res, next) => {
+    res.locals.notificationHref = req.user?.role === 'student' ? '/student/notices'
+      : req.user?.role === 'faculty' ? '/faculty/notices'
+        : req.user?.role === 'admin' ? '/admin/inbox' : null;
+    // The header is rendered by GET/HEAD page responses. Avoid a count query on authenticated
+    // form submissions and other non-rendering requests; the following redirect loads fresh data.
+    res.locals.notificationUnreadCount = req.user && ['GET', 'HEAD'].includes(req.method)
+      ? await unreadNoticeCount(req.user.userId) : 0;
     next();
   });
 

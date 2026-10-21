@@ -1,137 +1,217 @@
-# Notices (T8-1)
+# Notices and in-app notifications (T8-3)
 
-The academic office posts notices to any audience; faculty post to the divisions they teach. Every
-student and faculty member has a notice board, an unread count, and a "Notices" card on their
-dashboard. Other modules post system notices through the `post_notice(...)` contract.
+T8 provides one unified notice system for announcements, personal event updates, and live status
+alerts. Students, faculty, and admins see a role-specific bell in the authenticated top bar. The
+bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the current user's
+unread stored-notice count.
 
-Migration: `migrations/081-notices.sql` · Seed: `scripts/db/seed-notices.ts` ·
-Routes: `src/routes/notice-routes.ts` (student + faculty), `src/routes/admin/notice-routes.ts` ·
-Queries: `src/queries/notice-queries.ts` · Tests: `tests/db/notice.test.ts`, `tests/app/notice.test.ts`
+Migration: `migrations/081-notices.sql` and `migrations/082-automatic-notices.sql` · Seed:
+`scripts/db/seed-notices.ts` · Routes: `src/routes/notice-routes.ts`,
+`src/routes/admin/notice-routes.ts` · Queries: `src/queries/notice-queries.ts` · Tests:
+`tests/db/notice.test.ts`, `tests/db/automatic-notice.test.ts`, `tests/app/notice.test.ts`
 
-## Audiences
+## Audiences and stored data
 
-A notice has one or more **targets**. A target narrows the audience with optional filters, and a
-notice reaches a person when **any** of its targets matches them:
+A notice has one or more targets. A target narrows the audience with optional filters, and a notice
+reaches a person when any target matches them:
 
 | Target | Reaches |
 |---|---|
-| `{}` | everyone (students, faculty, admin) |
-| `{role}` | everyone with that role |
-| `{dept_id}` / `{dept_id, role}` | students of the department's programs and/or its faculty |
-| `{year_of_study}` (+ `dept_id`) | students in that year this session (optionally one department) |
-| `{division_id}` | the students of that division this session |
-
-Year and division come from the student's division in the **current session**, so a year-2 notice
-reaches whoever is in year 2 now. Year and division targets are always student targets.
-
-## Tables
+| `{}` | everyone |
+| `{role}` | every active account with that role |
+| `{dept_id}` or `{dept_id, role}` | matching department accounts |
+| `{year_of_study}` with optional `{dept_id}` | matching students in the current session |
+| `{division_id}` | students in that current-session division |
+| `{user_id}` | exactly one active account; personal notice only |
 
 | Table | Key | Purpose |
 |---|---|---|
-| `notice` | `notice_id` | title, body, category (General / Academic / Exam / Fees / Placement / Event), important flag, poster (NULL = system), posted, expires, withdrawn (when, by whom) |
-| `notice_target` | `target_id` | the audience filters (FKs to `department`, `division`) |
-| `notice_read` | `(user_id, notice_id)` | who has read what, and when |
+| `notice` | `notice_id` primary key | title, body, category, importance, poster, expiry, withdrawal, optional internal link and source |
+| `notice_target` | `target_id` primary key | audience filters or one personal `user_id` |
+| `notice_read` | composite primary key `(user_id, notice_id)` | read timestamp |
 
-## Rules and where they are enforced
+`v_user_audience` resolves active accounts to role, department, year, and division. The
+`v_user_notices` view resolves recipients, removes withdrawn/expired notices, and joins each user's
+read state. It returns one row per user/notice even when multiple targets match, so filtered boards
+do not duplicate notices.
 
-| Rule | Where |
+## Rules and enforcement
+
+The database enforces posting permissions, faculty teaching-division restrictions, target validity,
+at-least-one-audience, immutable posted notices, final withdrawal, expiry constraints, and
+recipient-only read tracking. Route forms also validate fields with Zod. Portal writes run in a
+transaction and add the relevant `NOTICE_*` audit record.
+
+The database objects responsible for these rules are:
+
+| Object | Definition and responsibility |
 |---|---|
-| Only the admin, faculty or the system (NULL) post | trigger `guard` on `notice` |
-| Faculty post only to divisions they teach this session | trigger `audience_guard` on `notice_target` |
-| Year/division targets describe students (role filled in automatically) | `CHECK` + trigger `audience_guard` |
-| A division target doesn't also name a department or year | `CHECK` |
-| Every notice has at least one target | deferred constraint trigger `has_audience` (checked at commit) |
-| A posted notice cannot be edited; its audience cannot change after the posting transaction | triggers `guard`, `audience_guard` |
-| Only the poster or an admin withdraws; withdrawing is final | trigger `guard` |
-| Expiry is after posting; title ≥ 5, body 10–5,000 characters | `CHECK`s (and zod in the routes) |
-| Only recipients can mark a notice read | trigger `recipient_only` on `notice_read` |
-| Every post / withdraw runs in a transaction and adds an `audit_log` row (`NOTICE_*`) | routes |
+| `guard` | `BEFORE INSERT OR UPDATE` on `notice`, calling `trg_notice_guard()`. Only active admin/faculty posters or `NULL` system posters are accepted; posted content is immutable; withdrawal is final and restricted to the poster or an admin. Migration 082 also freezes `link` and `source`. |
+| `audience_guard` | `BEFORE INSERT OR UPDATE OR DELETE` on `notice_target`, calling `trg_notice_target_guard()`. It fills student role for year/division targets, rejects invalid target changes, and limits faculty posters to divisions they teach in the current session. Cascading deletion of targets during notice deletion is allowed. |
+| `has_audience` | Deferred `AFTER INSERT` constraint trigger on `notice`, calling `trg_notice_has_target()`. The posting transaction must commit with at least one target. |
+| `recipient_only` | `BEFORE INSERT` on `notice_read`, calling `trg_notice_read_guard()`. The target must match the recipient's `v_user_audience` row, including personal `user_id` targets. |
 
-## Views and functions
+The key views and matching function are:
 
-**`v_user_audience`**: each active account with role, department, and (students) this session's year and division.
+* `v_user_audience` returns `(user_id, role, dept_id, year_of_study, division_id)` for every active
+  account. Student year/division values come from the current-session section; faculty department
+  values come from the faculty record.
+* `v_user_notices` returns live, recipient-filtered notices with read state. Migration 082 adds
+  `link`, `source`, and `is_personal`. A personal row is identified when the notice has a personal
+  `user_id` target.
+* `v_notice_reach` returns `(notice_id, recipients, reads)`. Group targets are counted from grouped
+  audience rows; personal targets add only named people not already covered by a group target.
+* `notice_target_matches(t notice_target, a v_user_audience) -> boolean` matches optional role,
+  department, year, division, and (in migration 082) personal `user_id` constraints.
 
-**`v_user_notices`**: every live notice (not withdrawn, not expired) for each user, with read status. Contract `v_user_notices(user_id)`.
+Representative read-only examples use bound parameters rather than interpolated IDs:
+
 ```sql
-SELECT title, category, posted_by_name, is_read FROM erp.v_user_notices WHERE user_id = 42 ORDER BY posted_at DESC;
+SELECT notice_id, recipients, reads
+FROM erp.v_notice_reach
+WHERE notice_id = $1;
+
+SELECT erp.notice_target_matches(t, a) AS matches
+FROM erp.notice_target AS t
+JOIN erp.v_user_audience AS a ON a.user_id = $1
+WHERE t.notice_id = $2;
 ```
 
-**`v_notice_reach`**: recipients and reads per notice. The ~50k accounts are grouped into a few hundred audience groups first, so a page of 25 notices takes about half a second.
+`notice_read` is only for stored notices. `user_alerts(user_id)` returns live attendance/fee status
+alerts and does not create read rows; an alert disappears when its underlying condition is fixed.
+
+## Current functions and query contracts
+
+Migrations 081 and 082 create functions and triggers, not SQL procedures; the portal and other
+modules call the function contracts below with bound parameters.
+
+`v_user_notices(user_id)` is the read-state and recipient contract:
+
 ```sql
-SELECT notice_id, recipients, reads FROM erp.v_notice_reach WHERE notice_id = 7;
+SELECT notice_id, title, category, is_personal, is_read
+FROM erp.v_user_notices
+WHERE user_id = $1
+ORDER BY is_important DESC, posted_at DESC;
 ```
 
-**`notice_target_matches(target, audience)`**: does a target describe a person?
+`post_notice(posted_by, title, body, category, targets jsonb, is_important = false,
+expires_at = NULL, link = NULL, source = NULL) -> notice_id` creates an audience-targeted notice.
+`posted_by = NULL` is used for system notices. `link` must be an internal portal path and `source`,
+when present, is one of `grievance`, `exam`, `results`, `fees`, or `attendance`.
 
-**`post_notice(posted_by, title, body, category, targets jsonb, is_important = false, expires_at = NULL) → notice_id`**: the contract for every team. `posted_by` NULL marks a system notice.
 ```sql
--- T5 when results are published
-SELECT erp.post_notice(NULL, 'Semester V results published', 'Results are on the results page.', 'Exam',
-                       '[{"role": "student", "dept_id": "CSE", "year_of_study": 3}]');
--- a faculty member to two divisions
-SELECT erp.post_notice(42, 'Lab moved', 'Thursday lab is in A-204.', 'Academic',
-                       '[{"division_id": 17}, {"division_id": 18}]');
+-- Prepared-statement shape; bind real, validated values in the caller.
+SELECT erp.post_notice($1, $2, $3, $4::erp.notice_category, $5::jsonb, $6, $7, $8, $9);
 ```
 
-## Pages
+Callers must bind the correct existing poster/user IDs, department IDs, year values, categories, and
+safe internal links. For example, a T5 caller may bind a current-session target JSON value such as
+`[{"role":"student","dept_id":"CSE","year_of_study":3}]` only after resolving that audience;
+the example is not a production-ready ID fixture.
 
-| Who | URL | What |
+`notify_user(user_id, title, body, category, link = NULL, source = NULL) -> notice_id` creates a
+stored personal notice for one active account through the same notice tables. Personal notices expire
+after 60 days. The current grievance triggers call it for assignment, replies, and closure events.
+
+```sql
+-- Bind an existing active app_user ID and a validated internal path, or NULL for no action.
+SELECT erp.notify_user($1, $2, $3, $4::erp.notice_category, $5, $6);
+```
+
+`user_alerts(p_user_id int) RETURNS TABLE (kind text, severity text, title text, body text, link text)`
+calculates current live alerts for an active student. Attendance uses
+`v_student_attendance_by_course`; fees are enabled conditionally when `v_student_fee_status` exists.
+
+`post_exam_timetable_notice(p_title text, p_body text, p_dept_id varchar = NULL,
+p_year smallint = NULL, p_until timestamptz = NULL) RETURNS int` and
+`post_results_notice(p_title text, p_body text, p_dept_id varchar = NULL,
+p_year smallint = NULL) RETURNS int` are T5 helper functions. They create important targeted Exam
+notices:
+
+```sql
+SELECT erp.post_exam_timetable_notice($1, $2, $3, $4::smallint, $5);
+SELECT erp.post_results_notice($1, $2, $3, $4::smallint);
+```
+
+The repository currently defines these helpers but has no verified T5 publication caller. T5 should
+call them from its real publication workflow when that workflow exists.
+
+The application query `unreadNoticeCount(userId)` counts `NOT is_read` from `v_user_notices` for
+one signed-in user. The app loads it once as a shared authenticated view local. It therefore respects
+recipient, withdrawal, expiry, and read rules without materializing other users' notices.
+
+## User experience and routes
+
+| Who | URL | Behaviour |
 |---|---|---|
-| Student | `/student/notices`, `/:id` | board with category chips, unread dots, mark all read; opening a notice marks it read |
-| Faculty | `/faculty/notices`, `/new`, `/:id` | board, **Posted by me** with reads, post to taught divisions (checkboxes), withdraw |
-| Student, faculty | dashboard | "Notices" card: latest four and the unread count |
-| Admin | `/admin/notices` | every notice with audience, reads / recipients and status (live / expired / withdrawn), filters |
-| Admin | `/admin/notices/new` | post with audience picker: everyone, a role, a department, a year, or division codes |
-| Admin | `/admin/notices/:id` | notice, reach, read %, withdraw |
+| Student | `/student/notices`, `/:id`, `/:id/go` | announcements/personal filter, category filter, read state, mark-all-read, safe personal navigation |
+| Faculty | `/faculty/notices`, `/new`, `/:id`, `/:id/go` | same inbox plus Posted by me, taught-division posting and withdrawal |
+| Admin | `/admin/inbox`, `/:id`, `/:id/go` | current user's inbox and personal alerts; bell destination |
+| Admin | `/admin/notices`, `/new`, `/:id` | announcement management, reach/read counts, state/category/kind filters, withdrawal |
 
-## Seed data
+The shared board accepts `kind=all`, `kind=announcements`, or `kind=personal` and a `category`
+parameter. Switching either filter preserves the other. Mark-all-read applies to the selected kind
+and category and never writes another user's rows. Opening a permitted notice marks it read; `/go`
+then redirects to its stored internal link. Guessed IDs are checked through `v_user_notices` and
+return 404 for non-recipients.
 
-`npm run db:seed-notices` (local) or `npm run supabase:seed-notices` adds 39 deterministic notices
-(Jul 2026 to today) from the office, 12 faculty members and the system, with a capped sample of
-reads (~0.9 MB). It runs only when `notice` is empty. Re-run it after `npm run db:load`.
+## Grievance notification events
 
-## Demo script (3 minutes)
+Migration 082 implements these database-triggered events; all use `notify_user(...)` and source
+`'grievance'`:
 
-1. Sign in as **admin** → *Notices* → **Post a notice**. Choose **Divisions** and enter `IT-Y3-A`
-   (the demo student's division). The confirmation shows how many students it reached.
-2. Sign in as **STU202600004**: the notice is on the dashboard card with an unread dot and on the
-   board. Open it, and it is marked read.
-3. Sign in as **FAC-CSE-074**: the notice is not on their board (it went to students of one division).
-   Post a notice to one of the divisions they teach; only those divisions are offered.
-4. Back as **admin**: the list shows reads / recipients; open the faculty notice and **Withdraw** it.
-   It disappears from the students' boards. *Audit log* shows `NOTICE_POST` and `NOTICE_WITHDRAW`.
-
-## Automatic notices and alerts (`migrations/082-automatic-notices.sql`)
-
-The portal tells people what they would expect to hear without anyone posting by hand.
-
-**Personal notices** (stored, addressed to one account through a `user_id` target, with an **Open →** link):
-
-| Event | Who is told | Link |
+| Trigger/event | Recipients | Stored link and detail |
 |---|---|---|
-| Grievance raised | the admin (Inbox) | `/admin/grievances/:id` |
-| Grievance assigned | the faculty member, and the raiser ("being handled") | their grievance page |
-| Moved to In progress without assignment | the raiser | `/…/grievances/:id` |
-| New reply | every other participant (raiser, assignee, admin) | their grievance page |
-| Resolved / rejected | the raiser (with the note), and the assignee | their grievance page |
+| `notify_new` after grievance creation | Every active admin | `/admin/grievances/:id`; includes the raiser and category in the message |
+| `notify_change` after assignment to a different faculty member | The assigned faculty member and the grievance raiser | Faculty and raiser role-specific grievance paths; the raiser receives “being handled” |
+| `notify_change` when status changes `Open` -> `In progress` without the assignment branch | The grievance raiser | Raiser role-specific grievance path |
+| `notify_reply` after a comment | Every other participant: the raiser, assigned faculty account, and active admins; the comment author is excluded | Each recipient's role-specific grievance path; message includes the comment author and truncated body |
+| `notify_change` when status first becomes `Resolved` or `Rejected` | The grievance raiser and, when present, the assigned faculty member | Role-specific grievance path; the raiser receives the resolution note and the assignee receives a closed notice |
 
-These are posted by triggers on `grievance` and `grievance_comment` through
-**`notify_user(user_id, title, body, category, link, source)`**, which any module can call. Personal
-notices expire after 60 days. Opening one through `/…/notices/:id/go` marks it read and jumps to the link.
+The assignment branch is evaluated before the standalone `Open` -> `In progress` branch. A later
+update that changes only status produces the standalone transition notice. The closure trigger covers
+both resolution and rejection, with the status text reflected in each message.
 
-**Live status alerts** (computed by **`user_alerts(user_id)`** each time, never stored; shown under
-*Needs your attention* on the board and on the dashboard card, and they disappear once fixed):
+## Cross-module integration matrix
 
-| Alert | Source |
-|---|---|
-| Attendance below the minimum in N courses, with sessions needed per course | `v_student_attendance_by_course` (T4) |
-| Fees pending / overdue with the amount and due date | `v_student_fee_status` (T6 contract): switches on automatically once T6 creates it |
+| Source | Event | Current implementation | Next step |
+|---|---|---|---|
+| T4 Attendance | student falls below required attendance | Implemented live alert through `user_alerts(user_id)` using `v_student_attendance_by_course`; called by the notice board/dashboard | Confirm this satisfies the shared notification requirement; do not add duplicate triggers without agreement |
+| T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist | Verify the real publication workflow calls the relevant helper |
+| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists | Verify compatibility with the real T6 view and fee screen |
+| T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
+| T2 Faculty | leave/request decision | No caller found in the repository | Coordinate when the event/API exists |
+| T7 Placement | new drive published | No caller found in the repository | Coordinate when the event/API exists |
+| T8 Grievances | creation, assignment, reply, resolution/rejection | Implemented by database triggers in `migrations/082-automatic-notices.sql` through `notify_user(...)`; covered by T8 tests | Preserve and extend when grievance events change |
 
-**Exam hooks for T5** (important notices to students, optionally one department and year):
-```sql
-SELECT erp.post_exam_timetable_notice('End-semester timetable published', 'Exams start on 24 Nov.', 'CSE', 3::smallint);
-SELECT erp.post_results_notice('Semester V results published', 'Check the results page.', 'CSE', 3::smallint);
-```
+## Architectural decision still required
 
-Admin: personal alerts are kept out of the announcements list (filter *Automatic personal alerts*),
-and the admin's own alerts are in **Inbox** (`/admin/inbox`) and on the admin dashboard.
+The original assignment names a separate `notification` table and `notify(user_id, kind, text,
+link)` procedure. The current repository instead uses the existing audience-targeted `notice` system,
+with `notify_user(user_id, title, body, category, link, source)` for personal notices. T8-3 keeps
+that unified design to avoid duplicate storage, conflicting read state, and parallel contracts.
+
+This is an explicit T0/project-team decision, not an assertion that the named `notification` contract
+has been implemented. If exact assignment compliance requires a separate table, it should be designed
+and coordinated as a future migration after overlap, callers, and read semantics are agreed.
+
+## Seed and demo
+
+`npm run db:seed-notices` adds deterministic notice data only when `notice` is empty. Do not run
+`npm run db:load` against the populated database; it reloads the dataset and related tables.
+
+## Demo script
+
+1. **Admin posting and reach:** sign in as an admin, open `/admin/notices/new`, choose **Division**,
+   and enter a division code that exists in the current academic session. Post the notice, open its
+   detail page, and review the audience plus recipient/read counts. Use the actual current-session
+   code shown by the form; do not copy a stale or fictitious ID.
+2. **Student read state:** sign in as `STU202600004` if that account is present in the selected
+   division. Observe the bell and unread badge, open the notice, then reload the page and confirm the
+   stored unread count has decreased. The board's Personal updates filter is separate from the
+   announcement.
+3. **Faculty permissions:** sign in as a faculty account, open `/faculty/notices/new`, and verify
+   that only divisions the faculty member teaches are offered. Post to one offered division; a
+   tampered request for another division is rejected by the database trigger.
+4. **Withdrawal and audit:** as the admin, withdraw the posted notice from its detail page. Confirm
+   it leaves the student board, then inspect the audit log for `NOTICE_POST` and `NOTICE_WITHDRAW`.

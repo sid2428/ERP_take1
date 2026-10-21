@@ -33,6 +33,11 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
   const idFrom = (location: string | undefined) => Number(/\/notices\/(\d+)$/.exec(location ?? '')?.[1]);
   const reach = async (id: number) =>
     (await db.query<{ recipients: number; reads: number }>('SELECT recipients, reads FROM v_notice_reach WHERE notice_id = $1', [id])).rows[0]!;
+  const userIdFor = async (loginId: string) =>
+    (await db.query<{ user_id: number }>('SELECT user_id FROM app_user WHERE login_id = $1', [loginId])).rows[0]!.user_id;
+  const unreadFor = async (userId: number) =>
+    (await db.query<{ n: number }>('SELECT count(*)::int AS n FROM v_user_notices WHERE user_id = $1 AND NOT is_read', [userId])).rows[0]!.n;
+  const bellLabel = (html: string) => html.match(/class="notification-link"[^>]*aria-label="([^"]+)"/)?.[1];
 
   beforeAll(async () => {
     await cleanup();
@@ -69,6 +74,66 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
       { title: '[test] student post', body: 'Students are not allowed to post.', category: 'General', division_ids: String(taught.id) });
     expect(res.status).toBe(403);
     expect((await db.query(`SELECT 1 FROM notice WHERE title = '[test] student post'`)).rows).toHaveLength(0);
+  });
+
+  it('renders role-specific notification bells with the signed-in unread count', async () => {
+    const studentId = await userIdFor(STUDENT);
+    const facultyId = await userIdFor(FACULTY);
+    const adminId = await userIdFor('admin');
+    const [studentPage, facultyPage, adminPage] = await Promise.all([
+      student.get('/student'), faculty.get('/faculty'), admin.get('/admin'),
+    ]);
+    const expected = (n: number) => `Notifications, ${n ? `${n} unread` : 'no unread notifications'}`;
+    expect(studentPage.text).toContain('href="/student/notices"');
+    expect(facultyPage.text).toContain('href="/faculty/notices"');
+    expect(adminPage.text).toContain('href="/admin/inbox"');
+    expect(bellLabel(studentPage.text)).toBe(expected(await unreadFor(studentId)));
+    expect(bellLabel(facultyPage.text)).toBe(expected(await unreadFor(facultyId)));
+    expect(bellLabel(adminPage.text)).toBe(expected(await unreadFor(adminId)));
+  });
+
+  it('separates personal updates, marks linked notices read, and protects recipient counts', async () => {
+    const studentId = await userIdFor(STUDENT);
+    const facultyId = await userIdFor(FACULTY);
+    const personal = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Bell personal', 'A private update with a destination.', 'General', '/student/grievances/1', 'grievance') AS id`, [studentId]);
+    const personalId = personal.rows[0]!.id;
+    const announcement = await db.query<{ id: number }>(
+      `SELECT post_notice($1, '[test] Bell announcement', 'A regular announcement for the board.', 'Academic', '[{}]'::jsonb) AS id`, [await userIdFor('admin')]);
+    const before = await unreadFor(studentId);
+    const personalBoard = await student.get('/student/notices?kind=personal');
+    expect(personalBoard.text).toContain('[test] Bell personal');
+    expect(personalBoard.text).not.toContain('[test] Bell announcement');
+    expect((await student.get('/student/notices?kind=announcements')).text).toContain('[test] Bell announcement');
+    expect((await faculty.get('/faculty/notices?kind=personal')).text).not.toContain('[test] Bell personal');
+
+    const go = await student.get(`/student/notices/${personalId}/go`);
+    expect(go.status).toBe(302);
+    expect(go.headers.location).toBe('/student/grievances/1');
+    expect(await unreadFor(studentId)).toBe(before - 1);
+    expect((await faculty.get(`/faculty/notices/${personalId}`)).status).toBe(404);
+
+    const facultyPersonal = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Bell faculty personal', 'Only faculty should receive this.', 'General') AS id`, [facultyId]);
+    expect((await student.get('/student/notices')).text).not.toContain('[test] Bell faculty personal');
+    expect(await unreadFor(studentId)).toBe(before - 1);
+    await db.query('DELETE FROM notice WHERE notice_id = $1', [facultyPersonal.rows[0]!.id]);
+    await db.query('DELETE FROM notice WHERE notice_id = $1', [announcement.rows[0]!.id]);
+  });
+
+  it('marks only the selected personal filter read', async () => {
+    const studentId = await userIdFor(STUDENT);
+    const personal = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Bell mark personal', 'Read this personal update.', 'General') AS id`, [studentId]);
+    const announcement = await db.query<{ id: number }>(
+      `SELECT post_notice($1, '[test] Bell mark announcement', 'Leave this announcement unread.', 'Academic', '[{}]'::jsonb) AS id`, [await userIdFor('admin')]);
+    const cleared = await postForm(student, '/student/notices?kind=personal', '/student/notices/read-all', { kind: 'personal' });
+    expect(cleared.headers.location).toBe('/student/notices?kind=personal');
+    const states = await db.query<{ notice_id: number; is_read: boolean }>(
+      `SELECT notice_id, is_read FROM v_user_notices WHERE user_id = $1 AND notice_id = ANY($2::int[])`,
+      [studentId, [personal.rows[0]!.id, announcement.rows[0]!.id]]);
+    expect(states.rows.find((r) => r.notice_id === personal.rows[0]!.id)?.is_read).toBe(true);
+    expect(states.rows.find((r) => r.notice_id === announcement.rows[0]!.id)?.is_read).toBe(false);
   });
 
   it('admin posts to one division; exactly its students receive it', async () => {

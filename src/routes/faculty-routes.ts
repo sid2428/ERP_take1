@@ -21,7 +21,7 @@ facultyRouter.get('/', async (req, res) => {
   const facultyId = req.user!.facultyId!;
   const [profile, classes, timetable, notices] = await Promise.all([
     getFacultyProfile(facultyId), getFacultyClasses(facultyId), getFacultyTimetable(facultyId),
-    noticeSummary(req.user!.userId),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   if (!profile) throw notFound('Faculty record');
 
