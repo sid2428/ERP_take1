@@ -1,0 +1,33 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Raise a grievance</h1><span class="sub"><a href="<%= base %>">← My grievances</a></span></div>
+<div class="grid2">
+<section class="card">
+  <form method="post" action="<%= base %>" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="field">
+      <label for="gc">Category</label>
+      <select id="gc" name="category" required>
+        <option value="">Choose a category</option>
+        <% for (const c of categories) { %><option><%= c %></option><% } %>
+      </select>
+    </div>
+    <div class="field">
+      <label for="gs">Subject</label>
+      <input id="gs" type="text" name="subject" minlength="5" maxlength="120" required placeholder="e.g. Attendance not updated for 14 Oct">
+    </div>
+    <div class="field">
+      <label for="gd">Describe the problem</label>
+      <textarea id="gd" name="description" rows="7" minlength="10" maxlength="4000" required></textarea>
+      <span class="hint">Include dates, course codes and anything already tried. You cannot edit this after submitting, but you can add replies.</span>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Submit grievance</button><a class="btn link" href="<%= base %>">Cancel</a></div>
+  </form>
+</section>
+<section class="card">
+  <div class="hd"><h2>What happens next</h2></div>
+  <div class="item"><div class="t"><div><span class="pill o">Open</span></div><div class="s">The academic office receives it straight away.</div></div></div>
+  <div class="item"><div class="t"><div><span class="pill">In progress</span></div><div class="s">It may be assigned to a faculty member who can help. You can talk to them in the replies.</div></div></div>
+  <div class="item"><div class="t"><div><span class="pill g">Resolved</span> or <span class="pill r">Rejected</span></div><div class="s">The office closes it with a note explaining the outcome.</div></div></div>
+</section>
+</div>
+<%- include('../partials/layout-end') %>

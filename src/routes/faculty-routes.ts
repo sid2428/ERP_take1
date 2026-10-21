@@ -3,8 +3,10 @@ import { isoWeekday, termProgress, todayIso } from '../lib/format.js';
 import { forbidden, notFound } from '../lib/http-error.js';
 import { getAssignment, getFacultyClasses, getFacultyProfile, getRoster, teachesStudent } from '../queries/faculty-queries.js';
 import { getFacultyTimetable, getStudentCourses, getStudentProfile, nextClassDay } from '../queries/shared-queries.js';
+import { grievanceRouter } from './grievance-routes.js';
 
 export const facultyRouter = Router();
+facultyRouter.use('/grievances', grievanceRouter);
 
 function idParam(value: string | undefined): number {
   const n = Number(value);

@@ -4,6 +4,7 @@ import { auditRouter } from './audit-routes.js';
 import { dashboardRouter } from './dashboard-routes.js';
 import { peopleRouter } from './people-routes.js';
 import { electiveRouter } from './elective-routes.js';
+import { grievanceAdminRouter } from './grievance-routes.js';
 
 export const adminRouter = Router();
 adminRouter.use(dashboardRouter);
@@ -11,3 +12,4 @@ adminRouter.use(academicRouter);
 adminRouter.use(peopleRouter);
 adminRouter.use(auditRouter);
 adminRouter.use(electiveRouter);
+adminRouter.use(grievanceAdminRouter);

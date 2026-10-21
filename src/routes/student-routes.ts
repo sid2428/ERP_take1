@@ -7,7 +7,10 @@ import { notFound } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { getCurriculum, getStudentCourses, getStudentProfile, getStudentTimetable, nextClassDay } from '../queries/shared-queries.js';
 import { getStudentElectiveOfferings, getStudentElectiveResult, getStudentElectiveWindows } from '../queries/academic-queries.js';
+import { grievanceRouter } from './grievance-routes.js';
+
 export const studentRouter = Router();
+studentRouter.use('/grievances', grievanceRouter);
 
 studentRouter.get('/', async (req, res) => {
   const studentId = req.user!.studentId!;
