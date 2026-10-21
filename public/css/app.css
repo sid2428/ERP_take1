@@ -242,3 +242,8 @@ input[readonly] { background: var(--surface-2); color: var(--muted); }
   th:last-child, td:last-child { padding-right: 14px; }
 }
 @media print { .side, .top, .foot, .actions, .menu-btn { display: none !important; } body { background: #fff; } }
+
+/* ---------- grievance thread ---------- */
+.thread .body { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thread .sys { padding: 6px 0; }
+.thread .sys .pill { font-size: 11px; }

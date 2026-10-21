@@ -14,12 +14,22 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'electives', label: 'Electives', href: '/student/electives', icon: 'list' },
       ],
     },
-    { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' }] },
+    {
+      label: 'RECORDS', items: [
+        { key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' },
+        { key: 'grievances', label: 'Grievances', href: '/student/grievances', icon: 'alert' },
+      ],
+    },
   ],
   faculty: [
     { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' }] },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
-    { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' }] },
+    {
+      label: 'RECORDS', items: [
+        { key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' },
+        { key: 'grievances', label: 'Grievances', href: '/faculty/grievances', icon: 'alert' },
+      ],
+    },
   ],
   admin: [
     { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' }] },
@@ -39,6 +49,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'faculty', label: 'Faculty', href: '/admin/faculty', icon: 'briefcase' },
       ],
     },
+    { label: 'COMMUNICATION', items: [{ key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' }] },
     { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },
   ],
 };

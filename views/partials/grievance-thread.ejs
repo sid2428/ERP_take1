@@ -1,0 +1,55 @@
+<%# Comment trail + status changes of one grievance. Locals: g, thread, statusPill, base, isRaiser %>
+<section class="card" style="margin-bottom:16px">
+  <div class="hd"><h2>Conversation</h2><span class="muted"><%= g.comment_count %> <%= g.comment_count === 1 ? 'reply' : 'replies' %></span></div>
+  <div class="thread">
+    <div class="item">
+      <div class="t">
+        <div><%= g.raised_by_name %> <span class="pill n"><%= g.raised_by_role %></span></div>
+        <div class="s">raised this grievance</div>
+      </div>
+      <div class="w"><%= fmt.dateTime(g.created_at) %></div>
+    </div>
+    <% for (const e of thread) { %>
+      <% if (e.kind === 'status') { %>
+      <div class="item sys">
+        <div class="t"><div class="s">
+          Status <span class="pill <%= statusPill(e.from_status) %>"><%= e.from_status %></span> →
+          <span class="pill <%= statusPill(e.to_status) %>"><%= e.to_status %></span>
+          <% if (e.author_name) { %> by <%= e.author_name %><% } %>
+        </div></div>
+        <div class="w"><%= fmt.dateTime(e.at) %></div>
+      </div>
+      <% } else { %>
+      <div class="item">
+        <div class="t">
+          <div><%= e.author_name %> <span class="pill <%= e.author_role === 'admin' ? 'v' : 'n' %>"><%= e.author_role === 'admin' ? 'academic office' : e.author_role %></span></div>
+          <div class="body"><%= e.body %></div>
+        </div>
+        <div class="w"><%= fmt.dateTime(e.at) %></div>
+      </div>
+      <% } %>
+    <% } %>
+    <% if (g.resolution_note) { %>
+    <div class="item">
+      <div class="t">
+        <div>Outcome <span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
+        <div class="body"><%= g.resolution_note %></div>
+      </div>
+      <div class="w"><%= fmt.dateTime(g.resolved_at) %></div>
+    </div>
+    <% } %>
+  </div>
+
+  <% if (g.status === 'Resolved' || g.status === 'Rejected') { %>
+    <p class="muted" style="margin-top:12px">This grievance is closed. <% if (isRaiser) { %>If the problem continues, raise a new grievance.<% } %></p>
+  <% } else { %>
+    <form method="post" action="<%= base %>/<%= g.grievance_id %>/comments" class="stack" style="margin-top:12px;gap:10px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="reply">Add a reply</label>
+        <textarea id="reply" name="body" rows="3" maxlength="2000" required></textarea>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Post reply</button></div>
+    </form>
+  <% } %>
+</section>
