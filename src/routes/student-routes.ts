@@ -58,6 +58,10 @@ studentRouter.get('/offerings', async (req, res) => {
   res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits });
 });
 
+studentRouter.get('/fee', (_req, res) => {
+  res.render('student/fee', { title: 'Fee & D-Wallet', nav: 'fee' });
+});
+
 studentRouter.get('/profile', async (req, res) => {
   const profile = await getStudentProfile(req.user!.studentId!);
   if (!profile) throw notFound('Student record');
