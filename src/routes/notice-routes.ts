@@ -14,13 +14,23 @@ import { flash } from '../middleware/auth.js';
 import { actAs } from '../queries/grievance-queries.js';
 import {
   NOTICE_CATEGORIES, alertsFor, audienceLabel, boardFor, categoryPill, markAllRead, markRead, noticeFor, postNotice, reachOf,
-  targetsOf, teachingDivisions,
+  targetsOf, teachingDivisions, type NoticeKind,
 } from '../queries/notice-queries.js';
 import { idParam } from './admin/helpers.js';
 
 export const noticeRouter = Router();
 
 const base = (req: Request): string => req.baseUrl;
+
+const noticeKind = (value: unknown): NoticeKind => value === 'personal' ? 'personal' : value === 'announcements' ? 'announcements' : 'all';
+
+function noticeFilters(req: Request): { category: string; kind: NoticeKind } {
+  return {
+    category: typeof req.query.category === 'string' && (NOTICE_CATEGORIES as readonly string[]).includes(req.query.category)
+      ? req.query.category : '',
+    kind: noticeKind(req.query.kind),
+  };
+}
 
 function requireFaculty(req: Request): number {
   if (req.user?.role !== 'faculty' || !req.user.facultyId) throw forbidden();
@@ -29,10 +39,23 @@ function requireFaculty(req: Request): number {
 
 noticeRouter.get('/', async (req, res) => {
   const user = req.user!;
-  const category = typeof req.query.category === 'string' && (NOTICE_CATEGORIES as readonly string[]).includes(req.query.category)
-    ? req.query.category : '';
+  const { category, kind } = noticeFilters(req);
+  const filterHref = (nextKind: NoticeKind): string => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (nextKind !== 'all') params.set('kind', nextKind);
+    const queryString = params.toString();
+    return `${base(req)}${queryString ? `?${queryString}` : ''}`;
+  };
+  const categoryHref = (nextCategory: string): string => {
+    const params = new URLSearchParams();
+    if (nextCategory) params.set('category', nextCategory);
+    if (kind !== 'all') params.set('kind', kind);
+    const queryString = params.toString();
+    return `${base(req)}${queryString ? `?${queryString}` : ''}`;
+  };
   const [notices, alerts, mine] = await Promise.all([
-    boardFor(user.userId, category),
+    boardFor(user.userId, category, kind),
     alertsFor(user.userId),
     user.role === 'faculty'
       ? query<{ notice_id: number; title: string; category: string; posted_at: Date; withdrawn_at: Date | null; expires_at: Date | null }>(
@@ -45,6 +68,7 @@ noticeRouter.get('/', async (req, res) => {
   res.render('shared/notices', {
     title: user.role === 'admin' ? 'Inbox' : 'Notices', nav: user.role === 'admin' ? 'inbox' : 'notices',
     base: base(req), notices, alerts, category, isAdmin: user.role === 'admin', categories: NOTICE_CATEGORIES, categoryPill,
+    kind, filterHref, categoryHref,
     isFaculty: user.role === 'faculty',
     mine: mine.map((n) => ({ ...n, audience: audienceLabel(targets.get(n.notice_id) ?? []), reach: reach.get(n.notice_id) })),
     unread: notices.filter((n) => !n.is_read).length,
@@ -52,9 +76,16 @@ noticeRouter.get('/', async (req, res) => {
 });
 
 noticeRouter.post('/read-all', async (req, res) => {
-  const n = await transaction(async (db) => markAllRead(db, req.user!.userId));
+  const category = typeof req.body.category === 'string' && (NOTICE_CATEGORIES as readonly string[]).includes(req.body.category)
+    ? req.body.category : '';
+  const kind = noticeKind(req.body.kind);
+  const n = await transaction(async (db) => markAllRead(db, req.user!.userId, category, kind));
   flash(req, 'success', n ? `${n} notice${n === 1 ? '' : 's'} marked as read.` : 'Everything was already read.');
-  res.redirect(base(req));
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (kind !== 'all') params.set('kind', kind);
+  const queryString = params.toString();
+  res.redirect(`${base(req)}${queryString ? `?${queryString}` : ''}`);
 });
 
 // ---------------------------------------------------------------- faculty: post / withdraw

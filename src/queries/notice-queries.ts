@@ -38,40 +38,57 @@ export interface NoticeTarget {
 /** Target JSON accepted by post_notice(). */
 export interface TargetSpec { role?: string; dept_id?: string; year_of_study?: number; division_id?: number; user_id?: number; }
 
+export type NoticeKind = 'all' | 'announcements' | 'personal';
+
 export function alertsFor(userId: number): Promise<UserAlert[]> {
   return query<UserAlert>('SELECT * FROM user_alerts($1)', [userId]);
 }
 
+/** Unread stored notices visible to this user; the view applies recipient, expiry and withdrawal rules. */
+export function unreadNoticeCount(userId: number): Promise<number> {
+  return queryOne<{ unread: number }>(
+    'SELECT count(*)::int AS unread FROM v_user_notices WHERE user_id = $1 AND NOT is_read', [userId]
+  ).then((row) => row?.unread ?? 0);
+}
+
 /** The notices this user should see, important ones first. */
-export function boardFor(userId: number, category = '', limit = 100): Promise<UserNotice[]> {
+export function boardFor(userId: number, category = '', kind: NoticeKind = 'all', limit = 100): Promise<UserNotice[]> {
   return query<UserNotice>(
-    `SELECT * FROM v_user_notices WHERE user_id = $1 AND ($2::text = '' OR category::text = $2::text)
-     ORDER BY is_important DESC, posted_at DESC LIMIT $3`, [userId, category, limit]);
+    `SELECT * FROM v_user_notices
+     WHERE user_id = $1
+       AND ($2::text = '' OR category::text = $2::text)
+       AND ($3::text = 'all' OR ($3::text = 'personal' AND is_personal)
+                         OR ($3::text = 'announcements' AND NOT is_personal))
+     ORDER BY is_important DESC, posted_at DESC LIMIT $4`, [userId, category, kind, limit]);
 }
 
 export function noticeFor(userId: number, noticeId: number): Promise<UserNotice | undefined> {
   return queryOne<UserNotice>('SELECT * FROM v_user_notices WHERE user_id = $1 AND notice_id = $2', [userId, noticeId]);
 }
 
-/** Latest notices for the dashboard card, plus how many are unread. */
-export async function noticeSummary(userId: number, limit = 4): Promise<{ latest: UserNotice[]; unread: number; alerts: UserAlert[] }> {
+/** Latest notices for the dashboard card, plus how many are unread. Pass a shared count to avoid a duplicate query. */
+export async function noticeSummary(userId: number, limit = 4, unread?: number): Promise<{ latest: UserNotice[]; unread: number; alerts: UserAlert[] }> {
   const [latest, counts, alerts] = await Promise.all([
     query<UserNotice>('SELECT * FROM v_user_notices WHERE user_id = $1 ORDER BY is_important DESC, posted_at DESC LIMIT $2', [userId, limit]),
-    queryOne<{ unread: number }>('SELECT count(*) FILTER (WHERE NOT is_read)::int AS unread FROM v_user_notices WHERE user_id = $1', [userId]),
+    unread === undefined ? unreadNoticeCount(userId) : Promise.resolve(unread),
     alertsFor(userId),
   ]);
-  return { latest, unread: counts?.unread ?? 0, alerts };
+  return { latest, unread: counts, alerts };
 }
 
 export async function markRead(db: Db, userId: number, noticeId: number): Promise<void> {
   await db.query('INSERT INTO notice_read (notice_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [noticeId, userId]);
 }
 
-export async function markAllRead(db: Db, userId: number): Promise<number> {
+export async function markAllRead(db: Db, userId: number, category = '', kind: NoticeKind = 'all'): Promise<number> {
   const r = await db.query(
     `INSERT INTO notice_read (notice_id, user_id)
-     SELECT notice_id, user_id FROM v_user_notices WHERE user_id = $1 AND NOT is_read
-     ON CONFLICT DO NOTHING`, [userId]);
+     SELECT notice_id, user_id FROM v_user_notices
+      WHERE user_id = $1 AND NOT is_read
+        AND ($2::text = '' OR category::text = $2::text)
+        AND ($3::text = 'all' OR ($3::text = 'personal' AND is_personal)
+                          OR ($3::text = 'announcements' AND NOT is_personal))
+     ON CONFLICT DO NOTHING`, [userId, category, kind]);
   return r.rowCount ?? 0;
 }
 

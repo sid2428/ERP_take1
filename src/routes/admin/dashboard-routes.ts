@@ -44,7 +44,7 @@ dashboardRouter.get('/', async (req, res) => {
              count(*) FILTER (WHERE session_status = 'Conducted')::int AS week_sessions,
              count(*) FILTER (WHERE session_status = 'Cancelled')::int AS week_cancelled
       FROM attendance_session WHERE session_date > (SELECT d FROM last) - 7`),
-    noticeSummary(req.user!.userId),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   const current = res.locals.currentSession as { start_date: string; end_date: string } | undefined;
   res.render('admin/dashboard', {

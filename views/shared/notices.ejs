@@ -42,14 +42,24 @@
   <div class="hd">
     <h2><%= isAdmin ? 'For you' : 'Notice board' %></h2>
     <% if (unread) { %>
-    <form method="post" action="<%= base %>/read-all"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn small" type="submit">Mark all read (<%= unread %>)</button></form>
+    <form method="post" action="<%= base %>/read-all">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <% if (category) { %><input type="hidden" name="category" value="<%= category %>"><% } %>
+      <% if (kind !== 'all') { %><input type="hidden" name="kind" value="<%= kind %>"><% } %>
+      <button class="btn small" type="submit">Mark all read (<%= unread %>)</button>
+    </form>
     <% } %>
   </div>
-  <div class="chips" style="margin:4px 0 8px">
-    <a class="chip-link<%= category === '' ? ' on' : '' %>" href="<%= base %>">All</a>
-    <% for (const c of categories) { %><a class="chip-link<%= category === c ? ' on' : '' %>" href="<%= base %>?category=<%= c %>"><%= c %></a><% } %>
+  <div class="chips" style="margin:4px 0 8px" aria-label="Notice type">
+    <a class="chip-link<%= kind === 'all' ? ' on' : '' %>" href="<%= filterHref('all') %>"<%- kind === 'all' ? ' aria-current="page"' : '' %>>All</a>
+    <a class="chip-link<%= kind === 'announcements' ? ' on' : '' %>" href="<%= filterHref('announcements') %>"<%- kind === 'announcements' ? ' aria-current="page"' : '' %>>Announcements</a>
+    <a class="chip-link<%= kind === 'personal' ? ' on' : '' %>" href="<%= filterHref('personal') %>"<%- kind === 'personal' ? ' aria-current="page"' : '' %>>Personal updates</a>
   </div>
-  <% if (!notices.length) { %><p class="empty">No notices<%= category ? ' in ' + category : '' %> right now.</p><% } %>
+  <div class="chips" style="margin:4px 0 8px" aria-label="Notice category">
+    <a class="chip-link<%= category === '' ? ' on' : '' %>" href="<%= categoryHref('') %>"<%- category === '' ? ' aria-current="page"' : '' %>>All categories</a>
+    <% for (const c of categories) { %><a class="chip-link<%= category === c ? ' on' : '' %>" href="<%= categoryHref(c) %>"<%- category === c ? ' aria-current="page"' : '' %>><%= c %></a><% } %>
+  </div>
+  <% if (!notices.length) { %><p class="empty">No <%= kind === 'personal' ? 'personal updates' : kind === 'announcements' ? 'announcements' : 'notices' %><%= category ? ' in ' + category : '' %> right now.</p><% } %>
   <% for (const n of notices) { %>
   <div class="notice<%= n.is_read ? '' : ' unread' %>">
     <div class="title">
@@ -59,6 +69,7 @@
       <% if (!n.is_read) { %><span class="dot b inline" title="Unread"></span><% } %>
     </div>
     <% if (n.is_personal) { %><div class="meta notice-body"><%= n.body %></div><% } %>
+    <% if (n.is_personal) { %><div class="meta"><span class="pill <%= n.is_read ? 'n' : 'o' %>"><%= n.is_read ? 'Read' : 'Unread' %></span></div><% } %>
     <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %><% if (n.link) { %> · <a href="<%= base %>/<%= n.notice_id %>/go">Open →</a><% } %></div>
   </div>
   <% } %>

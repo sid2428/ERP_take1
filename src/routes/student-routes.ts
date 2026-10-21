@@ -24,7 +24,7 @@ studentRouter.get('/', async (req, res) => {
     queryOne<{ total_sessions: number; attended: number; overall_pct: number | null }>(
       `SELECT total_sessions, attended, overall_pct FROM v_student_attendance_overall
         WHERE student_id = $1 AND academic_session_id = current_session_id()`, [studentId]),
-    noticeSummary(req.user!.userId),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   if (!profile) throw notFound('Student record');
 
