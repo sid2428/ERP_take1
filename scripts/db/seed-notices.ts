@@ -1,6 +1,8 @@
 /**
  * Demo notices (T8-1): about 45 notices from Jul 2026 to today from the academic office, faculty
  * (to divisions they teach) and the system, with some expired or withdrawn and a sample of reads.
+ * When demo grievances exist (npm run db:seed-grievances first), their history also produces the
+ * personal notices the triggers would have sent: new grievance, assigned, reply, resolved/rejected.
  * Deterministic. Runs only when the notice table is empty, so it never touches real notices.
  * Re-run after npm run db:load (the load truncates notices together with the accounts).
  *
@@ -24,7 +26,7 @@ const rand = rng(8110);
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
 
 type Target = { role?: string; dept_id?: string; year_of_study?: number; division_id?: number };
-interface Seed { title: string; body: string; category: string; important?: boolean; targets: Target[]; days?: number }
+interface Seed { title: string; body: string; category: string; important?: boolean; targets: Target[]; source?: string }
 
 const OFFICE: Seed[] = [
   { title: 'Welcome to the Odd Semester 2026-27', category: 'General', important: true, targets: [{}],
@@ -75,8 +77,10 @@ const FACULTY_NOTICES = [
 const SYSTEM: Seed[] = [
   { title: 'Fee installment 1 overdue: late fee applies', category: 'Fees', targets: [{ role: 'student' }],
     body: 'The first fee installment is overdue. A late fee of Rs 500 now applies. Please clear your dues to avoid further charges.' },
-  { title: 'In-semester marks published', category: 'Exam', targets: [{ role: 'student' }],
+  { title: 'In-semester marks published', category: 'Exam', targets: [{ role: 'student' }], source: 'results', important: true,
     body: 'In-semester marks for this term have been published. Check the results page for your course-wise marks.' },
+  { title: 'End-semester examination timetable published', category: 'Exam', targets: [{ role: 'student' }], source: 'exam', important: true,
+    body: 'The end-semester examination timetable for the odd semester is out. Exams start in the last week of November; check the dates for each of your courses and clear your dues to download the hall ticket.' },
 ];
 
 async function main(): Promise<void> {
@@ -116,7 +120,7 @@ async function main(): Promise<void> {
           at: now - (2 + Math.floor(rand() * 40)) * DAY - k * DAY, targets: divs.map((d) => ({ division_id: d })) });
       }
     });
-    SYSTEM.forEach((s, i) => items.push({ ...s, by: null, at: FROM + Math.floor((0.55 + 0.3 * i) * span) * DAY }));
+    SYSTEM.forEach((s, i) => items.push({ ...s, by: null, at: FROM + Math.floor(Math.min(0.97, 0.55 + 0.21 * i) * span) * DAY }));
 
     await db.query('BEGIN');
     try {
@@ -129,11 +133,11 @@ async function main(): Promise<void> {
         const expires = it.category === 'Event' || it.category === 'Exam' ? at + 21 * DAY : null;
         const withdrawn = i === 5 || i === 17 ? at + 2 * DAY : null;
         const { rows: [n] } = await db.query<{ notice_id: number }>(
-          `INSERT INTO notice (title, body, category, is_important, posted_by, posted_at, expires_at, withdrawn_at, withdrawn_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING notice_id`,
+          `INSERT INTO notice (title, body, category, is_important, posted_by, posted_at, expires_at, withdrawn_at, withdrawn_by, source)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING notice_id`,
           [it.title, it.body, it.category, it.important ?? false, it.by, new Date(at).toISOString(),
             expires ? new Date(expires).toISOString() : null, withdrawn && withdrawn < now ? new Date(withdrawn).toISOString() : null,
-            withdrawn && withdrawn < now ? (it.by ?? admin) : null]);
+            withdrawn && withdrawn < now ? (it.by ?? admin) : null, it.source ?? null]);
         for (const t of it.targets) {
           const role = t.role ?? (t.year_of_study || t.division_id ? 'student' : null);
           await db.query('INSERT INTO notice_target (notice_id, role, dept_id, year_of_study, division_id) VALUES ($1, $2, $3, $4, $5)',
@@ -150,6 +154,56 @@ async function main(): Promise<void> {
           ORDER BY hashint4(a.user_id + $1) LIMIT 400`, [n!.notice_id, new Date(at).toISOString(), Math.round(share * 1000)]);
         reads += r.rowCount ?? 0;
       }
+
+      // personal notices the grievance triggers would have sent, at the time each event happened
+      const events = (await db.query<{ user_id: number; title: string; body: string; category: string; link: string; at: Date }>(`
+        WITH g AS (SELECT g.*, grievance_notice_category(g.category) AS ncat, fu.user_id AS assignee_user,
+                          f.first_name || ' ' || f.last_name AS assignee_name
+                   FROM grievance g LEFT JOIN faculty f ON f.faculty_id = g.assigned_to
+                   LEFT JOIN app_user fu ON fu.faculty_id = g.assigned_to)
+        SELECT a.user_id, 'New grievance #' || g.grievance_id || ': ' || g.subject AS title,
+               p.display_name || ' (' || p.login_id || ') raised a ' || lower(g.category::text)
+                 || ' grievance. Assign it or reply from the grievance queue.' AS body,
+               g.ncat::text AS category, grievance_link('admin', g.grievance_id) AS link, g.created_at AS at
+        FROM g JOIN v_user_profile p ON p.user_id = g.raised_by CROSS JOIN app_user a WHERE a.role = 'admin' AND a.is_active
+        UNION ALL
+        SELECT g.assignee_user, 'Grievance #' || g.grievance_id || ' assigned to you',
+               'The academic office asked you to help with "' || g.subject || '". Read it and reply in the conversation.',
+               g.ncat::text, grievance_link('faculty', g.grievance_id), g.assigned_at
+        FROM g WHERE g.assignee_user IS NOT NULL
+        UNION ALL
+        SELECT g.raised_by, 'Your grievance #' || g.grievance_id || ' is being handled',
+               g.assignee_name || ' has been asked to help with "' || g.subject || '". You can talk to them in the replies.',
+               g.ncat::text, grievance_link(g.raised_by_role, g.grievance_id), g.assigned_at
+        FROM g WHERE g.assigned_to IS NOT NULL
+        UNION ALL
+        SELECT r.user_id, 'New reply on grievance #' || g.grievance_id,
+               CASE WHEN ap.role = 'admin' THEN 'The academic office' ELSE ap.display_name END || ' wrote: ' || c.body,
+               g.ncat::text, grievance_link(r.role, g.grievance_id), c.created_at
+        FROM grievance_comment c JOIN g USING (grievance_id) JOIN v_user_profile ap ON ap.user_id = c.author_id
+        CROSS JOIN LATERAL (
+          SELECT g.raised_by AS user_id, g.raised_by_role AS role
+          UNION SELECT u.user_id, u.role FROM app_user u WHERE u.faculty_id = g.assigned_to
+          UNION SELECT u.user_id, u.role FROM app_user u WHERE u.role = 'admin' AND u.is_active AND ap.role <> 'admin') r
+        WHERE r.user_id <> c.author_id
+        UNION ALL
+        SELECT g.raised_by, 'Your grievance #' || g.grievance_id || ' was ' || lower(g.status::text),
+               '"' || g.subject || '": ' || g.resolution_note, g.ncat::text, grievance_link(g.raised_by_role, g.grievance_id), g.resolved_at
+        FROM g WHERE g.resolved_at IS NOT NULL`)).rows;
+      for (const e of events) {
+        const ageDays = (now - e.at.getTime()) / DAY;
+        const { rows: [n] } = await db.query<{ notice_id: number }>(
+          `INSERT INTO notice (title, body, category, posted_by, posted_at, expires_at, link, source)
+           VALUES ($1, $2, $3, NULL, $4, $4::timestamptz + interval '60 days', $5, 'grievance') RETURNING notice_id`,
+          [e.title, e.body, e.category, e.at, e.link]);
+        await db.query('INSERT INTO notice_target (notice_id, user_id) VALUES ($1, $2)', [n!.notice_id, e.user_id]);
+        // people have read their older alerts; the last few days stay unread
+        if (ageDays > 3) {
+          await db.query(`INSERT INTO notice_read (notice_id, user_id, read_at) VALUES ($1, $2, LEAST(now(), $3::timestamptz + interval '5 hours'))`,
+            [n!.notice_id, e.user_id, e.at]);
+        }
+      }
+      if (events.length) console.log(`  ${events.length} personal grievance notices`);
       await db.query('ALTER TABLE notice ENABLE TRIGGER USER; ALTER TABLE notice_target ENABLE TRIGGER USER; ALTER TABLE notice_read ENABLE TRIGGER USER');
       await db.query('COMMIT');
       console.log(`seeded ${items.length} notices with ${reads} reads`);

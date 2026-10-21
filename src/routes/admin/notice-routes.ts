@@ -26,19 +26,20 @@ interface NoticeRow {
 // ---------------------------------------------------------------- list
 noticeAdminRouter.get('/notices', async (req, res) => {
   const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-  const filters = { state: str(req.query.state, 10), category: str(req.query.category, 20), q: str(req.query.q, 60) };
+  const filters = { state: str(req.query.state, 10), category: str(req.query.category, 20), q: str(req.query.q, 60), kind: str(req.query.kind, 10) };
   const page = parsePage(req.query.page);
   const where = `($1::text = '' OR ($1::text = 'live' AND n.withdrawn_at IS NULL AND (n.expires_at IS NULL OR n.expires_at > now()))
                    OR ($1::text = 'expired' AND n.withdrawn_at IS NULL AND n.expires_at <= now())
                    OR ($1::text = 'withdrawn' AND n.withdrawn_at IS NOT NULL))
      AND ($2::text = '' OR n.category::text = $2::text)
-     AND ($3::text = '' OR n.title ILIKE '%' || $3::text || '%')`;
-  const params = [filters.state, filters.category, filters.q];
+     AND ($3::text = '' OR n.title ILIKE '%' || $3::text || '%')
+     AND (($4::text = 'personal') = EXISTS (SELECT 1 FROM notice_target t WHERE t.notice_id = n.notice_id AND t.user_id IS NOT NULL))`;
+  const params = [filters.state, filters.category, filters.q, filters.kind];
   const [rows, count] = await Promise.all([
     query<NoticeRow>(`SELECT n.notice_id, n.title, n.category, n.is_important, n.posted_at, n.expires_at, n.withdrawn_at,
                              COALESCE(p.display_name, 'System') AS posted_by_name, p.role::text AS posted_by_role
                       FROM notice n LEFT JOIN v_user_profile p ON p.user_id = n.posted_by
-                      WHERE ${where} ORDER BY n.posted_at DESC LIMIT $4 OFFSET $5`, [...params, page.limit, page.offset]),
+                      WHERE ${where} ORDER BY n.posted_at DESC LIMIT $5 OFFSET $6`, [...params, page.limit, page.offset]),
     queryOne<{ n: number }>(`SELECT count(*) AS n FROM notice n WHERE ${where}`, params),
   ]);
   const ids = rows.map((r) => r.notice_id);

@@ -1,5 +1,7 @@
 /**
- * Notice board for students and faculty (T8-1), mounted at /student/notices and /faculty/notices.
+ * Notice board (T8-1), mounted at /student/notices, /faculty/notices and /admin/inbox. Live status
+ * alerts (attendance shortage, fees pending) sit above the notices; personal notices with a link
+ * open their target through /:id/go, which also marks them read.
  * Faculty can also post to the divisions they teach and withdraw their own notices; the database
  * enforces both rules (migrations/081-notices.sql). The admin's pages are in admin/notice-routes.ts.
  */
@@ -11,7 +13,7 @@ import { forbidden, notFound } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { actAs } from '../queries/grievance-queries.js';
 import {
-  NOTICE_CATEGORIES, audienceLabel, boardFor, categoryPill, markAllRead, markRead, noticeFor, postNotice, reachOf,
+  NOTICE_CATEGORIES, alertsFor, audienceLabel, boardFor, categoryPill, markAllRead, markRead, noticeFor, postNotice, reachOf,
   targetsOf, teachingDivisions,
 } from '../queries/notice-queries.js';
 import { idParam } from './admin/helpers.js';
@@ -29,8 +31,9 @@ noticeRouter.get('/', async (req, res) => {
   const user = req.user!;
   const category = typeof req.query.category === 'string' && (NOTICE_CATEGORIES as readonly string[]).includes(req.query.category)
     ? req.query.category : '';
-  const [notices, mine] = await Promise.all([
+  const [notices, alerts, mine] = await Promise.all([
     boardFor(user.userId, category),
+    alertsFor(user.userId),
     user.role === 'faculty'
       ? query<{ notice_id: number; title: string; category: string; posted_at: Date; withdrawn_at: Date | null; expires_at: Date | null }>(
         `SELECT notice_id, title, category, posted_at, withdrawn_at, expires_at FROM notice
@@ -40,7 +43,8 @@ noticeRouter.get('/', async (req, res) => {
   const ids = mine.map((n) => n.notice_id);
   const [targets, reach] = await Promise.all([targetsOf(ids), reachOf(ids)]);
   res.render('shared/notices', {
-    title: 'Notices', nav: 'notices', base: base(req), notices, category, categories: NOTICE_CATEGORIES, categoryPill,
+    title: user.role === 'admin' ? 'Inbox' : 'Notices', nav: user.role === 'admin' ? 'inbox' : 'notices',
+    base: base(req), notices, alerts, category, isAdmin: user.role === 'admin', categories: NOTICE_CATEGORIES, categoryPill,
     isFaculty: user.role === 'faculty',
     mine: mine.map((n) => ({ ...n, audience: audienceLabel(targets.get(n.notice_id) ?? []), reach: reach.get(n.notice_id) })),
     unread: notices.filter((n) => !n.is_read).length,
@@ -131,6 +135,15 @@ noticeRouter.post('/:id/withdraw', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------- detail
+/** Open what a personal notice is about (e.g. the grievance), marking the notice read on the way. */
+noticeRouter.get('/:id/go', async (req, res) => {
+  const id = idParam(req.params.id);
+  const n = await noticeFor(req.user!.userId, id);
+  if (!n) throw notFound('Notice');
+  if (!n.is_read) await markRead(pool, req.user!.userId, id);
+  res.redirect(n.link ?? `${base(req)}/${id}`);
+});
+
 noticeRouter.get('/:id', async (req, res) => {
   const id = idParam(req.params.id);
   const user = req.user!;
@@ -150,7 +163,7 @@ noticeRouter.get('/:id', async (req, res) => {
     queryOne<{ withdrawn_at: Date | null }>('SELECT withdrawn_at FROM notice WHERE notice_id = $1', [id]),
   ]);
   res.render('shared/notice-detail', {
-    title: n!.title, nav: 'notices', base: base(req), n, categoryPill, isPoster,
+    title: n!.title, nav: user.role === 'admin' ? 'inbox' : 'notices', base: base(req), n, categoryPill, isPoster,
     audience: audienceLabel(targets.get(id) ?? []), reach: reach.get(id), withdrawnAt: status?.withdrawn_at ?? null,
   });
 });

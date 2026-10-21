@@ -21,7 +21,12 @@ describe.skipIf(!hasAppEnv)('T8-2 grievances (pages and permissions)', () => {
   let student: Agent;
   let faculty: Agent;
 
-  const cleanup = () => db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
+  // test grievances and the personal notices their triggers posted
+  const cleanup = async () => {
+    await db.query(`DELETE FROM notice WHERE source = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
+                      (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
+    await db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
+  };
   const row = async (id: number) =>
     (await db.query<{ status: string; assigned_code: string | null; resolution_note: string | null }>(
       'SELECT status, assigned_code, resolution_note FROM v_grievance_overview WHERE grievance_id = $1', [id])).rows[0]!;

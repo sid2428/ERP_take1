@@ -17,7 +17,13 @@ export interface UserNotice {
   posted_by_role: string | null;
   read_at: Date | null;
   is_read: boolean;
+  link: string | null;
+  source: string | null;
+  is_personal: boolean;
 }
+
+/** A live status alert (attendance shortage, fees pending): computed, not stored. */
+export interface UserAlert { kind: string; severity: 'high' | 'normal'; title: string; body: string; link: string | null; }
 
 export interface NoticeTarget {
   role: string | null;
@@ -25,10 +31,16 @@ export interface NoticeTarget {
   year_of_study: number | null;
   division_id: number | null;
   division_code: string | null;
+  user_id: number | null;
+  login_id: string | null;
 }
 
 /** Target JSON accepted by post_notice(). */
-export interface TargetSpec { role?: string; dept_id?: string; year_of_study?: number; division_id?: number; }
+export interface TargetSpec { role?: string; dept_id?: string; year_of_study?: number; division_id?: number; user_id?: number; }
+
+export function alertsFor(userId: number): Promise<UserAlert[]> {
+  return query<UserAlert>('SELECT * FROM user_alerts($1)', [userId]);
+}
 
 /** The notices this user should see, important ones first. */
 export function boardFor(userId: number, category = '', limit = 100): Promise<UserNotice[]> {
@@ -42,12 +54,13 @@ export function noticeFor(userId: number, noticeId: number): Promise<UserNotice 
 }
 
 /** Latest notices for the dashboard card, plus how many are unread. */
-export async function noticeSummary(userId: number, limit = 4): Promise<{ latest: UserNotice[]; unread: number }> {
-  const [latest, counts] = await Promise.all([
+export async function noticeSummary(userId: number, limit = 4): Promise<{ latest: UserNotice[]; unread: number; alerts: UserAlert[] }> {
+  const [latest, counts, alerts] = await Promise.all([
     query<UserNotice>('SELECT * FROM v_user_notices WHERE user_id = $1 ORDER BY is_important DESC, posted_at DESC LIMIT $2', [userId, limit]),
     queryOne<{ unread: number }>('SELECT count(*) FILTER (WHERE NOT is_read)::int AS unread FROM v_user_notices WHERE user_id = $1', [userId]),
+    alertsFor(userId),
   ]);
-  return { latest, unread: counts?.unread ?? 0 };
+  return { latest, unread: counts?.unread ?? 0, alerts };
 }
 
 export async function markRead(db: Db, userId: number, noticeId: number): Promise<void> {
@@ -65,8 +78,10 @@ export async function markAllRead(db: Db, userId: number): Promise<number> {
 /** Targets of several notices, keyed by notice id. */
 export async function targetsOf(noticeIds: number[]): Promise<Map<number, NoticeTarget[]>> {
   const rows = noticeIds.length === 0 ? [] : await query<NoticeTarget & { notice_id: number }>(
-    `SELECT t.notice_id, t.role::text AS role, t.dept_id, t.year_of_study, t.division_id, d.division_code
+    `SELECT t.notice_id, t.role::text AS role, t.dept_id, t.year_of_study, t.division_id, d.division_code,
+            t.user_id, u.login_id
      FROM notice_target t LEFT JOIN division d ON d.division_id = t.division_id
+     LEFT JOIN app_user u ON u.user_id = t.user_id
      WHERE t.notice_id = ANY($1::int[]) ORDER BY t.target_id`, [noticeIds]);
   const map = new Map<number, NoticeTarget[]>();
   for (const r of rows) map.set(r.notice_id, [...(map.get(r.notice_id) ?? []), r]);
@@ -86,6 +101,7 @@ const ROLE_LABEL: Record<string, string> = { student: 'Students', faculty: 'Facu
 export function audienceLabel(targets: NoticeTarget[]): string {
   if (targets.length === 0) return '–';
   return targets.map((t) => {
+    if (t.user_id) return `Only ${t.login_id ?? 'one person'}`;
     if (t.division_id) return `Division ${t.division_code ?? t.division_id}`;
     const parts = [t.role ? ROLE_LABEL[t.role] ?? t.role : 'Everyone'];
     if (t.dept_id) parts.push(t.dept_id);

@@ -9,13 +9,18 @@
     <option value="expired"<%= filters.state === 'expired' ? ' selected' : '' %>>Expired</option>
     <option value="withdrawn"<%= filters.state === 'withdrawn' ? ' selected' : '' %>>Withdrawn</option>
   </select>
+  <label class="sr-only" for="fk">Kind</label>
+  <select id="fk" name="kind" data-autosubmit>
+    <option value="">Announcements</option>
+    <option value="personal"<%= filters.kind === 'personal' ? ' selected' : '' %>>Automatic personal alerts</option>
+  </select>
   <label class="sr-only" for="fc">Category</label>
   <select id="fc" name="category" data-autosubmit><option value="">All categories</option>
     <% for (const c of categories) { %><option<%= filters.category === c ? ' selected' : '' %>><%= c %></option><% } %></select>
   <label class="sr-only" for="fq">Search</label>
   <input id="fq" type="search" name="q" value="<%= filters.q %>" placeholder="Title">
   <button class="btn" type="submit">Filter</button>
-  <% if (filters.state || filters.category || filters.q) { %><a class="btn link" href="/admin/notices">Clear</a><% } %>
+  <% if (filters.state || filters.category || filters.q || filters.kind) { %><a class="btn link" href="/admin/notices">Clear</a><% } %>
   <span style="flex:1"></span>
   <a class="btn primary" href="/admin/notices/new">Post a notice</a>
 </form>
