@@ -147,6 +147,60 @@ describe.skipIf(!hasDatabase)('T8 automatic notices', () => {
     });
   });
 
+  it('stores one attendance-shortage notification on the eligible-to-shortage transition only', async () => {
+    await inRollback(async (db) => {
+      const before = await one<{
+        user_id: number; student_id: number; course_id: number; academic_session_id: string;
+        min_attendance_pct: number; course_code: string; course_name: string;
+      }>(db, `
+        SELECT u.user_id, a.student_id, a.course_id, a.academic_session_id,
+               c.min_attendance_pct, c.course_code, c.course_name
+        FROM attendance_summary a
+        JOIN course c USING (course_id)
+        JOIN app_user u ON u.student_id = a.student_id
+        JOIN student s ON s.student_id = a.student_id
+        WHERE a.academic_session_id = current_session_id()
+          AND a.total_sessions > 0 AND a.attendance_pct >= c.min_attendance_pct
+          AND c.min_attendance_pct > 0 AND u.role = 'student' AND u.is_active AND s.status = 'Active'
+        ORDER BY u.user_id, a.course_id LIMIT 1`);
+      const other = await one<{ user_id: number }>(db, `
+        SELECT u.user_id FROM app_user u JOIN student s ON s.student_id = u.student_id
+        WHERE u.role = 'student' AND u.is_active AND s.status = 'Active' AND u.user_id <> $1
+        ORDER BY u.user_id LIMIT 1`, [before.user_id]);
+      const count = (userId: number) => db.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM notification
+         WHERE user_id = $1 AND kind = 'attendance_shortage' AND text LIKE $2`,
+        [userId, `Attendance shortage: ${before.course_code}%`]).then((r) => r.rows[0]!.n);
+
+      expect(await count(before.user_id)).toBe(0);
+      expect(await count(other.user_id)).toBe(0);
+
+      await db.query(`
+        UPDATE attendance_summary
+        SET total_sessions = 100, attended = GREATEST(0, $1 - 1), last_updated = now()
+        WHERE student_id = $2 AND course_id = $3 AND academic_session_id = $4`,
+      [before.min_attendance_pct, before.student_id, before.course_id, before.academic_session_id]);
+
+      expect(await count(before.user_id)).toBe(1);
+      expect(await count(other.user_id)).toBe(0);
+      const notice = await one<{ text: string; category: string; link: string }>(db,
+        `SELECT text, category, link FROM notification
+         WHERE user_id = $1 AND kind = 'attendance_shortage' AND text LIKE $2`,
+        [before.user_id, `Attendance shortage: ${before.course_code}%`]);
+      expect(notice).toMatchObject({ category: 'Academic', link: '/student' });
+      expect(notice.text).toContain(before.course_name);
+      expect(notice.text).toContain(`${before.min_attendance_pct}%`);
+
+      // A later refresh while still below the minimum must not create another event.
+      await db.query(`
+        UPDATE attendance_summary
+        SET total_sessions = 101, attended = GREATEST(0, $1 - 1), last_updated = now()
+        WHERE student_id = $2 AND course_id = $3 AND academic_session_id = $4`,
+      [before.min_attendance_pct, before.student_id, before.course_id, before.academic_session_id]);
+      expect(await count(before.user_id)).toBe(1);
+    });
+  });
+
   it('fee alert switches on once T6 provides v_student_fee_status', async () => {
     await inRollback(async (db) => {
       const p = await people(db);
@@ -182,6 +236,46 @@ describe.skipIf(!hasDatabase)('T8 automatic notices', () => {
         SELECT count(*)::int AS n FROM v_user_audience WHERE role = 'student' AND dept_id = $1 AND year_of_study = $2`,
         [d.dept_id, d.year_of_study]);
       expect(reach.recipients).toBe(expected.n);
+    });
+  });
+
+  it('results hook reaches only the chosen department and year', async () => {
+    await inRollback(async (db) => {
+      const audience = await one<{ dept_id: string; year_of_study: number }>(db, `
+        SELECT dept_id, year_of_study
+        FROM v_user_audience
+        WHERE role = 'student' AND dept_id IS NOT NULL AND year_of_study IS NOT NULL
+        GROUP BY dept_id, year_of_study
+        ORDER BY dept_id, year_of_study LIMIT 1`);
+      const outside = await one<{ user_id: number }>(db, `
+        SELECT user_id FROM v_user_audience
+        WHERE role = 'student'
+          AND (dept_id IS DISTINCT FROM $1 OR year_of_study IS DISTINCT FROM $2)
+        ORDER BY user_id LIMIT 1`, [audience.dept_id, audience.year_of_study]);
+      const n = await one<{ id: number }>(db,
+        `SELECT post_results_notice('Results published', 'Your semester results are now available.', $1, $2::smallint) AS id`,
+        [audience.dept_id, audience.year_of_study]);
+
+      const notice = await one<{
+        is_important: boolean; category: string; source: string; expires_at: string;
+      }>(db, 'SELECT is_important, category, source, expires_at FROM notice WHERE notice_id = $1', [n.id]);
+      expect(notice).toMatchObject({ is_important: true, category: 'Exam', source: 'results' });
+      expect((await db.query(`
+        SELECT expires_at > now() + interval '29 days'
+           AND expires_at <= now() + interval '30 days' AS within_results_window
+        FROM notice WHERE notice_id = $1`, [n.id])).rows[0]!.within_results_window).toBe(true);
+
+      const expected = (await db.query<{ user_id: number }>(`
+        SELECT user_id FROM v_user_audience
+        WHERE role = 'student' AND dept_id = $1 AND year_of_study = $2
+        ORDER BY user_id`, [audience.dept_id, audience.year_of_study])).rows;
+      const actual = (await db.query<{ user_id: number }>(`
+        SELECT user_id FROM v_user_notices
+        WHERE notice_id = $1 ORDER BY user_id`, [n.id])).rows;
+      expect(actual).toEqual(expected);
+      expect(actual.length).toBeGreaterThan(0);
+      expect((await db.query('SELECT 1 FROM v_user_notices WHERE notice_id = $1 AND user_id = $2',
+        [n.id, outside.user_id])).rows).toHaveLength(0);
     });
   });
 });
