@@ -39,4 +39,89 @@
       if (!d.contains(e.target)) d.removeAttribute('open');
     });
   });
+
+  // Keep the server-backed bell and an open notice board current across tabs/devices.
+  // The endpoint is recipient-scoped; polling pauses while hidden and never overlaps.
+  var notificationLink = document.querySelector('.notification-link');
+  if (notificationLink && window.fetch) {
+    var lastRevision = notificationLink.getAttribute('data-notification-revision') || '';
+    var inFlight = false;
+    var timer = null;
+
+    function renderUnread(unread) {
+      var count = Number(unread);
+      if (!Number.isFinite(count) || count < 0) count = 0;
+      count = Math.floor(count);
+      var badge = notificationLink.querySelector('.notification-badge');
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'notification-badge';
+          badge.setAttribute('aria-hidden', 'true');
+          notificationLink.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : String(count);
+      } else if (badge) {
+        badge.remove();
+      }
+      var unreadText = count ? ', ' + count + ' unread' : ', no unread notifications';
+      notificationLink.setAttribute('aria-label', 'Notifications' + unreadText);
+      notificationLink.title = 'Notifications' + (count ? ', ' + count + ' unread' : '');
+      notificationLink.setAttribute('data-notification-unread', String(count));
+    }
+
+    function refreshNotifications() {
+      if (inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      fetch('/api/notifications/state', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' }
+      }).then(function (response) {
+        if (response.status === 401) {
+          lastRevision = '';
+          renderUnread(0);
+          return null;
+        }
+        if (!response.ok) throw new Error('notification state unavailable');
+        return response.json();
+      }).then(function (state) {
+        if (!state || typeof state.revision !== 'string') return;
+        var changed = state.revision !== lastRevision;
+        lastRevision = state.revision;
+        renderUnread(state.unread);
+        if (changed && document.querySelector('[data-notification-board]')) window.location.reload();
+      }).catch(function () {
+        // A transient network/session error must not disturb the last known badge.
+      }).then(function () {
+        inFlight = false;
+      });
+    }
+
+    function startPolling() {
+      if (!timer) timer = window.setInterval(refreshNotifications, 15000);
+    }
+    function stopPolling() {
+      if (timer) window.clearInterval(timer);
+      timer = null;
+    }
+    refreshNotifications();
+    startPolling();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        refreshNotifications();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    });
+    window.addEventListener('focus', refreshNotifications);
+    window.addEventListener('pagehide', stopPolling);
+    window.addEventListener('pageshow', function () {
+      if (document.visibilityState === 'visible') {
+        refreshNotifications();
+        startPolling();
+      }
+    });
+  }
 })();

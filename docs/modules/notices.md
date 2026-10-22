@@ -9,6 +9,7 @@ Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`,
 `migrations/083-notifications.sql`, and `migrations/084-attendance-shortage-notifications.sql` ·
 Seed: `scripts/db/seed-notices.ts` · Routes:
 `src/routes/notice-routes.ts`,
+`src/routes/notification-routes.ts`,
 `src/routes/admin/notice-routes.ts` · Queries: `src/queries/notice-queries.ts` · Tests:
 `tests/db/notice.test.ts`, `tests/db/automatic-notice.test.ts`, `tests/app/notice.test.ts`
 
@@ -171,9 +172,27 @@ SELECT erp.post_results_notice($1, $2, $3, $4::smallint);
 The repository currently defines these helpers but has no verified T5 publication caller. T5 should
 call them from its real publication workflow when that workflow exists.
 
-The application query `unreadNoticeCount(userId)` counts `NOT is_read` from `v_user_notices` for
-one signed-in user. The app loads it once as a shared authenticated view local. It therefore respects
-recipient, withdrawal, expiry, and read rules without materializing other users' notices.
+The application query `notificationState(userId)` counts `NOT is_read` and fingerprints the visible
+rows in `v_user_notices` for one signed-in user. The app loads it as a shared authenticated view
+local. It therefore respects recipient, withdrawal, expiry, and read rules without materializing
+other users' notices.
+
+## Cross-device synchronization
+
+The database remains authoritative. Authenticated pages render the initial count and a recipient-
+scoped revision from `v_user_notices` and `user_alerts(user_id)`; the shared client then polls
+`GET /api/notifications/state` every 15 seconds while visible and refreshes on focus or when a tab
+becomes visible. The endpoint returns `{ unread, revision }`, sends `Cache-Control: no-store`, and
+returns `401` without an active session. The revision includes the visible item identity, content
+read state, and read timestamp, so a read on another device or a replacement event is detected even
+when the unread total is unchanged. Live attendance/fee alert changes are included in the revision
+even though they are not stored read-state rows. A visible notice board or dashboard notice card reloads
+when its revision changes; other pages update only the bell badge and pick up the complete board on navigation.
+
+Polling uses same-origin credentials, has no local notification cache, pauses in hidden tabs, and
+allows only one request at a time. The existing role-specific routes and `v_user_notices` recipient
+checks remain the authority for board contents, detail access, read writes, expiry, withdrawal, and
+live `user_alerts`; the synchronization endpoint exposes no notice bodies or other users' data.
 
 ## User experience and routes
 
