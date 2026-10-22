@@ -28,6 +28,8 @@ export interface UserNotice {
 /** A live status alert (attendance shortage, fees pending): computed, not stored. */
 export interface UserAlert { kind: string; severity: 'high' | 'normal'; title: string; body: string; link: string | null; }
 
+export interface NotificationState { unread: number; revision: string; }
+
 export interface NoticeTarget {
   role: string | null;
   dept_id: string | null;
@@ -52,6 +54,27 @@ export function unreadNoticeCount(userId: number): Promise<number> {
   return queryOne<{ unread: number }>(
     'SELECT count(*)::int AS unread FROM v_user_notices WHERE user_id = $1 AND NOT is_read', [userId]
   ).then((row) => row?.unread ?? 0);
+}
+
+/** A compact recipient-scoped revision for cross-tab/device synchronization. */
+export function notificationState(userId: number): Promise<NotificationState> {
+  return queryOne<NotificationState>(
+    `SELECT count(*) FILTER (WHERE NOT is_read)::int AS unread,
+            md5(
+              COALESCE(string_agg(
+                item_type || ':' || COALESCE(notification_id, notice_id)::text || ':' ||
+                is_read::text || ':' || COALESCE(read_at::text, ''),
+                ',' ORDER BY item_type, COALESCE(notification_id, notice_id)
+              ), '') || '|alerts:' || COALESCE((
+                SELECT string_agg(
+                  kind || ':' || severity || ':' || title || ':' || body || ':' || COALESCE(link, ''),
+                  ',' ORDER BY kind
+                ) FROM user_alerts($1)
+              ), '')
+            ) AS revision
+       FROM v_user_notices
+      WHERE user_id = $1`, [userId]
+  ).then((row) => ({ unread: row?.unread ?? 0, revision: row?.revision ?? '' }));
 }
 
 /** The notices this user should see, important ones first. */

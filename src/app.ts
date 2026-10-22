@@ -12,10 +12,11 @@ import { currentUser, homeFor, requireLogin, requireRole } from './middleware/au
 import { csrf } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
 import { sessionMiddleware } from './middleware/session.js';
-import { unreadNoticeCount } from './queries/notice-queries.js';
+import { notificationState } from './queries/notice-queries.js';
 import { adminRouter } from './routes/admin/index.js';
 import { authRouter } from './routes/auth-routes.js';
 import { facultyRouter } from './routes/faculty-routes.js';
+import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
@@ -60,6 +61,7 @@ export function createApp(): express.Express {
   app.use(sessionMiddleware);
   app.use(csrf);
   app.use(currentUser);
+  app.use('/api/notifications', notificationRouter);
 
   // current term, shown in the top bar of every page
   app.use(async (_req, res, next) => {
@@ -77,8 +79,10 @@ export function createApp(): express.Express {
         : req.user?.role === 'admin' ? '/admin/inbox' : null;
     // The header is rendered by GET/HEAD page responses. Avoid a count query on authenticated
     // form submissions and other non-rendering requests; the following redirect loads fresh data.
-    res.locals.notificationUnreadCount = req.user && ['GET', 'HEAD'].includes(req.method)
-      ? await unreadNoticeCount(req.user.userId) : 0;
+    const state = req.user && ['GET', 'HEAD'].includes(req.method)
+      ? await notificationState(req.user.userId) : { unread: 0, revision: '' };
+    res.locals.notificationUnreadCount = state.unread;
+    res.locals.notificationRevision = state.revision;
     next();
   });
 

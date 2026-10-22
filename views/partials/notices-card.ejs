@@ -1,5 +1,5 @@
 <%# Dashboard card: latest notices for this user. Locals: notices ({ latest, unread }), noticeBase %>
-<div class="card">
+<div class="card" data-notification-board>
   <div class="hd"><h2><%= noticeBase.endsWith('/inbox') ? 'Inbox' : 'Notices' %></h2><% if (notices.unread) { %><span class="pill o"><%= notices.unread %> unread</span><% } %></div>
   <% for (const a of notices.alerts) { %>
   <div class="item">
