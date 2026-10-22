@@ -5,8 +5,9 @@ live status alerts. Students, faculty, and admins see a role-specific bell in th
 bar. The bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the
 current user's unread count across announcements and dedicated notifications.
 
-Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`, and
-`migrations/083-notifications.sql` · Seed: `scripts/db/seed-notices.ts` · Routes:
+Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`,
+`migrations/083-notifications.sql`, and `migrations/084-attendance-shortage-notifications.sql` ·
+Seed: `scripts/db/seed-notices.ts` · Routes:
 `src/routes/notice-routes.ts`,
 `src/routes/admin/notice-routes.ts` · Queries: `src/queries/notice-queries.ts` · Tests:
 `tests/db/notice.test.ts`, `tests/db/automatic-notice.test.ts`, `tests/app/notice.test.ts`
@@ -87,9 +88,17 @@ WHERE t.notice_id = $2;
 with one row per recipient. `user_alerts(user_id)` returns live attendance/fee status alerts and
 does not create read rows; an alert disappears when its underlying condition is fixed.
 
+Migration 084 adds the `attendance_shortage_notification` trigger on `attendance_summary`. It
+calls `notify(user_id, 'attendance_shortage', text, '/student', 'Academic')` only when an active
+student’s current-session percentage crosses from eligible to below that course’s minimum. The
+message includes the course code/name, updated percentage, minimum, and the existing
+sessions-to-recover guidance when finite. It is update-only, so summary inserts and existing
+rows do not notify; subsequent updates while still below minimum are also ignored. The trigger
+preserves `user_alerts`, which remains the live aggregate alert.
+
 ## Current functions and query contracts
 
-Migrations 081–083 create the database contracts below. The portal and other modules call them with
+Migrations 081–084 create the database contracts below. The portal and other modules call them with
 bound parameters.
 
 `v_user_notices(user_id)` is the read-state and recipient contract:
@@ -204,7 +213,7 @@ both resolution and rejection, with the status text reflected in each message.
 
 | Source | Event | Current implementation | Next step |
 |---|---|---|---|
-| T4 Attendance | student falls below required attendance | Implemented live alert through `user_alerts(user_id)` using `v_student_attendance_by_course`; called by the notice board/dashboard. No T4 event caller to `notify(...)` exists. | Decide whether the live alert satisfies the shared notification requirement before adding a stored event |
+| T4 Attendance | student falls below required attendance | Live aggregate alert through `user_alerts(user_id)` plus the T8 stored `attendance_shortage` transition notification from migration 084. | Keep the live alert and stored transition event aligned if the attendance contract changes |
 | T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist | Verify the real publication workflow calls the relevant helper |
 | T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition or stored-notification caller was found | Verify compatibility with the real T6 view and fee screen |
 | T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
