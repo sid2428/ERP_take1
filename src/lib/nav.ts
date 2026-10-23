@@ -81,6 +81,11 @@ export const NAV: Record<Role, NavGroup[]> = {
       ],
     },
     {
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-unlocks', label: 'Attendance unlocks', href: '/admin/attendance-unlocks', icon: 'check' },
+      ],
+    },
+    {
       label: 'COMMUNICATION', items: [
         { key: 'notices', label: 'Notices', href: '/admin/notices', icon: 'bell' },
         { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },

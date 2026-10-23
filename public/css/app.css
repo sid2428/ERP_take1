@@ -254,6 +254,14 @@ input[readonly] { background: var(--surface-2); color: var(--muted); }
 /* ---------- faculty attendance ---------- */
 .faculty-attendance-form { display: flex; flex-direction: column; gap: 14px; }
 .faculty-attendance-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.attendance-calendar { max-width: 340px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.attendance-calendar-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.attendance-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.attendance-calendar-weekday { padding: 4px 0; color: var(--muted); font-size: 12px; }
+.attendance-calendar-day { min-height: 34px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
+.attendance-calendar-day:hover:not(:disabled), .attendance-calendar-day.selected { border-color: var(--green); background: var(--surface-2); }
+.attendance-calendar-day:disabled { color: var(--muted); cursor: not-allowed; opacity: .4; }
+.extra-session-reason textarea { min-height: 80px; }
 .faculty-attendance-roster { margin-top: 22px; }
 .faculty-attendance-roster table, .faculty-attendance-history table { min-width: 600px; }
 .faculty-attendance-history { margin-top: 20px; }

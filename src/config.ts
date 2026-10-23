@@ -28,3 +28,6 @@ export const config = {
   sessionSecret: parsed.data.SESSION_SECRET,
   port: parsed.data.PORT,
 } as const;
+
+export const ATTENDANCE_WEEKEND_DAYS = [6, 7] as const;
+export { LOCK_DAYS, UNLOCK_HOURS } from './lib/attendance-lock.js';
