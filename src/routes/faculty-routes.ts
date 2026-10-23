@@ -1,3 +1,4 @@
+import { getFacultySyllabusPct, getRecentSessions, getSyllabusSummary, getUnitProgress } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
 import { isoWeekday, termProgress, todayIso } from '../lib/format.js';
 import { forbidden, notFound } from '../lib/http-error.js';
@@ -62,7 +63,8 @@ facultyRouter.get('/', async (req, res) => {
 
 facultyRouter.get('/classes', async (req, res) => {
   const classes = await getFacultyClasses(req.user!.facultyId!);
-  res.render('faculty/classes', { title: 'My classes', nav: 'classes', classes });
+  const syllabus = await getFacultySyllabusPct(req.user!.facultyId!);
+  res.render('faculty/classes', { title: 'My classes', nav: 'classes', classes, syllabus });
 });
 
 facultyRouter.get('/classes/:id', async (req, res) => {
@@ -93,4 +95,16 @@ facultyRouter.get('/profile', async (req, res) => {
   const profile = await getFacultyProfile(req.user!.facultyId!);
   if (!profile) throw notFound('Faculty record');
   res.render('faculty/profile', { title: 'Profile', nav: 'profile', profile });
+});
+
+// T3-3: syllabus coverage of one of this faculty member's classes (planned vs delivered lectures per unit).
+facultyRouter.get('/classes/:id/syllabus', async (req, res) => {
+  const cls = await getAssignment(idParam(req.params.id), req.user!.facultyId!);
+  if (!cls) throw notFound('Class');                       // not one of this faculty member's classes
+  const [summary, units, recent] = await Promise.all([
+    getSyllabusSummary(cls.assignment_id), getUnitProgress(cls.assignment_id), getRecentSessions(cls.assignment_id),
+  ]);
+  res.render('faculty/syllabus-coverage', {
+    title: `Syllabus · ${cls.course_code}`, nav: 'classes', cls, summary, units, recent,
+  });
 });
