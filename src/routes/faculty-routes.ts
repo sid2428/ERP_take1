@@ -6,8 +6,12 @@ import { getFacultyTimetable, getStudentCourses, getStudentProfile, nextClassDay
 import { grievanceRouter } from './grievance-routes.js';
 import { noticeRouter } from './notice-routes.js';
 import { noticeSummary } from '../queries/notice-queries.js';
+import { facultyAttendanceRouter } from './faculty-attendance-routes.js';
+import { facultyExaminationRouter } from './faculty-examination-routes.js';
 
 export const facultyRouter = Router();
+facultyRouter.use('/attendance', facultyAttendanceRouter);
+facultyRouter.use('/examination', facultyExaminationRouter);
 facultyRouter.use('/grievances', grievanceRouter);
 facultyRouter.use('/notices', noticeRouter);
 

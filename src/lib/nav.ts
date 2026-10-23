@@ -20,6 +20,19 @@ export const NAV: Record<Role, NavGroup[]> = {
       ],
     },
     {
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-summary', label: 'Attendance Summary', href: '/student/attendance', icon: 'check' },
+        { key: 'attendance-detail', label: 'Attendance Detail', href: '/student/attendance/detail', icon: 'list' },
+      ],
+    },
+    {
+      label: 'EXAMINATION', items: [
+        { key: 'exam-schedule', label: 'Exam Schedule', href: '/student/exams', icon: 'calendar' },
+        { key: 'hall-ticket', label: 'Hall Ticket', href: '/student/hall-ticket', icon: 'briefcase' },
+        { key: 'results', label: 'Results', href: '/student/results', icon: 'check' },
+      ],
+    },
+    {
       label: 'RECORDS', items: [
         { key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' },
         { key: 'fee', label: 'Fees & D-Wallet', href: '/student/fee', icon: 'wallet' },
@@ -34,6 +47,8 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
       ],
     },
+    { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
+    { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
     {
       label: 'RECORDS', items: [

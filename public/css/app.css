@@ -251,6 +251,46 @@ input[readonly] { background: var(--surface-2); color: var(--muted); }
 .thread .sys { padding: 6px 0; }
 .thread .sys .pill { font-size: 11px; }
 
+/* ---------- faculty attendance ---------- */
+.faculty-attendance-form { display: flex; flex-direction: column; gap: 14px; }
+.faculty-attendance-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.faculty-attendance-roster { margin-top: 22px; }
+.faculty-attendance-roster table, .faculty-attendance-history table { min-width: 600px; }
+.faculty-attendance-history { margin-top: 20px; }
+.faculty-attendance-history h2 { margin-bottom: 10px; }
+.attendance-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.attendance-check input { width: 16px; height: 16px; accent-color: var(--green); }
+
+/* ---------- faculty examination ---------- */
+.faculty-exam-form { display: flex; flex-direction: column; gap: 14px; }
+.faculty-exam-scheme { font-size: 13px; }
+.faculty-exam-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.faculty-exam-stat { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.faculty-exam-stat strong { font-size: 17px; font-weight: 600; }
+.faculty-exam-table { margin-top: 4px; }
+.faculty-exam-table table { min-width: 900px; }
+.faculty-exam-table th, .faculty-exam-table td { vertical-align: middle; }
+.faculty-exam-table input[type=number] { width: 94px; min-width: 0; }
+.faculty-exam-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* ---------- student attendance and examination ---------- */
+.student-record-card { padding: 18px 20px; }
+.student-record-card .hd { margin-bottom: 14px; }
+.student-record-card h2 { margin-bottom: 12px; }
+.student-record-card .sc { margin: 0 -20px; }
+.student-record-card table { min-width: 680px; }
+.student-state { color: var(--muted); padding: 8px 0; }
+.student-field { display: inline-flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.student-field select { min-width: min(420px, 80vw); }
+.student-detail { margin-top: 18px; }
+.student-pct { display: flex; align-items: center; gap: 10px; min-width: 130px; }
+.student-pct > b { min-width: 54px; font-weight: 600; }
+.student-pct .bar { flex: 1; min-width: 54px; margin: 0; }
+.student-record-card .student-pct { min-width: 160px; }
+.student-result-kpis { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+.actions { display: flex; gap: 8px; }
+.actions .btn:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ---------- notices ---------- */
 .dot.inline { display: inline-block; margin: 0 0 1px 4px; vertical-align: middle; }
 .notice { padding: 14px 0; border-top: 1px solid var(--line-2); }
