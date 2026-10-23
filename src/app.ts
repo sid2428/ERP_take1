@@ -19,6 +19,7 @@ import { facultyRouter } from './routes/faculty-routes.js';
 import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
 import { apiRouter } from './routes/api-routes.js';
+import { placementFacultyRouter } from './routes/placement-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
@@ -98,6 +99,7 @@ export function createApp(): express.Express {
   app.get('/', requireLogin, (req, res) => { res.redirect(homeFor(req.user!.role)); });
   app.use('/student', requireLogin, requireRole('student'), studentRouter);
   app.use('/faculty', requireLogin, requireRole('faculty'), facultyRouter);
+  app.use('/faculty', requireLogin, requireRole('faculty'), placementFacultyRouter);
   app.use('/admin', requireLogin, requireRole('admin'), adminRouter);
 
   app.use(notFoundHandler);

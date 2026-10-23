@@ -11,10 +11,10 @@ import { getStudentElectiveOfferings, getStudentElectiveResult, getStudentElecti
 import { grievanceRouter } from './grievance-routes.js';
 import { noticeRouter } from './notice-routes.js';
 import { noticeSummary } from '../queries/notice-queries.js';
-import { studentApiRouter } from './student-api-routes.js';
+import { placementStudentRouter } from './placement-routes.js';
 
 export const studentRouter = Router();
-studentRouter.use('/api', studentApiRouter);
+studentRouter.use('/placement', placementStudentRouter);
 studentRouter.use('/grievances', grievanceRouter);
 studentRouter.use('/notices', noticeRouter);
 
