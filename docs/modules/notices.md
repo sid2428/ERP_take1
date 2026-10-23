@@ -232,12 +232,12 @@ both resolution and rejection, with the status text reflected in each message.
 
 | Source | Event | Current implementation | Next step |
 |---|---|---|---|
-| T4 Attendance | student falls below required attendance | Live aggregate alert through `user_alerts(user_id)` plus the T8 stored `attendance_shortage` transition notification from migration 084. | Keep the live alert and stored transition event aligned if the attendance contract changes |
-| T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist | Verify the real publication workflow calls the relevant helper |
-| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition or stored-notification caller was found | Verify compatibility with the real T6 view and fee screen |
+| T4 Attendance | student falls below required attendance | Live aggregate alert through `user_alerts(user_id)` plus the `attendance_summary` eligible-to-shortage trigger in `migrations/084-attendance-shortage-notifications.sql`; the stored event is current-session-only, active-student-only, and edge-triggered | Keep the live alert and stored transition event aligned if the attendance contract changes |
+| T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist and are covered by database tests; no timetable/results publication caller was found in the repository | Wire the relevant helper into the real publication workflow when that workflow exists; do not notify from ordinary marks saves |
+| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition, payment/due event caller, or stored-notification caller was found | Provide the verified T6 status/event contract before adding an integration |
 | T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
 | T2 Faculty | leave/request decision | No caller found in the repository | Coordinate when the event/API exists |
-| T7 Placement | new drive published | No caller found in the repository | Coordinate when the event/API exists |
+| T7 Placement | new drive published | `src/routes/placement-routes.ts` calls `notify_eligible_placement_drive(...)` inside the placement admin transaction after creating a drive as `Open` and after changing a drive status to `Open`; migrations 086/090 filter eligible active students and deduplicate by recipient and drive link | Keep the call sites inside their transactions and extend regression coverage when placement eligibility changes |
 | T8 Grievances | creation, assignment, reply, resolution/rejection | Implemented by database triggers redefined in `migrations/083-notifications.sql` through `notify(...)`; covered by T8 database/app tests | Preserve and extend when grievance events change |
 
 ## Architecture and migration compatibility
@@ -273,3 +273,10 @@ rows. Mixed group/personal notices remain in `notice` to avoid losing group reci
    tampered request for another division is rejected by the database trigger.
 4. **Withdrawal and audit:** as the admin, withdraw the posted notice from its detail page. Confirm
    it leaves the student board, then inspect the audit log for `NOTICE_POST` and `NOTICE_WITHDRAW`.
+5. **Grievance notification:** as `STU202600004`, open `/student/grievances/new`, submit a grievance,
+   then sign in as the admin and open `/admin/inbox` (or follow the notification bell). Confirm the
+   unread **New grievance #...** notification appears under **For you**. Open it and verify that its
+   link takes you to `/admin/grievances/:id`; opening it marks that notification read.
+6. **Mark all read:** from `/admin/inbox`, leave at least one notification unread, then use
+   **Mark all read (n)**. Confirm the inbox no longer shows the unread item and the notification bell
+   reports no unread notifications.
