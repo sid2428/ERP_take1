@@ -18,7 +18,8 @@ import { authRouter } from './routes/auth-routes.js';
 import { facultyRouter } from './routes/faculty-routes.js';
 import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
-import { placementStudentRouter, placementFacultyRouter } from './routes/placement-routes.js';
+import { apiRouter } from './routes/api-routes.js';
+import { placementFacultyRouter } from './routes/placement-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
