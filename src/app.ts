@@ -18,6 +18,7 @@ import { authRouter } from './routes/auth-routes.js';
 import { facultyRouter } from './routes/faculty-routes.js';
 import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
+import { apiRouter } from './routes/api-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
@@ -57,11 +58,18 @@ export function createApp(): express.Express {
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '7d' }));
   app.get('/healthz', (_req, res) => { res.json({ ok: true }); });
 
+  app.use(express.json());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
   app.use(sessionMiddleware);
   app.use(csrf);
   app.use(currentUser);
   app.use('/api/notifications', notificationRouter);
+
+  app.use('/api', apiRouter);
+  app.use('/faculty/api', apiRouter);
+
+  app.use('/api', apiRouter);
+  app.use('/faculty/api', apiRouter);
 
   // current term, shown in the top bar of every page
   app.use(async (_req, res, next) => {

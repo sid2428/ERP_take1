@@ -15,6 +15,9 @@ export function tokensMatch(expected: string | undefined, given: unknown): boole
 export function csrf(req: Request, res: Response, next: NextFunction): void {
   if (!req.session.csrfToken) req.session.csrfToken = randomBytes(32).toString('base64url');
   res.locals.csrfToken = req.session.csrfToken;
+  if (req.path.startsWith('/api') || req.path.startsWith('/faculty/api')) {
+    return next();
+  }
   if (UNSAFE.has(req.method)) {
     const given = (req.body as Record<string, unknown> | undefined)?._csrf ?? req.get('x-csrf-token');
     if (!tokensMatch(req.session.csrfToken, given)) {
