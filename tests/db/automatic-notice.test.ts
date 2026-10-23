@@ -198,6 +198,63 @@ describe.skipIf(!hasDatabase)('T8 automatic notices', () => {
         WHERE student_id = $2 AND course_id = $3 AND academic_session_id = $4`,
       [before.min_attendance_pct, before.student_id, before.course_id, before.academic_session_id]);
       expect(await count(before.user_id)).toBe(1);
+
+      // The trigger ignores attendance summaries from historical academic sessions.
+      const historical = await db.query<{
+        user_id: number; student_id: number; course_id: number; academic_session_id: string;
+        min_attendance_pct: number; course_code: string;
+      }>(`
+        SELECT u.user_id, a.student_id, a.course_id, a.academic_session_id,
+               c.min_attendance_pct, c.course_code
+        FROM attendance_summary a
+        JOIN course c USING (course_id)
+        JOIN app_user u ON u.student_id = a.student_id
+        JOIN student s ON s.student_id = a.student_id
+        WHERE a.academic_session_id <> current_session_id()
+          AND a.total_sessions > 0 AND a.attendance_pct >= c.min_attendance_pct
+          AND c.min_attendance_pct > 0 AND u.role = 'student'
+          AND u.is_active AND s.status = 'Active'
+        ORDER BY u.user_id, a.course_id LIMIT 1`);
+      if (historical.rows[0]) {
+        const h = historical.rows[0];
+        const historicalCount = () => db.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM notification
+           WHERE user_id = $1 AND kind = 'attendance_shortage' AND text LIKE $2`,
+          [h.user_id, `Attendance shortage: ${h.course_code}%`]).then((r) => r.rows[0]!.n);
+        await db.query(`
+          UPDATE attendance_summary
+          SET total_sessions = 100, attended = GREATEST(0, $1 - 1), last_updated = now()
+          WHERE student_id = $2 AND course_id = $3 AND academic_session_id = $4`,
+        [h.min_attendance_pct, h.student_id, h.course_id, h.academic_session_id]);
+        expect(await historicalCount()).toBe(0);
+      }
+
+      // An otherwise eligible student who is inactive must not receive the stored event.
+      const inactive = await one<{
+        user_id: number; student_id: number; course_id: number; academic_session_id: string;
+        min_attendance_pct: number; course_code: string;
+      }>(db, `
+        SELECT u.user_id, a.student_id, a.course_id, a.academic_session_id,
+               c.min_attendance_pct, c.course_code
+        FROM attendance_summary a
+        JOIN course c USING (course_id)
+        JOIN app_user u ON u.student_id = a.student_id
+        JOIN student s ON s.student_id = a.student_id
+        WHERE a.academic_session_id = current_session_id()
+          AND a.total_sessions > 0 AND a.attendance_pct >= c.min_attendance_pct
+          AND c.min_attendance_pct > 0 AND u.role = 'student'
+          AND u.is_active AND s.status = 'Active' AND u.user_id <> $1
+        ORDER BY u.user_id, a.course_id LIMIT 1`, [before.user_id]);
+      await db.query('UPDATE app_user SET is_active = false WHERE user_id = $1', [inactive.user_id]);
+      await db.query(`
+        UPDATE attendance_summary
+        SET total_sessions = 100, attended = GREATEST(0, $1 - 1), last_updated = now()
+        WHERE student_id = $2 AND course_id = $3 AND academic_session_id = $4`,
+      [inactive.min_attendance_pct, inactive.student_id, inactive.course_id, inactive.academic_session_id]);
+      expect((await db.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM notification
+         WHERE user_id = $1 AND kind = 'attendance_shortage' AND text LIKE $2`,
+        [inactive.user_id, `Attendance shortage: ${inactive.course_code}%`])).rows[0]!.n).toBe(0);
     });
   });
 
