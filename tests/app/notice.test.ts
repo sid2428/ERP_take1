@@ -67,6 +67,8 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     const res = await request(app).get('/student/notices');
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('/login');
+    const state = await request(app).get('/api/notifications/state');
+    expect(state.status).toBe(401);
   });
 
   it('keeps students out of posting and the admin pages', async () => {
@@ -92,6 +94,40 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     expect(bellLabel(studentPage.text)).toBe(expected(await unreadFor(studentId)));
     expect(bellLabel(facultyPage.text)).toBe(expected(await unreadFor(facultyId)));
     expect(bellLabel(adminPage.text)).toBe(expected(await unreadFor(adminId)));
+  });
+
+  it('synchronizes persisted notification state across independent sessions', async () => {
+    const studentId = await userIdFor(STUDENT);
+    const secondSession = (await signIn(app, STUDENT.toLowerCase(), DEMO)).agent;
+    const before = await student.get('/api/notifications/state');
+    const facultyBefore = await faculty.get('/api/notifications/state');
+    expect(before.status).toBe(200);
+    expect(facultyBefore.status).toBe(200);
+    expect(before.headers['cache-control']).toContain('no-store');
+
+    const created = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Cross-device update', 'A persisted update shared by both sessions.',
+         'Academic', '/student/notices', 'cross_device_test') AS id`, [studentId]);
+    const notificationId = created.rows[0]!.id;
+
+    const [firstState, secondState, board] = await Promise.all([
+      student.get('/api/notifications/state'),
+      secondSession.get('/api/notifications/state'),
+      secondSession.get('/student/notices'),
+    ]);
+    expect(firstState.body.unread).toBe(before.body.unread + 1);
+    expect(secondState.body).toEqual(firstState.body);
+    expect(secondState.body.revision).not.toBe(before.body.revision);
+    expect(board.text).toContain('[test] Cross-device update');
+    expect((await faculty.get(`/faculty/notices/notification/${notificationId}`)).status).toBe(404);
+    expect((await faculty.get('/api/notifications/state')).body).toEqual(facultyBefore.body);
+
+    // Reading from one session changes the same server-backed row seen by the other.
+    expect((await student.get(`/student/notices/notification/${notificationId}`)).status).toBe(200);
+    const afterRead = await secondSession.get('/api/notifications/state');
+    expect(afterRead.body.unread).toBe(before.body.unread);
+    expect(afterRead.body.revision).not.toBe(firstState.body.revision);
+    await db.query('DELETE FROM notification WHERE notification_id = $1', [notificationId]);
   });
 
   it('separates personal updates, marks linked notices read, and protects recipient counts', async () => {

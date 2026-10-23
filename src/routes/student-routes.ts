@@ -18,6 +18,26 @@ studentRouter.use('/placement', placementStudentRouter);
 studentRouter.use('/grievances', grievanceRouter);
 studentRouter.use('/notices', noticeRouter);
 
+studentRouter.get('/attendance', (_req, res) => {
+  res.render('student/attendance-summary', { title: 'Attendance Summary', nav: 'attendance-summary' });
+});
+
+studentRouter.get('/attendance/detail', (_req, res) => {
+  res.render('student/attendance-detail', { title: 'Attendance Detail', nav: 'attendance-detail' });
+});
+
+studentRouter.get('/exams', (_req, res) => {
+  res.render('student/exam-schedule', { title: 'Exam Schedule', nav: 'exam-schedule' });
+});
+
+studentRouter.get('/hall-ticket', (_req, res) => {
+  res.render('student/hall-ticket', { title: 'Hall Ticket', nav: 'hall-ticket' });
+});
+
+studentRouter.get('/results', (_req, res) => {
+  res.render('student/results', { title: 'Results', nav: 'results' });
+});
+
 studentRouter.get('/', async (req, res) => {
   const studentId = req.user!.studentId!;
   const [profile, courses, timetable, overall, notices] = await Promise.all([

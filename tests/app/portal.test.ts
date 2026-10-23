@@ -133,7 +133,7 @@ describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
       for (const path of ['/admin', '/admin/departments', '/admin/departments/CSE', '/admin/programs', '/admin/programs/BTECH-IT',
         '/admin/courses', '/admin/courses?dept=IT&type=LAB', '/admin/courses/new', '/admin/courses/4', '/admin/sessions',
         '/admin/sections', '/admin/sections/divisions/1', '/admin/students?q=STU2026000', '/admin/students/4',
-        '/admin/faculty', '/admin/faculty/1', '/admin/audit']) {
+        '/admin/faculty', '/admin/faculty/1', '/admin/audit', '/admin/attendance-unlocks']) {
         const res = await agent.get(path);
         expect(res.status, path).toBe(200);
       }

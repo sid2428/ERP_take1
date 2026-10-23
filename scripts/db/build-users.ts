@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   ];
 
   console.log(`hashing ${accounts.length.toLocaleString()} passwords ...`);
-  const hashes = await mapLimit(accounts, 8, (a) => hashPassword(a.password));
+  const hashes = await mapLimit(accounts, 16, (a) => hashPassword(a.password));
 
   const lines = ['user_id,login_id,role,student_id,faculty_id,password_hash,must_change_password'];
   accounts.forEach((a, i) => {

@@ -5,9 +5,11 @@ live status alerts. Students, faculty, and admins see a role-specific bell in th
 bar. The bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the
 current user's unread count across announcements and dedicated notifications.
 
-Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`, and
-`migrations/083-notifications.sql` · Seed: `scripts/db/seed-notices.ts` · Routes:
+Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`,
+`migrations/083-notifications.sql`, and `migrations/084-attendance-shortage-notifications.sql` ·
+Seed: `scripts/db/seed-notices.ts` · Routes:
 `src/routes/notice-routes.ts`,
+`src/routes/notification-routes.ts`,
 `src/routes/admin/notice-routes.ts` · Queries: `src/queries/notice-queries.ts` · Tests:
 `tests/db/notice.test.ts`, `tests/db/automatic-notice.test.ts`, `tests/app/notice.test.ts`
 
@@ -87,9 +89,17 @@ WHERE t.notice_id = $2;
 with one row per recipient. `user_alerts(user_id)` returns live attendance/fee status alerts and
 does not create read rows; an alert disappears when its underlying condition is fixed.
 
+Migration 084 adds the `attendance_shortage_notification` trigger on `attendance_summary`. It
+calls `notify(user_id, 'attendance_shortage', text, '/student', 'Academic')` only when an active
+student’s current-session percentage crosses from eligible to below that course’s minimum. The
+message includes the course code/name, updated percentage, minimum, and the existing
+sessions-to-recover guidance when finite. It is update-only, so summary inserts and existing
+rows do not notify; subsequent updates while still below minimum are also ignored. The trigger
+preserves `user_alerts`, which remains the live aggregate alert.
+
 ## Current functions and query contracts
 
-Migrations 081–083 create the database contracts below. The portal and other modules call them with
+Migrations 081–084 create the database contracts below. The portal and other modules call them with
 bound parameters.
 
 `v_user_notices(user_id)` is the read-state and recipient contract:
@@ -162,9 +172,27 @@ SELECT erp.post_results_notice($1, $2, $3, $4::smallint);
 The repository currently defines these helpers but has no verified T5 publication caller. T5 should
 call them from its real publication workflow when that workflow exists.
 
-The application query `unreadNoticeCount(userId)` counts `NOT is_read` from `v_user_notices` for
-one signed-in user. The app loads it once as a shared authenticated view local. It therefore respects
-recipient, withdrawal, expiry, and read rules without materializing other users' notices.
+The application query `notificationState(userId)` counts `NOT is_read` and fingerprints the visible
+rows in `v_user_notices` for one signed-in user. The app loads it as a shared authenticated view
+local. It therefore respects recipient, withdrawal, expiry, and read rules without materializing
+other users' notices.
+
+## Cross-device synchronization
+
+The database remains authoritative. Authenticated pages render the initial count and a recipient-
+scoped revision from `v_user_notices` and `user_alerts(user_id)`; the shared client then polls
+`GET /api/notifications/state` every 15 seconds while visible and refreshes on focus or when a tab
+becomes visible. The endpoint returns `{ unread, revision }`, sends `Cache-Control: no-store`, and
+returns `401` without an active session. The revision includes the visible item identity, content
+read state, and read timestamp, so a read on another device or a replacement event is detected even
+when the unread total is unchanged. Live attendance/fee alert changes are included in the revision
+even though they are not stored read-state rows. A visible notice board or dashboard notice card reloads
+when its revision changes; other pages update only the bell badge and pick up the complete board on navigation.
+
+Polling uses same-origin credentials, has no local notification cache, pauses in hidden tabs, and
+allows only one request at a time. The existing role-specific routes and `v_user_notices` recipient
+checks remain the authority for board contents, detail access, read writes, expiry, withdrawal, and
+live `user_alerts`; the synchronization endpoint exposes no notice bodies or other users' data.
 
 ## User experience and routes
 
@@ -204,7 +232,7 @@ both resolution and rejection, with the status text reflected in each message.
 
 | Source | Event | Current implementation | Next step |
 |---|---|---|---|
-| T4 Attendance | student falls below required attendance | Implemented live alert through `user_alerts(user_id)` using `v_student_attendance_by_course`; called by the notice board/dashboard. No T4 event caller to `notify(...)` exists. | Decide whether the live alert satisfies the shared notification requirement before adding a stored event |
+| T4 Attendance | student falls below required attendance | Live aggregate alert through `user_alerts(user_id)` plus the T8 stored `attendance_shortage` transition notification from migration 084. | Keep the live alert and stored transition event aligned if the attendance contract changes |
 | T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist | Verify the real publication workflow calls the relevant helper |
 | T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition or stored-notification caller was found | Verify compatibility with the real T6 view and fee screen |
 | T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
