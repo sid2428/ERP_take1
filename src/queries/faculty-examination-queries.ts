@@ -8,10 +8,39 @@ export interface FacultyExamMarkEntry {
   endsem_marks: number | null;
 }
 
+export interface FacultyExamMaxima {
+  internal_max: number | null;
+  midsem_max: number | null;
+  endsem_max: number | null;
+}
+
+export function validateFacultyExamMarkEntries(
+  entries: FacultyExamMarkEntry[],
+  maxima: FacultyExamMaxima,
+): void {
+  const componentNames = ['Internal', 'Midsem', 'Endsem'];
+  const configuredMaxima = [maxima.internal_max, maxima.midsem_max, maxima.endsem_max];
+  for (const entry of entries) {
+    const values = [entry.internal_marks, entry.midsem_marks, entry.endsem_marks];
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index];
+      const maximum = configuredMaxima[index];
+      if (value === null || value === undefined) continue;
+      if (maximum === null || maximum === undefined || maximum === 0) {
+        throw new HttpError(400, `${componentNames[index]} marks are not applicable for this course.`);
+      }
+      if (value < 0 || value > maximum) {
+        throw new HttpError(400, `${componentNames[index]} marks must be between 0 and ${maximum}.`);
+      }
+    }
+  }
+}
+
 interface AssignedCourse {
   course_id: number;
   course_code: string;
   course_name: string;
+  course_type: string;
   internal_max: number | null;
   midsem_max: number | null;
   endsem_max: number | null;
@@ -41,7 +70,7 @@ export function getFacultyExamCourses(facultyId: number): Promise<AssignedCourse
       FROM roster_members
       GROUP BY course_id
     )
-    SELECT c.course_id, c.course_code, c.course_name,
+    SELECT c.course_id, c.course_code, c.course_name, c.course_type,
            sch.internal_max, sch.midsem_max, sch.endsem_max, sch.total_max, sch.passing_percentage,
            roster.roster_size, cy.exam_cycle_id, cy.exam_type,
            COALESCE(mark_summary.marks_entered, 0)::int AS marks_entered,
@@ -84,13 +113,14 @@ export async function getFacultyExamCourse(facultyId: number, courseId: number, 
     course_id: number;
     course_code: string;
     course_name: string;
+    course_type: string;
     internal_max: number | null;
     midsem_max: number | null;
     endsem_max: number | null;
     total_max: number | null;
     passing_percentage: number | null;
   }>(`
-    SELECT c.course_id, c.course_code, c.course_name,
+    SELECT c.course_id, c.course_code, c.course_name, c.course_type,
            sch.internal_max, sch.midsem_max, sch.endsem_max, sch.total_max, sch.passing_percentage
     FROM course c
     JOIN teaching_assignment ta USING (course_id)
@@ -194,8 +224,9 @@ export async function saveFacultyExamMarks(
     endsem_max: number | null;
     total_max: number | null;
     passing_percentage: number | null;
+    course_type: string;
   }>(`
-    SELECT ta.academic_session_id,
+    SELECT ta.academic_session_id, c.course_type,
            COALESCE(
              (SELECT d.semester
               FROM teaching_assignment section_ta
@@ -248,13 +279,7 @@ export async function saveFacultyExamMarks(
     throw new HttpError(400, 'A student is not on your assigned course roster.');
   }
 
-  for (const entry of entries) {
-    const values = [entry.internal_marks, entry.midsem_marks, entry.endsem_marks];
-    const maxima = [scope.internal_max, scope.midsem_max, scope.endsem_max];
-    if (values.some((value, index) => value !== null && (maxima[index] === null || value > maxima[index]!))) {
-      throw new HttpError(400, 'Marks cannot be negative or exceed the course examination scheme maximum.');
-    }
-  }
+  validateFacultyExamMarkEntries(entries, scope);
 
   const existing = await query<{ student_id: number }>(`
     SELECT DISTINCT m.student_id
@@ -373,6 +398,66 @@ export async function saveFacultyExamMarks(
   if (results.length !== savedMarks.length) {
     throw new HttpError(400, 'The configured grade scale does not cover one or more saved marks percentages.');
   }
+
+  const affectedStudents = [...new Set(savedMarks.map((mark) => mark.student_id))];
+  await db.query(`
+    WITH affected AS (
+      SELECT DISTINCT r.student_id, r.academic_session_id, r.semester
+      FROM course_result r
+      WHERE r.student_id = ANY($1::int[]) AND r.course_id = $2
+    ), semester_totals AS (
+      SELECT r.student_id, r.academic_session_id, r.semester,
+             sum(c.credits)::smallint AS credits_registered,
+             sum(c.credits) FILTER (WHERE r.result_status = 'Pass')::smallint AS credits_earned,
+             round(sum(c.credits * r.grade_points) / NULLIF(sum(c.credits), 0), 2) AS sgpa,
+             count(*) FILTER (WHERE r.result_status = 'Fail')::smallint AS backlogs
+      FROM course_result r
+      JOIN course c USING (course_id)
+      JOIN affected a USING (student_id, academic_session_id, semester)
+      WHERE r.is_final_attempt
+      GROUP BY r.student_id, r.academic_session_id, r.semester
+    )
+    INSERT INTO semester_result (
+      student_id, academic_session_id, semester, credits_registered, credits_earned,
+      sgpa, backlogs, result_status
+    )
+    SELECT t.student_id, t.academic_session_id, t.semester, t.credits_registered, t.credits_earned,
+           t.sgpa, t.backlogs,
+           CASE WHEN t.backlogs = 0
+             THEN 'Pass'::semester_result_state ELSE 'ATKT'::semester_result_state END
+    FROM semester_totals t
+    ON CONFLICT (student_id, academic_session_id) DO UPDATE
+      SET semester = EXCLUDED.semester,
+          credits_registered = EXCLUDED.credits_registered,
+          credits_earned = EXCLUDED.credits_earned,
+          sgpa = EXCLUDED.sgpa,
+          backlogs = EXCLUDED.backlogs,
+          result_status = EXCLUDED.result_status`, [affectedStudents, courseId]);
+
+  await db.query(`
+    WITH student_totals AS (
+      SELECT r.student_id,
+             count(DISTINCT (r.academic_session_id, r.semester))::smallint AS semesters_completed,
+             sum(c.credits)::smallint AS credits_attempted,
+             sum(c.credits) FILTER (WHERE r.result_status = 'Pass')::smallint AS credits_earned,
+             round(sum(c.credits * r.grade_points) / NULLIF(sum(c.credits), 0), 2) AS cgpa,
+             count(*) FILTER (WHERE r.result_status = 'Fail')::smallint AS backlog_count
+      FROM course_result r
+      JOIN course c USING (course_id)
+      WHERE r.student_id = ANY($1::int[]) AND r.is_final_attempt
+      GROUP BY r.student_id
+    )
+    INSERT INTO student_cgpa (
+      student_id, semesters_completed, credits_attempted, credits_earned, cgpa, backlog_count
+    )
+    SELECT student_id, semesters_completed, credits_attempted, credits_earned, cgpa, backlog_count
+    FROM student_totals
+    ON CONFLICT (student_id) DO UPDATE
+      SET semesters_completed = EXCLUDED.semesters_completed,
+          credits_attempted = EXCLUDED.credits_attempted,
+          credits_earned = EXCLUDED.credits_earned,
+          cgpa = EXCLUDED.cgpa,
+          backlog_count = EXCLUDED.backlog_count`, [affectedStudents]);
 
   return { saved: savedMarks.length, course_results_updated: results.length };
 }

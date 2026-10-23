@@ -80,6 +80,17 @@
     return value === null || value === undefined ? '—' : Number(value).toFixed(1) + '%';
   }
 
+  function courseType(value) {
+    if (value === 'TH') return 'Theory';
+    if (value === 'LAB') return 'Lab';
+    return 'Tutorial';
+  }
+
+  function componentMark(value, maximum) {
+    if (Number(maximum) <= 0) return '—';
+    return (value === null || value === undefined ? '—' : value) + ' / ' + maximum;
+  }
+
   function attendanceBar(value) {
     var box = node('div', null, 'student-pct');
     var label = node('b', pct(value));
@@ -267,23 +278,28 @@
     view.appendChild(summary);
 
     view.appendChild(resultsSection('Exam marks',
-      ['Cycle', 'Course', 'Internal', 'Mid-semester', 'End-semester', 'End-sem status'],
+      ['Cycle', 'Course', 'Type', 'Internal', 'Mid-semester', 'End-semester / Practical', 'End-sem status'],
       data.marks.map(function (mark) {
         return [
           mark.exam_type,
           mark.course_code + ' · ' + mark.course_name,
-          mark.internal_marks,
-          mark.midsem_marks,
-          mark.endsem_marks,
+          courseType(mark.course_type),
+          componentMark(mark.internal_marks, mark.internal_max),
+          componentMark(mark.midsem_marks, mark.midsem_max),
+          componentMark(mark.endsem_marks, mark.endsem_max),
           mark.endsem_status,
         ];
       }), 'No exam marks are available yet.'));
     view.appendChild(resultsSection('Course results',
-      ['Session · semester', 'Course', 'Marks', 'Percentage', 'Grade', 'Status'],
+      ['Session · semester', 'Course', 'Type', 'Internal', 'Mid-semester', 'End-semester / Practical', 'Total', 'Percentage', 'Grade', 'Status'],
       data.course_results.map(function (result) {
         return [
           result.academic_session_id + ' · ' + result.semester,
           result.course_code + ' · ' + result.course_name,
+          courseType(result.course_type),
+          componentMark(result.internal_marks, result.internal_max),
+          componentMark(result.midsem_marks, result.midsem_max),
+          componentMark(result.endsem_marks, result.endsem_max),
           result.total_marks + ' / ' + result.max_marks,
           pct(result.percentage),
           result.grade + ' · ' + result.grade_points,

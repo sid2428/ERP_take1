@@ -94,6 +94,10 @@ describe.skipIf(!hasAppEnv)('student read-only API', () => {
     expect(response.body.course_results[0]).toEqual(expect.objectContaining({
       total_marks: expect.any(Number),
       grade: expect.any(String),
+      course_type: expect.stringMatching(/^(TH|LAB|TUT)$/),
+      internal_max: expect.any(Number),
+      midsem_max: expect.any(Number),
+      endsem_max: expect.any(Number),
     }));
     expect(response.body.semester_results[0]).toEqual(expect.objectContaining({ sgpa: expect.any(Number) }));
     expect(response.body.cgpa.cgpa).toEqual(expect.any(Number));

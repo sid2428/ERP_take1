@@ -279,6 +279,9 @@ input[readonly] { background: var(--surface-2); color: var(--muted); }
 .faculty-exam-table table { min-width: 900px; }
 .faculty-exam-table th, .faculty-exam-table td { vertical-align: middle; }
 .faculty-exam-table input[type=number] { width: 94px; min-width: 0; }
+.faculty-exam-table input[aria-invalid=true] { border-color: var(--red-text); }
+.faculty-exam-table .field-error { display: block; min-height: 16px; color: var(--red-text); font-size: 11px; }
+.faculty-exam-total { white-space: nowrap; font-weight: 600; }
 .faculty-exam-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
 /* ---------- student attendance and examination ---------- */

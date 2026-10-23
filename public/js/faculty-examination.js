@@ -96,8 +96,10 @@
         var maxima = result.course;
         scheme.textContent = maxima.total_max === null
           ? 'This course does not have a configured examination scheme.'
-          : 'Maximum marks — Internal: ' + maxima.internal_max + ', Midsem: ' + maxima.midsem_max
-            + ', Endsem: ' + maxima.endsem_max + ' (Total: ' + maxima.total_max
+          : (maxima.course_type === 'LAB' ? 'Lab' : maxima.course_type === 'TH' ? 'Theory' : 'Tutorial')
+            + ' — ' + componentFields(maxima).map(function (field) {
+              return field.label + ': ' + field.max;
+            }).join(', ') + ' (Total: ' + maxima.total_max
             + '; pass: ' + maxima.passing_percentage + '%).';
         renderSummary();
         renderTable();
@@ -143,12 +145,12 @@
       var table = el('table');
       var head = el('thead');
       var header = el('tr');
-      [
-        'Roll', 'Student number', 'Student',
-        'Internal (' + current.course.internal_max + ')',
-        'Midsem (' + current.course.midsem_max + ')',
-        'Endsem (' + current.course.endsem_max + ')',
-      ].forEach(function (label) { header.appendChild(el('th', label)); });
+      var fields = componentFields(current.course);
+      ['Roll', 'Student number', 'Student'].concat(fields.map(function (field) {
+        return field.label + ' (/' + field.max + ')';
+      }), ['Total (/' + current.course.total_max + ')']).forEach(function (label) {
+        header.appendChild(el('th', label));
+      });
       head.appendChild(header);
       var body = el('tbody');
       current.students.forEach(function (student) {
@@ -158,23 +160,28 @@
         row.appendChild(el('td', student.roll_no === null ? '—' : student.roll_no));
         row.appendChild(el('td', student.student_number, 'code'));
         row.appendChild(el('td', student.name));
-        [
-          ['internal_marks', current.course.internal_max],
-          ['midsem_marks', current.course.midsem_max],
-          ['endsem_marks', current.course.endsem_max],
-        ].forEach(function (field) {
+        fields.forEach(function (field) {
           var cell = el('td');
           var input = el('input');
           input.type = 'number';
           input.min = '0';
-          input.max = field[1];
+          input.max = field.max;
           input.step = '0.1';
-          input.value = student[field[0]] === null ? '' : student[field[0]];
-          input.dataset.component = field[0];
-          input.setAttribute('aria-label', field[0].replace('_marks', '') + ' marks for ' + student.name);
-          cell.appendChild(input);
+          input.value = student[field.key] === null ? '' : student[field.key];
+          input.dataset.component = field.key;
+          input.dataset.max = field.max;
+          input.setAttribute('aria-label', field.label + ' marks for ' + student.name);
+          var error = el('span', '', 'field-error');
+          error.dataset.errorFor = field.key;
+          error.setAttribute('aria-live', 'polite');
+          cell.append(input, error);
           row.appendChild(cell);
+          input.addEventListener('input', function () { updateRow(row, fields, current.course.total_max); });
         });
+        var total = el('td', '', 'faculty-exam-total');
+        total.dataset.total = 'true';
+        row.appendChild(total);
+        updateRow(row, fields, current.course.total_max);
         body.appendChild(row);
       });
       table.append(head, body);
@@ -182,6 +189,37 @@
       wrapper.appendChild(table);
       tablePanel.appendChild(wrapper);
       save.disabled = false;
+    }
+
+    function componentFields(course) {
+      var endsemLabel = course.course_type === 'LAB' ? 'Practical' : 'Endsem';
+      return [
+        { key: 'internal_marks', label: 'Internal', max: course.internal_max },
+        { key: 'midsem_marks', label: 'Midsem', max: course.midsem_max },
+        { key: 'endsem_marks', label: endsemLabel, max: course.endsem_max },
+      ].filter(function (field) { return Number(field.max) > 0; });
+    }
+
+    function updateRow(row, fields, totalMax) {
+      var valid = true;
+      var total = 0;
+      fields.forEach(function (field) {
+        var input = row.querySelector('input[data-component="' + field.key + '"]');
+        var error = row.querySelector('[data-error-for="' + field.key + '"]');
+        var value = input.value === '' ? null : Number(input.value);
+        var invalid = value !== null && (!Number.isFinite(value) || value < 0
+          || value > Number(field.max) || Math.abs(value * 10 - Math.round(value * 10)) > 1e-8);
+        input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+        error.textContent = invalid ? 'Enter 0–' + field.max + ' (max 1 decimal place).' : '';
+        if (invalid) valid = false;
+        else if (value !== null) total += value;
+      });
+      var totalCell = row.querySelector('[data-total]');
+      var roundedTotal = Math.round(total);
+      totalCell.textContent = valid ? roundedTotal + ' / ' + totalMax : 'Invalid';
+      totalCell.setAttribute('aria-label', valid ? 'Total ' + roundedTotal + ' out of ' + totalMax : 'Invalid marks');
+      row.dataset.valid = valid ? 'true' : 'false';
+      return valid;
     }
 
     function selectedCycleId() {
@@ -193,12 +231,27 @@
     save.addEventListener('click', function () {
       if (!current || !current.selected_cycle) return;
       var entries = [];
+      var invalidRows = [];
       Array.prototype.forEach.call(tablePanel.querySelectorAll('tbody tr'), function (row) {
+        if (!updateRow(row, componentFields(current.course), current.course.total_max)) {
+          invalidRows.push(row);
+          return;
+        }
         var inputs = row.querySelectorAll('input[data-component]');
-        var entry = { student_id: Number(row.dataset.studentId) };
+        var entry = {
+          student_id: Number(row.dataset.studentId),
+          internal_marks: null,
+          midsem_marks: null,
+          endsem_marks: null,
+        };
         Array.prototype.forEach.call(inputs, function (input) {
           entry[input.dataset.component] = input.value === '' ? null : Number(input.value);
         });
+        if (invalidRows.length) {
+          notice.textContent = 'Correct the highlighted marks before saving.';
+          invalidRows[0].querySelector('input[aria-invalid="true"]').focus();
+          return;
+        }
         if (row.dataset.existing === 'true' || Object.keys(entry).some(function (key) {
           return key !== 'student_id' && entry[key] !== null;
         })) entries.push(entry);

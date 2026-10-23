@@ -138,19 +138,24 @@ studentApiRouter.get('/results', async (req, res) => {
       course_id: number;
       course_code: string;
       course_name: string;
+      course_type: string;
       attempt_no: number;
       exam_cycle_id: number;
       exam_type: string;
       internal_marks: number | null;
+      internal_max: number;
       midsem_marks: number | null;
+      midsem_max: number;
       endsem_marks: number | null;
+      endsem_max: number;
       endsem_status: string;
     }>(`
-      SELECT m.marks_id, m.course_id, c.course_code, c.course_name, m.attempt_no,
+      SELECT m.marks_id, m.course_id, c.course_code, c.course_name, c.course_type, m.attempt_no,
              m.exam_cycle_id, cy.exam_type, m.internal_marks, m.midsem_marks,
-             m.endsem_marks, m.endsem_status
+             m.endsem_marks, m.endsem_status, sch.internal_max, sch.midsem_max, sch.endsem_max
       FROM exam_marks m
       JOIN course c USING (course_id)
+      JOIN course_exam_scheme sch USING (course_id)
       JOIN exam_cycle cy USING (exam_cycle_id)
       WHERE m.student_id = $1
       ORDER BY cy.start_date DESC, c.course_code, m.attempt_no DESC`, [studentId]),
@@ -161,9 +166,16 @@ studentApiRouter.get('/results', async (req, res) => {
       course_id: number;
       course_code: string;
       course_name: string;
+      course_type: string;
       attempt_no: number;
       total_marks: number;
       max_marks: number;
+      internal_marks: number | null;
+      internal_max: number;
+      midsem_marks: number | null;
+      midsem_max: number;
+      endsem_marks: number | null;
+      endsem_max: number;
       percentage: number;
       grade: string;
       grade_points: number;
@@ -171,10 +183,15 @@ studentApiRouter.get('/results', async (req, res) => {
       is_final_attempt: boolean;
     }>(`
       SELECT r.result_id, r.academic_session_id, r.semester, r.course_id,
+             c.course_type, m.internal_marks, sch.internal_max,
+             m.midsem_marks, sch.midsem_max, m.endsem_marks, sch.endsem_max,
              c.course_code, c.course_name, r.attempt_no, r.total_marks, r.max_marks,
              r.percentage, r.grade, r.grade_points, r.result_status, r.is_final_attempt
       FROM course_result r
       JOIN course c USING (course_id)
+      JOIN course_exam_scheme sch USING (course_id)
+      LEFT JOIN exam_marks m
+        ON m.student_id = r.student_id AND m.course_id = r.course_id AND m.attempt_no = r.attempt_no
       WHERE r.student_id = $1
       ORDER BY r.academic_session_id DESC, r.semester DESC, c.course_code, r.attempt_no`,
     [studentId]),

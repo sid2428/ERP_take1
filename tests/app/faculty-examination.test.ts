@@ -84,7 +84,9 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
       roster_size: number;
       exam_cycle_id: number | null;
       total_max: number | null;
-    }) => item.roster_size > 0 && item.exam_cycle_id !== null && item.total_max !== null);
+      course_type: string;
+    }) => item.roster_size > 0 && item.exam_cycle_id !== null
+      && item.total_max === 100 && item.course_type === 'TH');
     expect(course).toBeDefined();
 
     const detail = await faculty.get(
@@ -105,17 +107,17 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
         }]),
       });
     expect(rejected.status).toBe(400);
-      const negative = await postForm(faculty, '/faculty/examination',
-        `/faculty/examination/courses/${course.course_id}/marks`, {
-          exam_cycle_id: String(course.exam_cycle_id),
-          entries_json: JSON.stringify([{
-            student_id: student.student_id,
-            internal_marks: -0.1,
-            midsem_marks: null,
-            endsem_marks: null,
-          }]),
-        });
-      expect(negative.status).toBe(400);
+    const negative = await postForm(faculty, '/faculty/examination',
+      `/faculty/examination/courses/${course.course_id}/marks`, {
+        exam_cycle_id: String(course.exam_cycle_id),
+        entries_json: JSON.stringify([{
+          student_id: student.student_id,
+          internal_marks: -0.1,
+          midsem_marks: null,
+          endsem_marks: null,
+        }]),
+      });
+    expect(negative.status).toBe(400);
 
     const client = await db.connect();
     try {
@@ -123,18 +125,19 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
       await client.query('SET LOCAL search_path = erp, public');
       const saved = await saveFacultyExamMarks!(client, facultyId, course.course_id, course.exam_cycle_id, [{
         student_id: student.student_id,
-        internal_marks: 0,
-        midsem_marks: 0,
-        endsem_marks: 0,
+        internal_marks: 15,
+        midsem_marks: 18,
+        endsem_marks: 55,
       }]);
       expect(saved).toEqual({ saved: 1, course_results_updated: 1 });
 
       const marks = await client.query<{ internal_marks: number; midsem_marks: number; endsem_marks: number }>(`
-        SELECT internal_marks, midsem_marks, endsem_marks
+        SELECT internal_marks::float8 AS internal_marks, midsem_marks::float8 AS midsem_marks,
+               endsem_marks::float8 AS endsem_marks
         FROM exam_marks
         WHERE student_id = $1 AND course_id = $2 AND exam_cycle_id = $3`,
       [student.student_id, course.course_id, course.exam_cycle_id]);
-      expect(marks.rows).toContainEqual({ internal_marks: 0, midsem_marks: 0, endsem_marks: 0 });
+      expect(marks.rows).toContainEqual({ internal_marks: 15, midsem_marks: 18, endsem_marks: 55 });
 
       const result = await client.query<{
         total_marks: number; max_marks: number; is_final_attempt: boolean; grade: string; grade_points: number;
@@ -146,15 +149,39 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
       expect(result.rows).toHaveLength(1);
       const scale = await client.query<{ grade: string; grade_points: number }>(`
         SELECT grade, grade_points FROM grade_scale
-        WHERE 0 BETWEEN min_percentage AND max_percentage
+        WHERE 88 BETWEEN min_percentage AND max_percentage
         ORDER BY min_percentage DESC LIMIT 1`);
       expect(result.rows[0]).toMatchObject({
-        total_marks: 0,
+        total_marks: 88,
         max_marks: course.total_max,
         is_final_attempt: true,
         grade: scale.rows[0]!.grade,
         grade_points: scale.rows[0]!.grade_points,
       });
+
+      const summaries = await client.query<{
+        sgpa: number;
+        expected_sgpa: number;
+        cgpa: number;
+        expected_cgpa: number;
+      }>(`
+        SELECT sr.sgpa,
+               (SELECT round(sum(c.credits * r.grade_points) / NULLIF(sum(c.credits), 0), 2)
+                FROM course_result r JOIN course c USING (course_id)
+                WHERE r.student_id = sr.student_id
+                  AND r.academic_session_id = sr.academic_session_id
+                  AND r.semester = sr.semester AND r.is_final_attempt) AS expected_sgpa,
+               sc.cgpa, calculate_cgpa(sc.student_id) AS expected_cgpa
+        FROM course_result r
+        JOIN semester_result sr
+          ON sr.student_id = r.student_id
+         AND sr.academic_session_id = r.academic_session_id
+         AND sr.semester = r.semester
+        JOIN student_cgpa sc ON sc.student_id = r.student_id
+        WHERE r.student_id = $1 AND r.course_id = $2 AND r.is_final_attempt`,
+      [student.student_id, course.course_id]);
+      expect(summaries.rows[0]!.sgpa).toBe(summaries.rows[0]!.expected_sgpa);
+      expect(summaries.rows[0]!.cgpa).toBe(summaries.rows[0]!.expected_cgpa);
     } finally {
       await client.query('ROLLBACK');
       client.release();
