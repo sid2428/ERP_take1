@@ -562,8 +562,11 @@ async function importExamination(db: import('pg').Client): Promise<void> {
   await merge(db, 'course_exam_scheme', `
     INSERT INTO erp.course_exam_scheme
       (course_id, internal_max, midsem_max, endsem_max, total_max, passing_percentage)
-    SELECT co.course_id, ${c(scheme, 'internal_max')}::smallint, ${c(scheme, 'midsem_max')}::smallint,
-           ${c(scheme, 'endsem_max')}::smallint, ${c(scheme, 'total_max')}::smallint,
+    SELECT co.course_id,
+           CASE co.course_type WHEN 'TH' THEN 20 WHEN 'LAB' THEN 50 ELSE ${c(scheme, 'internal_max')}::smallint END,
+           CASE co.course_type WHEN 'TH' THEN 20 WHEN 'LAB' THEN 0 ELSE ${c(scheme, 'midsem_max')}::smallint END,
+           CASE co.course_type WHEN 'TH' THEN 60 WHEN 'LAB' THEN 50 ELSE ${c(scheme, 'endsem_max')}::smallint END,
+           CASE co.course_type WHEN 'TH' THEN 100 WHEN 'LAB' THEN 100 ELSE ${c(scheme, 'total_max')}::smallint END,
            ${c(scheme, 'passing_percentage')}::smallint
     FROM ${qid(stages.get(scheme)!.table)} s JOIN erp.course co ON co.course_id = ${c(scheme, 'course_id')}::int
     ON CONFLICT DO NOTHING`);
@@ -599,10 +602,16 @@ async function importExamination(db: import('pg').Client): Promise<void> {
     SELECT ${c(sch, 'schedule_id')}::int, ec.exam_cycle_id, co.course_id, ${c(sch, 'exam_mode')}::erp.exam_mode,
            pg_temp.erp_loader_date(${c(sch, 'exam_date')}), ${c(sch, 'session')}::erp.exam_session,
            ${c(sch, 'start_time')}::time, ${c(sch, 'end_time')}::time,
-           ${c(sch, 'duration_min')}::smallint, ${c(sch, 'max_marks')}::smallint
+           ${c(sch, 'duration_min')}::smallint,
+           CASE ${c(sch, 'exam_mode')}::erp.exam_mode
+             WHEN 'MidSem' THEN scheme.midsem_max
+             WHEN 'EndSem Theory' THEN scheme.endsem_max
+             WHEN 'Practical/Oral' THEN scheme.endsem_max
+           END
     FROM ${qid(stages.get(sch)!.table)} s
     JOIN erp.exam_cycle ec ON ec.exam_cycle_id = ${c(sch, 'exam_cycle_id')}::int
     JOIN erp.course co ON co.course_id = ${c(sch, 'course_id')}::int
+    JOIN erp.course_exam_scheme scheme ON scheme.course_id = co.course_id
     ON CONFLICT DO NOTHING`);
 
   const reg = 'examination_exam_registration';
@@ -661,6 +670,43 @@ async function importExamination(db: import('pg').Client): Promise<void> {
     ON CONFLICT DO NOTHING`);
 
   const marks = 'examination_exam_marks';
+  const markValue = (column: string): string => `nullif(${c(marks, column, 'src')}, '')::numeric`;
+  const oldMaximum = (column: string): string => `${c(scheme, column, 'old_scheme')}::numeric`;
+  const scaledMark = (value: string, oldMax: string, newMax: string): string =>
+    `CASE WHEN ${value} IS NULL OR ${oldMax} = 0 THEN NULL ELSE round(${value} * ${newMax} / ${oldMax}, 1) END`;
+  const internalSource = markValue('internal_marks');
+  const midsemSource = markValue('midsem_marks');
+  const endsemSource = markValue('endsem_marks');
+  const internalMaxSource = oldMaximum('internal_max');
+  const midsemMaxSource = oldMaximum('midsem_max');
+  const endsemMaxSource = oldMaximum('endsem_max');
+  const internalMark = `CASE co.course_type
+    WHEN 'TH' THEN ${scaledMark(internalSource, internalMaxSource, 'target.internal_max')}
+    WHEN 'LAB' THEN ${scaledMark(internalSource, internalMaxSource, 'target.internal_max')}
+    ELSE ${internalSource} END`;
+  const midsemMark = `CASE
+    WHEN co.course_type = 'TH' AND ${midsemMaxSource} > 0
+      THEN ${scaledMark(midsemSource, midsemMaxSource, 'target.midsem_max')}
+    WHEN co.course_type = 'TH' AND ${midsemMaxSource} = 0
+      AND ${c(marks, 'endsem_status', 'src')} <> 'Pending'
+      AND (${internalSource} IS NOT NULL OR ${endsemSource} IS NOT NULL)
+      THEN round(least(target.midsem_max::numeric, greatest(0.0,
+        target.midsem_max * (
+          coalesce(${internalSource} / NULLIF(${internalMaxSource}, 0), 0)
+          + coalesce(${endsemSource} / NULLIF(${endsemMaxSource}, 0), 0)
+        ) / NULLIF(
+          (CASE WHEN ${internalSource} IS NOT NULL AND ${internalMaxSource} > 0 THEN 1 ELSE 0 END)
+          + (CASE WHEN ${endsemSource} IS NOT NULL AND ${endsemMaxSource} > 0 THEN 1 ELSE 0 END),
+          0
+        )
+        + (mod(st.student_id * 37 + co.course_id * 11 + ${c(marks, 'attempt_no', 'src')}::int * 17, 17) - 8) * 0.1
+      )), 1)
+    WHEN co.course_type = 'LAB' THEN NULL
+    ELSE ${midsemSource} END`;
+  const endsemMark = `CASE co.course_type
+    WHEN 'TH' THEN ${scaledMark(endsemSource, endsemMaxSource, 'target.endsem_max')}
+    WHEN 'LAB' THEN ${scaledMark(endsemSource, endsemMaxSource, 'target.endsem_max')}
+    ELSE ${endsemSource} END`;
   await addFKFailure(db, 'exam_marks', 'student number missing', `
     SELECT count(*) FROM ${qid(stages.get(marks)!.table)} s
     LEFT JOIN erp.student st ON st.student_number = ${c(marks, 'student_number')}
@@ -693,17 +739,21 @@ async function importExamination(db: import('pg').Client): Promise<void> {
     INSERT INTO erp.exam_marks
       (marks_id, student_id, course_id, attempt_no, exam_cycle_id, internal_marks, midsem_marks,
        endsem_marks, endsem_status, entered_by, last_updated)
-    SELECT ${c(marks, 'marks_id')}::int, st.student_id, co.course_id, ${c(marks, 'attempt_no')}::smallint,
-           ec.exam_cycle_id, nullif(${c(marks, 'internal_marks')}, '')::numeric,
-           nullif(${c(marks, 'midsem_marks')}, '')::numeric, nullif(${c(marks, 'endsem_marks')}, '')::numeric,
-           ${c(marks, 'endsem_status')}::erp.exam_mark_state, f.faculty_id,
-           pg_temp.erp_loader_timestamp(${c(marks, 'last_updated')})
-    FROM ${qid(stages.get(marks)!.table)} s
-    JOIN erp.student st ON st.student_number = ${c(marks, 'student_number')}
-    JOIN erp.course co ON co.course_id = ${c(marks, 'course_id')}::int
-    JOIN erp.exam_cycle ec ON ec.exam_cycle_id = ${c(marks, 'exam_cycle_id')}::int
-    LEFT JOIN source_faculty_id_map f ON f.source_id = nullif(${c(marks, 'entered_by')}, '')::int AND f.faculty_id IS NOT NULL
-    WHERE nullif(${c(marks, 'entered_by')}, '') IS NULL OR f.faculty_id IS NOT NULL
+    SELECT ${c(marks, 'marks_id', 'src')}::int, st.student_id, co.course_id,
+           ${c(marks, 'attempt_no', 'src')}::smallint, ec.exam_cycle_id,
+           ${internalMark}, ${midsemMark}, ${endsemMark},
+           ${c(marks, 'endsem_status', 'src')}::erp.exam_mark_state, f.faculty_id,
+           pg_temp.erp_loader_timestamp(${c(marks, 'last_updated', 'src')})
+    FROM ${qid(stages.get(marks)!.table)} src
+    JOIN erp.student st ON st.student_number = ${c(marks, 'student_number', 'src')}
+    JOIN erp.course co ON co.course_id = ${c(marks, 'course_id', 'src')}::int
+    JOIN erp.course_exam_scheme target ON target.course_id = co.course_id
+    JOIN ${qid(stages.get(scheme)!.table)} old_scheme
+      ON ${c(scheme, 'course_id', 'old_scheme')}::int = co.course_id
+    JOIN erp.exam_cycle ec ON ec.exam_cycle_id = ${c(marks, 'exam_cycle_id', 'src')}::int
+    LEFT JOIN source_faculty_id_map f
+      ON f.source_id = nullif(${c(marks, 'entered_by', 'src')}, '')::int AND f.faculty_id IS NOT NULL
+    WHERE nullif(${c(marks, 'entered_by', 'src')}, '') IS NULL OR f.faculty_id IS NOT NULL
     ON CONFLICT DO NOTHING`);
 
   const results = 'examination_course_result';
@@ -723,15 +773,28 @@ async function importExamination(db: import('pg').Client): Promise<void> {
        max_marks, percentage, grade, grade_points, result_status, is_final_attempt)
     SELECT ${c(results, 'result_id')}::int, st.student_id, co.course_id, a.session_id,
            ${c(results, 'semester')}::smallint, ${c(results, 'attempt_no')}::smallint,
-           ${c(results, 'total_marks')}::smallint, ${c(results, 'max_marks')}::smallint,
-           ${c(results, 'percentage')}::numeric, gs.grade, ${c(results, 'grade_points')}::smallint,
-           ${c(results, 'result_status')}::erp.exam_result_state,
+           normalized.total_marks, normalized.max_marks, scored.percentage,
+           grade_row.grade, grade_row.grade_points,
+           CASE WHEN scored.percentage >= scheme.passing_percentage
+             THEN 'Pass'::erp.exam_result_state ELSE 'Fail'::erp.exam_result_state END,
            coalesce(nullif(${c(results, 'is_final_attempt')}, '')::int, 0) <> 0
     FROM ${qid(stages.get(results)!.table)} s
     JOIN erp.student st ON st.student_number = ${c(results, 'student_number')}
     JOIN erp.course co ON co.course_id = ${c(results, 'course_id')}::int
-    JOIN erp.grade_scale gs ON gs.grade = ${c(results, 'grade')}
+    JOIN erp.course_exam_scheme scheme ON scheme.course_id = co.course_id
     JOIN erp.academic_session a ON ${semesterToSession(results)}
+    CROSS JOIN LATERAL (
+      SELECT scheme.total_max::smallint AS max_marks,
+             round(${c(results, 'percentage')}::numeric * scheme.total_max / 100.0)::smallint AS total_marks
+    ) normalized
+    CROSS JOIN LATERAL (
+      SELECT round(normalized.total_marks * 100.0 / normalized.max_marks, 2) AS percentage
+    ) scored
+    JOIN LATERAL (
+      SELECT grade, grade_points FROM erp.grade_scale
+      WHERE scored.percentage BETWEEN min_percentage AND max_percentage
+      ORDER BY min_percentage DESC LIMIT 1
+    ) grade_row ON true
     ON CONFLICT DO NOTHING`);
 
   const sem = 'examination_semester_result';
@@ -766,6 +829,8 @@ async function importExamination(db: import('pg').Client): Promise<void> {
            ${c(cgpa, 'cgpa')}::numeric, ${c(cgpa, 'backlog_count')}::smallint
     FROM ${qid(stages.get(cgpa)!.table)} s JOIN erp.student st ON st.student_number = ${c(cgpa, 'student_number')}
     ON CONFLICT DO NOTHING`);
+
+  await db.query('SELECT erp.refresh_exam_results()');
 }
 
 async function main(): Promise<void> {

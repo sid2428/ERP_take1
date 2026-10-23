@@ -1,10 +1,12 @@
 import numpy as np, pandas as pd, datetime as dt, os
 rng=np.random.default_rng(7)
-ATT=os.environ.get('ATT_DIR','/mnt/user-data/outputs/attendance_dataset/'); OUT=os.environ.get('OUT_DIR','/mnt/user-data/outputs/exam_dataset/')
-UP=os.environ.get('IN_DIR','/mnt/user-data/uploads/')
+ROOT=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ATT=os.path.join(os.environ.get('ATT_DIR',os.path.join(ROOT,'data','attendance')), '')
+OUT=os.path.join(os.environ.get('OUT_DIR',os.path.join(ROOT,'data','examination')), '')
+UP=os.path.join(os.environ.get('IN_DIR',os.path.join(ROOT,'data','core')), '')
 cfg=pd.read_csv(ATT+'course_attendance_config.csv'); mp=pd.read_csv(ATT+'student_section_mapping.csv')
 asg=pd.read_csv(ATT+'teaching_assignments.csv'); summ=pd.read_csv(ATT+'attendance_summary.csv')
-crs=pd.read_excel(UP+'faculty_dataset__1_.xlsx',sheet_name='Courses')
+crs=pd.read_excel(UP+'faculty_dataset.xlsx',sheet_name='Courses')
 coord=dict(zip(crs.Course_ID,crs.Course_Coordinator_ID))
 
 # ---------- grade scale ----------
@@ -17,14 +19,13 @@ def grade(p):
            np.select([p>=80,p>=70,p>=60,p>=55,p>=50,p>=45,p>=40],[10,9,8,7,6,5,4],0)
 
 # ---------- assessment scheme per course ----------
-th_schemes=[(20,30,50),(30,20,50),(25,25,50),(20,20,60)]
 rows=[]
 for r in cfg.itertuples():
     if r.course_type=='Lab':
-        cr=2 if r.course_id%2==0 else 1; i,m,e=(50,0,50) if cr==2 else (25,0,25)
+        cr=2 if r.course_id%2==0 else 1; i,m,e=50,0,50
     elif r.is_tutorial==1: cr=1; i,m,e=25,0,0
     else:
-        cr=4 if r.course_id%3==0 else 3; i,m,e=th_schemes[r.course_id%4]
+        cr=4 if r.course_id%3==0 else 3; i,m,e=20,20,60
     rows.append((r.course_id,cr,i,m,e,i+m+e,40))
 sch=pd.DataFrame(rows,columns=['course_id','credits','internal_max','midsem_max','endsem_max','total_max','passing_percentage'])
 sch.to_csv(OUT+'course_exam_scheme.csv',index=False)
@@ -151,11 +152,11 @@ cr_out.to_csv(OUT+'course_result.csv',index=False)
 # ---------- semester_result & student_cgpa (final attempts) ----------
 fin=cr_out[cr_out.is_final_attempt==1].copy(); fin['pts']=fin.credits*fin.grade_points
 sr=fin.groupby(['student_number','academic_year','semester']).agg(credits_registered=('credits','sum'),credits_earned=('credits_earned','sum'),pts=('pts','sum'),backlogs=('result_status',lambda s:(s=='Fail').sum())).reset_index()
-sr['sgpa']=((200*sr.pts+sr.credits_registered)//(2*sr.credits_registered))/100; sr['result_status']=np.where(sr.backlogs==0,'Pass','ATKT'); sr=sr.drop(columns='pts')
+sr['sgpa']=np.round(sr.pts/sr.credits_registered,2); sr['result_status']=np.where(sr.backlogs==0,'Pass','ATKT'); sr=sr.drop(columns='pts')
 sr.insert(0,'semester_result_id',np.arange(1,len(sr)+1)); sr=sr[['semester_result_id','student_number','academic_year','semester','credits_registered','credits_earned','sgpa','backlogs','result_status']]
 sr.to_csv(OUT+'semester_result.csv',index=False)
 cg=fin.groupby('student_number').agg(credits_attempted=('credits','sum'),credits_earned=('credits_earned','sum'),pts=('pts','sum'),backlog_count=('result_status',lambda s:(s=='Fail').sum()),semesters_completed=('semester','nunique')).reset_index()
-cg['cgpa']=((200*cg.pts+cg.credits_attempted)//(2*cg.credits_attempted))/100; cg=cg[['student_number','semesters_completed','credits_attempted','credits_earned','cgpa','backlog_count']]
+cg['cgpa']=np.round(cg.pts/cg.credits_attempted,2); cg=cg[['student_number','semesters_completed','credits_attempted','credits_earned','cgpa','backlog_count']]
 cg.to_csv(OUT+'student_cgpa.csv',index=False)
 
 # ---------- registration + hall tickets (2026-27 EndSem) ----------
