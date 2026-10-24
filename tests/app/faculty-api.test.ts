@@ -190,6 +190,7 @@ describe.skipIf(!hasAppEnv)('Faculty Dashboard API Endpoints', () => {
         attendanceStatus: i === 0 ? 'ABSENT' : 'PRESENT',
       })),
     });
+    if (postAttRes.status !== 200) console.error('Attendance submit error:', postAttRes.body);
     expect(postAttRes.status).toBe(200);
     expect(postAttRes.body.success).toBe(true);
     expect(postAttRes.body.attendanceSessionId).toBeDefined();

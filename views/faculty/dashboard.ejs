@@ -1,7 +1,7 @@
 <%- include('../partials/head') %>
 <link rel="stylesheet" href="/static/css/faculty-dashboard.css">
 <body>
-<div class="app">
+<div class="app" id="facultyApp" data-faculty-id="<%= profile.faculty_id %>">
 
 <!-- SIDEBAR -->
 <aside class="side" id="sidebar" aria-label="Main navigation">
@@ -61,11 +61,11 @@
     </div>
     <div class="dropdown-box" id="userMenuDropdown">
       <div style="padding:10px 16px 6px;font-weight:600;font-size:12px;color:#7A8497">ACCOUNT & SWITCH (TESTING)</div>
-      <div class="dropdown-item" onclick="switchFaculty(74)">Dr. Libni Ghosh (CSE · Demo)</div>
-      <div class="dropdown-item" onclick="switchFaculty(1)">Prof. Faculty 01 (AIDS)</div>
-      <div class="dropdown-item" onclick="switchFaculty(20)">Prof. Faculty 20 (IT)</div>
+      <div class="dropdown-item" data-switch-faculty="74" onclick="switchFaculty(74)">Dr. Libni Ghosh (CSE · Demo)</div>
+      <div class="dropdown-item" data-switch-faculty="1" onclick="switchFaculty(1)">Prof. Faculty 01 (AIDS)</div>
+      <div class="dropdown-item" data-switch-faculty="20" onclick="switchFaculty(20)">Prof. Faculty 20 (IT)</div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" onclick="navigateTo('profile')">View My Profile</div>
+      <div class="dropdown-item" data-target="profile" onclick="navigateTo('profile')">View My Profile</div>
       <a class="dropdown-item" href="/account/password">Change password</a>
       <form method="post" action="/logout" style="margin:0">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -170,7 +170,7 @@
             <h2>Today's teaching day</h2>
             <div class="note">Session status and quick attendance actions</div>
           </div>
-          <button class="action-link" onclick="navigateTo('timetable')">View timetable</button>
+          <button type="button" class="action-link" data-target="timetable" onclick="navigateTo('timetable')">View timetable</button>
         </div>
         <div class="timeline" id="todayTimeline">
           <!-- Populated from DB / Timetable -->
@@ -215,7 +215,7 @@
 
     <!-- COURSES TABLE -->
     <div class="card t">
-      <div class="hd"><h2>Courses taught · <%= currentSession ? currentSession.session_name : 'Current Term' %></h2><button class="action-link" onclick="navigateTo('courses')">View full course list</button></div>
+      <div class="hd"><h2>Courses taught · <%= currentSession ? currentSession.session_name : 'Current Term' %></h2><button type="button" class="action-link" data-target="courses" onclick="navigateTo('courses')">View full course list</button></div>
       <div class="sc">
       <table id="dashCoursesTable">
         <thead><tr><th>Code</th><th>Course</th><th>Section</th><th>Role</th><th>Students</th><th>Sessions</th><th>Avg attendance</th><th>Below 75%</th></tr></thead>
@@ -243,16 +243,16 @@
       <div class="card">
         <div class="hd"><h2>Needs attention</h2></div>
         <div id="dashNeedsAttention">
-          <div class="item"><span class="dot r"></span><div class="t"><div><%= stats.belowMin %> students below 75% attendance</div><a href="javascript:void(0)" onclick="navigateTo('low-attendance')">View list</a></div></div>
-          <div class="item"><span class="dot b"></span><div class="t"><div>1 leave request pending approval</div><a href="javascript:void(0)" onclick="navigateTo('my-requests')">Track request</a></div></div>
+          <div class="item"><span class="dot r"></span><div class="t"><div><%= stats.belowMin %> students below 75% attendance</div><a href="javascript:void(0)" data-target="low-attendance" onclick="navigateTo('low-attendance')">View list</a></div></div>
+          <div class="item"><span class="dot b"></span><div class="t"><div>1 leave request pending approval</div><a href="javascript:void(0)" data-target="my-requests" onclick="navigateTo('my-requests')">Track request</a></div></div>
         </div>
       </div>
       <div class="card">
-        <div class="hd"><h2>Upcoming sessions</h2><button class="action-link" onclick="navigateTo('timetable')">Timetable</button></div>
+        <div class="hd"><h2>Upcoming sessions</h2><button type="button" class="action-link" data-target="timetable" onclick="navigateTo('timetable')">Timetable</button></div>
         <div id="dashUpcomingSessions"></div>
       </div>
       <div class="card">
-        <div class="hd"><h2>Recent attendance corrections</h2><button class="action-link" onclick="navigateTo('correction-history')">View all</button></div>
+        <div class="hd"><h2>Recent attendance corrections</h2><button type="button" class="action-link" data-target="correction-history" onclick="navigateTo('correction-history')">View all</button></div>
         <div id="dashRecentCorrections"></div>
       </div>
     </div>
@@ -358,8 +358,8 @@
       <div class="hd">
         <h2>Student Register</h2>
         <div style="display:flex;gap:8px">
-          <button class="btn sm" onclick="markAllStatus('PRESENT')">Mark All Present</button>
-          <button class="btn sm" onclick="markAllStatus('ABSENT')">Mark All Absent</button>
+          <button type="button" class="btn sm" data-action="mark-all-present" onclick="markAllStatus('PRESENT')">Mark All Present</button>
+          <button type="button" class="btn sm" data-action="mark-all-absent" onclick="markAllStatus('ABSENT')">Mark All Absent</button>
         </div>
       </div>
       <div class="sc">
@@ -369,7 +369,7 @@
         </table>
       </div>
       <div style="padding:16px 20px;border-top:1px solid #EEF0F5;display:flex;justify-content:flex-end">
-        <button class="btn primary" onclick="submitAttendanceSession()">Save Attendance to Database</button>
+        <button type="button" class="btn primary" data-action="save-attendance" onclick="submitAttendanceSession()">Save Attendance to Database</button>
       </div>
     </div>
   </section>
@@ -404,7 +404,7 @@
         <h1>Low Attendance Report</h1>
         <p>Students falling below the mandatory 75% attendance threshold.</p>
       </div>
-      <button class="btn" onclick="exportLowAttendanceCSV()"><svg width="14" height="14" viewBox="0 0 24 24" stroke="#5B6578"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"/></svg> Export CSV</button>
+      <button type="button" class="btn" data-action="export-low-att" onclick="exportLowAttendanceCSV()"><svg width="14" height="14" viewBox="0 0 24 24" stroke="#5B6578"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"/></svg> Export CSV</button>
     </div>
     <div class="card t">
       <div class="sc">
@@ -441,10 +441,11 @@
         <h1>Apply for Leave</h1>
         <p>Submit a formal leave application subject to database balance validation and admin approval.</p>
       </div>
+      <button type="button" class="btn" data-target="my-requests" onclick="navigateTo('my-requests')">← Back to My Requests</button>
     </div>
     <div class="form-card">
       <div id="applyLeaveAlert"></div>
-      <form id="leaveApplyForm" onsubmit="submitLeaveApplication(event)">
+      <form id="leaveApplyForm" onsubmit="submitLeaveApplication(event); return false;">
         <div class="form-grid">
           <div class="form-group">
             <label>Leave Type</label>
@@ -472,8 +473,9 @@
             <textarea id="applyReason" placeholder="Specify reason for leave..." required></textarea>
           </div>
         </div>
-        <div style="margin-top:20px;display:flex;justify-content:flex-end">
-          <button type="submit" class="btn primary">Submit Leave Application</button>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:12px">
+          <button type="button" class="btn" data-target="my-requests" onclick="navigateTo('my-requests')">Cancel</button>
+          <button type="submit" id="leaveApplySubmitBtn" class="btn primary">Submit Leave Application</button>
         </div>
       </form>
     </div>
@@ -486,7 +488,7 @@
         <h1>My Leave Requests</h1>
         <p>Track statuses, decision remarks, and cancellations for your submitted leave requests.</p>
       </div>
-      <button class="btn primary" onclick="navigateTo('apply-leave')">+ Apply for Leave</button>
+      <button type="button" class="btn primary" id="btnGoToApplyLeave" data-target="apply-leave" onclick="navigateTo('apply-leave')">+ Apply for Leave</button>
     </div>
     <div class="card t">
       <div class="sc">
@@ -562,7 +564,7 @@
         <div class="form-group full"><label>Contact Mobile Number (Editable)</label><input type="text" id="profContact"></div>
       </div>
       <div style="margin-top:20px;display:flex;justify-content:flex-end">
-        <button class="btn primary" onclick="updateFacultyContact()">Update Contact Info</button>
+        <button type="button" class="btn primary" data-action="update-contact" onclick="updateFacultyContact()">Update Contact Info</button>
       </div>
     </div>
   </section>
@@ -574,11 +576,11 @@
         <h1>Faculty Grievances & Redressal</h1>
         <p>Submit and track academic, administrative, and payroll-related grievances.</p>
       </div>
-      <button class="btn primary" onclick="document.getElementById('grievanceFormCard').style.display='block'">+ Submit New Grievance</button>
+      <button type="button" class="btn primary" data-action="open-grievance-form" onclick="document.getElementById('grievanceFormCard').style.display='block'">+ Submit New Grievance</button>
     </div>
 
     <div class="card form-card" id="grievanceFormCard" style="display:none;margin-bottom:16px">
-      <div class="hd"><h2>New Grievance Submission</h2><button class="modal-close" onclick="document.getElementById('grievanceFormCard').style.display='none'">✕</button></div>
+      <div class="hd"><h2>New Grievance Submission</h2><button type="button" class="modal-close" data-action="close-grievance-form" onclick="document.getElementById('grievanceFormCard').style.display='none'">✕</button></div>
       <div id="grievanceAlert"></div>
       <div class="form-grid">
         <div class="form-group">
@@ -601,8 +603,8 @@
         </div>
       </div>
       <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
-        <button class="btn" onclick="document.getElementById('grievanceFormCard').style.display='none'">Cancel</button>
-        <button class="btn primary" onclick="submitGrievance()">Submit Grievance</button>
+        <button type="button" class="btn" data-action="close-grievance-form" onclick="document.getElementById('grievanceFormCard').style.display='none'">Cancel</button>
+        <button type="button" class="btn primary" data-action="submit-grievance" onclick="submitGrievance()">Submit Grievance</button>
       </div>
     </div>
 
@@ -626,12 +628,12 @@
   <div class="modal-content">
     <div class="modal-head">
       <h2 id="payslipModalTitle">Payslip Statement</h2>
-      <button class="modal-close" onclick="closePayslipModal()">✕</button>
+      <button type="button" class="modal-close" data-action="close-payslip-modal" onclick="closePayslipModal()">✕</button>
     </div>
     <div id="payslipModalBody"></div>
     <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
-      <button class="btn" onclick="window.print()">Print Payslip</button>
-      <button class="btn primary" onclick="closePayslipModal()">Close</button>
+      <button type="button" class="btn" data-action="print-payslip" onclick="window.print()">Print Payslip</button>
+      <button type="button" class="btn primary" data-action="close-payslip-modal" onclick="closePayslipModal()">Close</button>
     </div>
   </div>
 </div>
@@ -639,6 +641,6 @@
 <script>
   window.__FACULTY_ID__ = <%= profile.faculty_id %>;
 </script>
-<script src="/static/js/faculty-dashboard.js"></script>
+<script src="/static/js/faculty-dashboard.js?v=<%= Date.now() %>"></script>
 </body>
 </html>

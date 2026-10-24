@@ -1,5 +1,6 @@
 // Centralized API Configuration
-let currentFacultyId = window.__FACULTY_ID__ || 74;
+const appRootEl = document.getElementById('facultyApp') || document.querySelector('.app');
+let currentFacultyId = Number(appRootEl?.dataset?.facultyId || window.__FACULTY_ID__ || 74);
 const API_BASE = '/api';
 
 // Cached Data
@@ -196,7 +197,7 @@ async function loadDashboard() {
               <div class="status-text ${idx === 0 ? 'done' : 'pending'}">${idx === 0 ? 'Scheduled' : 'Upcoming'}</div>
             </div>
             <div class="session-actions">
-              <button class="action-link primary" onclick="navigateTo('mark-attendance')">Mark attendance</button>
+              <button class="action-link primary" data-target="mark-attendance" onclick="navigateTo('mark-attendance')">Mark attendance</button>
             </div>
           </div>
         `).join('');
@@ -209,8 +210,8 @@ async function loadDashboard() {
     const needsAtt = document.getElementById('dashNeedsAttention');
     if (needsAtt) {
       needsAtt.innerHTML = `
-        <div class="item"><span class="dot r"></span><div class="t"><div>${lowCount} students below 75% attendance</div><a href="javascript:void(0)" onclick="navigateTo('low-attendance')">View low attendance list</a></div></div>
-        <div class="item"><span class="dot b"></span><div class="t"><div>${data.pendingLeaveRequests} leave request pending approval</div><a href="javascript:void(0)" onclick="navigateTo('my-requests')">Track request</a></div></div>
+        <div class="item"><span class="dot r"></span><div class="t"><div>${lowCount} students below 75% attendance</div><a href="javascript:void(0)" data-target="low-attendance" onclick="navigateTo('low-attendance')">View low attendance list</a></div></div>
+        <div class="item"><span class="dot b"></span><div class="t"><div>${data.pendingLeaveRequests} leave request pending approval</div><a href="javascript:void(0)" data-target="my-requests" onclick="navigateTo('my-requests')">Track request</a></div></div>
       `;
     }
 
@@ -268,7 +269,7 @@ async function loadCourses() {
         <td>${c.enrolledStudents}</td>
         <td>${c.totalSessions}</td>
         <td><div class="pc">${c.avgAttendancePct != null ? c.avgAttendancePct + '%' : '–'}<div class="bar"><i style="width:${c.avgAttendancePct || 0}%"></i></div></div></td>
-        <td><button class="btn sm" onclick="viewOfferingStudents(${c.courseOfferingId})">Roster</button></td>
+        <td><button type="button" class="btn sm" data-action="view-offering-students" data-id="${c.courseOfferingId}" onclick="viewOfferingStudents(${c.courseOfferingId})">Roster</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -505,7 +506,7 @@ async function loadSessionRecords() {
         <td><span class="pill r">${s.absentCount}</span></td>
         <td><span class="pill n">${s.excusedCount}</span></td>
         <td><strong>${s.attendancePct != null ? s.attendancePct + '%' : '–'}</strong></td>
-        <td><button class="btn sm" onclick="viewSessionRegister(${s.attendanceSessionId})">View Register</button></td>
+        <td><button type="button" class="btn sm" data-action="view-session-register" data-id="${s.attendanceSessionId}" onclick="viewSessionRegister(${s.attendanceSessionId})">View Register</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -618,34 +619,81 @@ async function loadCorrectionHistory() {
 function initApplyLeave() {
   const fromInput = document.getElementById('applyFromDate');
   const toInput = document.getElementById('applyToDate');
-  const today = new Date().toISOString().split('T')[0];
-  if (fromInput) fromInput.value = today;
-  if (toInput) toInput.value = today;
+  const alertEl = document.getElementById('applyLeaveAlert');
+  if (alertEl) alertEl.innerHTML = '';
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const today = `${year}-${month}-${day}`;
+  if (fromInput && !fromInput.value) fromInput.value = today;
+  if (toInput && !toInput.value) toInput.value = today;
   calculateLeaveDays();
 }
 
 function calculateLeaveDays() {
-  const f = new Date(document.getElementById('applyFromDate')?.value);
-  const t = new Date(document.getElementById('applyToDate')?.value);
-  if (!isNaN(f) && !isNaN(t) && t >= f) {
-    const days = Math.round((t - f) / (1000 * 60 * 60 * 24)) + 1;
-    const daysInput = document.getElementById('applyDaysRequested');
-    if (daysInput) daysInput.value = days;
+  const fromVal = document.getElementById('applyFromDate')?.value;
+  const toVal = document.getElementById('applyToDate')?.value;
+  if (!fromVal || !toVal) return;
+  const f = new Date(fromVal + 'T00:00:00');
+  const t = new Date(toVal + 'T00:00:00');
+  const daysInput = document.getElementById('applyDaysRequested');
+  if (!isNaN(f.getTime()) && !isNaN(t.getTime())) {
+    if (t >= f) {
+      const days = Math.round((t - f) / (1000 * 60 * 60 * 24)) + 1;
+      if (daysInput) {
+        daysInput.value = days;
+        daysInput.max = days;
+      }
+    } else {
+      const toInput = document.getElementById('applyToDate');
+      if (toInput) toInput.value = fromVal;
+      if (daysInput) {
+        daysInput.value = 1;
+        daysInput.max = 1;
+      }
+    }
   }
 }
 
 async function submitLeaveApplication(e) {
-  if (e) e.preventDefault();
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
   const alertEl = document.getElementById('applyLeaveAlert');
   if (alertEl) alertEl.innerHTML = '';
 
-  const body = {
-    leaveTypeId: Number(document.getElementById('applyLeaveType')?.value || 1),
-    fromDate: document.getElementById('applyFromDate')?.value,
-    toDate: document.getElementById('applyToDate')?.value,
-    daysRequested: Number(document.getElementById('applyDaysRequested')?.value || 1),
-    reason: document.getElementById('applyReason')?.value || ''
-  };
+  const submitBtn = document.getElementById('leaveApplySubmitBtn') || document.querySelector('#leaveApplyForm button[type="submit"]');
+  const originalText = submitBtn ? submitBtn.textContent : 'Submit Leave Application';
+
+  const leaveTypeEl = document.getElementById('applyLeaveType');
+  const fromDateEl = document.getElementById('applyFromDate');
+  const toDateEl = document.getElementById('applyToDate');
+  const daysReqEl = document.getElementById('applyDaysRequested');
+  const reasonEl = document.getElementById('applyReason');
+
+  const leaveTypeId = Number(leaveTypeEl?.value || 1);
+  const fromDate = fromDateEl?.value;
+  const toDate = toDateEl?.value;
+  const daysRequested = Number(daysReqEl?.value || 1);
+  const reason = reasonEl?.value?.trim() || '';
+
+  if (!fromDate || !toDate) {
+    if (alertEl) alertEl.innerHTML = `<div class="alert error">Please select both From Date and To Date.</div>`;
+    return false;
+  }
+  if (!reason) {
+    if (alertEl) alertEl.innerHTML = `<div class="alert error">Please specify a reason for the leave application.</div>`;
+    return false;
+  }
+
+  const body = { leaveTypeId, fromDate, toDate, daysRequested, reason };
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+  }
 
   try {
     const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/apply`, {
@@ -654,30 +702,55 @@ async function submitLeaveApplication(e) {
       body: JSON.stringify(body)
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Failed to submit leave');
-    if (alertEl) alertEl.innerHTML = `<div class="alert success">Leave request #${result.leaveRequestId} submitted successfully. Waiting for admin approval.</div>`;
+    if (!res.ok) throw new Error(result.error || 'Failed to submit leave application');
+    if (alertEl) {
+      alertEl.innerHTML = `<div class="alert success" style="padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;background:#E3F4EC;color:#1D6B4A;border:1px solid #B8E4D0">
+        <strong>Application Submitted!</strong> Leave request #${result.leaveRequestId} submitted successfully. Waiting for admin approval.
+      </div>`;
+    }
     document.getElementById('leaveApplyForm')?.reset();
-    setTimeout(() => navigateTo('my-requests'), 1500);
-  } catch(err) {
-    if (alertEl) alertEl.innerHTML = `<div class="alert error">${err.message}</div>`;
+    await loadLeaveRequests();
+    await loadLeaveBalance();
+    setTimeout(() => {
+      navigateTo('my-requests');
+    }, 1000);
+  } catch (err) {
+    if (alertEl) {
+      alertEl.innerHTML = `<div class="alert error" style="padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;background:#FBE7E5;color:#8E1B14;border:1px solid #F3C3BF">
+        <strong>Submission Failed:</strong> ${err.message}
+      </div>`;
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
   }
+  return false;
 }
 
 // 10. LEAVE REQUESTS
 async function loadLeaveRequests() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests`);
+    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests?t=${Date.now()}`);
     const reqs = await res.json();
     const tb = document.querySelector('#leaveRequestsTable tbody');
     if (!tb) return;
-    if (reqs.length === 0) {
+    if (!Array.isArray(reqs) || reqs.length === 0) {
       tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#7A8497">No leave requests recorded</td></tr>';
       return;
     }
+
+    const pendingCount = reqs.filter(r => r.status === 'PENDING').length;
+    const badgeLeave = document.getElementById('badgeLeavePending');
+    if (badgeLeave) badgeLeave.textContent = pendingCount;
+    const heroPending = document.getElementById('heroFactPending');
+    if (heroPending) heroPending.textContent = pendingCount;
+
     tb.innerHTML = reqs.map(r => `
       <tr>
         <td><strong>#${r.leaveRequestId}</strong></td>
-        <td>${r.leaveName}</td>
+        <td>${r.leaveName || r.leaveTypeName || 'Leave'}</td>
         <td>${formatDate(r.fromDate)} – ${formatDate(r.toDate)}</td>
         <td><strong>${r.daysRequested}</strong></td>
         <td>${r.reason || '—'}</td>
@@ -685,7 +758,7 @@ async function loadLeaveRequests() {
         <td>${r.approvedBy || '—'}</td>
         <td>${r.decisionRemarks || '—'}</td>
         <td>
-          ${(r.status === 'PENDING' || r.status === 'APPROVED') ? `<button class="btn sm danger" onclick="cancelLeaveRequest(${r.leaveRequestId})">Cancel</button>` : '—'}
+          ${(r.status === 'PENDING' || r.status === 'APPROVED') ? `<button type="button" class="btn sm danger" data-cancel-leave="${r.leaveRequestId}" onclick="cancelLeaveRequest(${r.leaveRequestId})">Cancel</button>` : '—'}
         </td>
       </tr>
     `).join('');
@@ -754,7 +827,7 @@ async function loadPayslips() {
         <td><strong style="color:#1D6B4A">${formatCurrency(p.netSalary)}</strong></td>
         <td><span class="pill ${p.status === 'PAID' ? 'g' : (p.status === 'APPROVED' ? 'o' : 'n')}">${p.status}</span></td>
         <td>${formatDate(p.paidAt)}</td>
-        <td><button class="btn sm" onclick="viewPayslipDetail(${p.payrollId})">View Payslip</button></td>
+        <td><button type="button" class="btn sm" data-view-payslip="${p.payrollId}" onclick="viewPayslipDetail(${p.payrollId})">View Payslip</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -955,8 +1028,50 @@ document.getElementById('globalSearchInput')?.addEventListener('input', (e) => {
   else if (q.includes('attendance') || q.includes('mark')) navigateTo('mark-attendance');
 });
 
-// Dropdowns and UI Setup
-document.addEventListener('DOMContentLoaded', () => {
+// Explicit window bindings so inline onclicks always succeed regardless of execution environment
+window.navigateTo = navigateTo;
+window.switchFaculty = switchFaculty;
+window.loadDashboard = loadDashboard;
+window.loadCourses = loadCourses;
+window.loadTimetable = loadTimetable;
+window.loadStudentList = loadStudentList;
+window.initMarkAttendance = initMarkAttendance;
+window.loadSessionRecords = loadSessionRecords;
+window.loadLowAttendance = loadLowAttendance;
+window.loadCorrectionHistory = loadCorrectionHistory;
+window.initApplyLeave = initApplyLeave;
+window.calculateLeaveDays = calculateLeaveDays;
+window.loadLeaveRequests = loadLeaveRequests;
+window.loadLeaveBalance = loadLeaveBalance;
+window.loadPayslips = loadPayslips;
+window.loadSalaryStructure = loadSalaryStructure;
+window.loadProfile = loadProfile;
+window.loadGrievances = loadGrievances;
+window.submitLeaveApplication = submitLeaveApplication;
+window.cancelLeaveRequest = cancelLeaveRequest;
+window.viewPayslipDetail = viewPayslipDetail;
+window.closePayslipModal = closePayslipModal;
+window.viewOfferingStudents = viewOfferingStudents;
+window.viewSessionRegister = viewSessionRegister;
+window.markAllStatus = markAllStatus;
+window.setStudentStatus = setStudentStatus;
+window.submitAttendanceSession = submitAttendanceSession;
+window.exportLowAttendanceCSV = exportLowAttendanceCSV;
+window.submitGrievance = submitGrievance;
+window.updateFacultyContact = updateFacultyContact;
+
+// Dashboard Application Initializer
+function initDashboardApp() {
+  const root = document.getElementById('facultyApp') || document.querySelector('.app');
+  if (root && root.dataset.facultyId) {
+    currentFacultyId = Number(root.dataset.facultyId);
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const pageParam = urlParams.get('page') || (window.location.hash ? window.location.hash.substring(1) : null);
+  const facultyParam = urlParams.get('facultyId');
+  if (facultyParam && Number(facultyParam) > 0) currentFacultyId = Number(facultyParam);
+
   const btnBell = document.getElementById('btnBell');
   const bellDropdown = document.getElementById('bellDropdown');
   btnBell?.addEventListener('click', (e) => {
@@ -978,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
     userMenuDropdown?.classList.remove('open');
   });
 
-  // Attach nav listeners
+  // Attach nav listeners (for direct clicks)
   document.querySelectorAll('.side .nav, .side .nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
       const target = link.dataset.target;
@@ -989,14 +1104,112 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const pageParam = urlParams.get('page') || (window.location.hash ? window.location.hash.substring(1) : null);
-  const facultyParam = urlParams.get('facultyId');
-  if (facultyParam && Number(facultyParam) > 0) currentFacultyId = Number(facultyParam);
-  
+  // Attach quick-action buttons
+  document.getElementById('btnGoToApplyLeave')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('apply-leave');
+  });
+
+  // Attach explicit submit listener on leave application form
+  document.getElementById('leaveApplyForm')?.addEventListener('submit', submitLeaveApplication);
+
   if (pageParam && pageParam !== 'dashboard') {
     navigateTo(pageParam);
   } else {
     loadDashboard();
   }
+}
+
+// Global click event delegation for robust handling even if inline onclick is blocked by CSP
+document.addEventListener('click', (e) => {
+  // Navigation targets
+  const navEl = e.target.closest('[data-target]');
+  if (navEl) {
+    const target = navEl.dataset.target;
+    if (target) {
+      e.preventDefault();
+      navigateTo(target);
+      return;
+    }
+  }
+
+  // Switch faculty testing
+  const switchEl = e.target.closest('[data-switch-faculty]');
+  if (switchEl) {
+    e.preventDefault();
+    const id = Number(switchEl.dataset.switchFaculty);
+    if (id) switchFaculty(id);
+    return;
+  }
+
+  // Cancel leave request
+  const cancelEl = e.target.closest('[data-cancel-leave]');
+  if (cancelEl) {
+    e.preventDefault();
+    const reqId = Number(cancelEl.dataset.cancelLeave);
+    if (reqId) cancelLeaveRequest(reqId);
+    return;
+  }
+
+  // View payslip
+  const payslipEl = e.target.closest('[data-view-payslip]');
+  if (payslipEl) {
+    e.preventDefault();
+    const pId = Number(payslipEl.dataset.viewPayslip);
+    if (pId) viewPayslipDetail(pId);
+    return;
+  }
+
+  // Other UI action buttons
+  const actionEl = e.target.closest('[data-action]');
+  if (actionEl) {
+    const act = actionEl.dataset.action;
+    const id = Number(actionEl.dataset.id);
+    if (act === 'view-offering-students' && id) {
+      e.preventDefault();
+      viewOfferingStudents(id);
+    } else if (act === 'view-session-register' && id) {
+      e.preventDefault();
+      viewSessionRegister(id);
+    } else if (act === 'export-low-att') {
+      e.preventDefault();
+      exportLowAttendanceCSV();
+    } else if (act === 'mark-all-present') {
+      e.preventDefault();
+      markAllStatus('PRESENT');
+    } else if (act === 'mark-all-absent') {
+      e.preventDefault();
+      markAllStatus('ABSENT');
+    } else if (act === 'save-attendance') {
+      e.preventDefault();
+      submitAttendanceSession();
+    } else if (act === 'open-grievance-form') {
+      e.preventDefault();
+      const g = document.getElementById('grievanceFormCard');
+      if (g) g.style.display = 'block';
+    } else if (act === 'close-grievance-form') {
+      e.preventDefault();
+      const g = document.getElementById('grievanceFormCard');
+      if (g) g.style.display = 'none';
+    } else if (act === 'submit-grievance') {
+      e.preventDefault();
+      submitGrievance();
+    } else if (act === 'update-contact') {
+      e.preventDefault();
+      updateFacultyContact();
+    } else if (act === 'close-payslip-modal') {
+      e.preventDefault();
+      closePayslipModal();
+    } else if (act === 'print-payslip') {
+      e.preventDefault();
+      window.print();
+    }
+  }
 });
+
+// Run immediately if DOM already parsed, or wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDashboardApp);
+} else {
+  initDashboardApp();
+}
