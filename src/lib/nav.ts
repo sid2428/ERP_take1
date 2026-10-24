@@ -48,6 +48,8 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
       ],
     },
+    { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
+    { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase' }] },
     {
       label: 'RECORDS', items: [
