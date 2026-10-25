@@ -1,0 +1,96 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <div>
+    <h1>Salary Statement</h1>
+    <span class="sub"><%= payslip.period_text %> · <%= payslip.faculty_name %> (<%= payslip.faculty_code %>)</span>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn" onclick="window.print()">Print statement</button>
+    <a class="btn" href="/faculty/payroll">← Back to Payroll</a>
+  </div>
+</div>
+
+<section class="card" style="max-width:840px;margin:0 auto">
+  <div style="border-bottom:2px solid var(--line);padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <h2 style="font-size:18px;margin:0 0 4px">Pune Institute of Computer Technology</h2>
+      <div class="sub">Faculty Compensation &amp; Payroll Statement</div>
+    </div>
+    <div style="text-align:right">
+      <span class="pill <%= payslip.status === 'PAID' ? 'g' : (payslip.status === 'APPROVED' ? 'o' : 'n') %>" style="font-size:13px;padding:4px 10px">
+        <%= payslip.status %>
+      </span>
+      <div class="sub" style="margin-top:4px"><%= payslip.period_text %></div>
+    </div>
+  </div>
+
+  <div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;background:var(--surface-2);padding:14px;border-radius:var(--radius)">
+    <div><small class="muted" style="display:block;font-size:11px;text-transform:uppercase">Faculty Name</small><strong><%= payslip.faculty_name %></strong></div>
+    <div><small class="muted" style="display:block;font-size:11px;text-transform:uppercase">Faculty Code</small><strong><%= payslip.faculty_code %></strong></div>
+    <div><small class="muted" style="display:block;font-size:11px;text-transform:uppercase">Disbursement Date</small><strong><%= payslip.paid_at ? fmt.date(payslip.paid_at) : 'Pending disbursement' %></strong></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+    <div>
+      <h3 style="font-size:14px;margin:0 0 10px;color:var(--text);border-bottom:1px solid var(--line-2);padding-bottom:6px">Earnings</h3>
+      <table style="width:100%;font-size:13px">
+        <tbody>
+          <tr>
+            <td style="padding:6px 0">Basic Pay</td>
+            <td style="text-align:right;font-weight:600">₹<%= Number(payslip.basic_salary).toLocaleString('en-IN') %></td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0">Allowances (HRA, DA, Special)</td>
+            <td style="text-align:right;font-weight:600">₹<%= Number(payslip.allowances).toLocaleString('en-IN') %></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="border-top:1px solid var(--line);font-weight:700">
+            <td style="padding:8px 0">Gross Earnings</td>
+            <td style="text-align:right">₹<%= (Number(payslip.basic_salary) + Number(payslip.allowances)).toLocaleString('en-IN') %></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="font-size:14px;margin:0 0 10px;color:var(--text);border-bottom:1px solid var(--line-2);padding-bottom:6px">Deductions</h3>
+      <table style="width:100%;font-size:13px">
+        <tbody>
+          <tr>
+            <td style="padding:6px 0">Standard Deductions (PF, PT)</td>
+            <td style="text-align:right;font-weight:600">₹<%= Number(payslip.deductions).toLocaleString('en-IN') %></td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0">Loss of Pay (Unpaid Leave)</td>
+            <td style="text-align:right;font-weight:600;color:var(--red)">₹<%= Number(payslip.leave_deductions).toLocaleString('en-IN') %></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style="border-top:1px solid var(--line);font-weight:700">
+            <td style="padding:8px 0">Total Deductions</td>
+            <td style="text-align:right;color:var(--red)">₹<%= (Number(payslip.deductions) + Number(payslip.leave_deductions)).toLocaleString('en-IN') %></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div style="background:var(--surface-2);border:1px solid var(--line);padding:16px 20px;border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--muted)">Net Take-Home Pay</div>
+      <small class="muted">Amount disbursed to linked salary account</small>
+    </div>
+    <div style="font-size:28px;font-weight:700;color:var(--green)">
+      ₹<%= Number(payslip.net_salary).toLocaleString('en-IN') %>
+    </div>
+  </div>
+
+  <div style="margin-top:24px;border-top:1px dashed var(--line);padding-top:14px;display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+    <div>This is an electronically generated statement and does not require a physical signature.</div>
+    <div>PICT ERP · Faculty Module</div>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>
