@@ -21,11 +21,13 @@ function loadEnv(): void {
   const file = path.join(process.cwd(), '.env');
   if (!fs.existsSync(file)) return;
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-    if (!m || line.trim().startsWith('#')) continue;
-    const value = m[2].replace(/^(['"])(.*)\1$/, '$2');
-    if (process.env[m[1]] === undefined) process.env[m[1]] = value;
-  }
+  const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+  if (!m || line.trim().startsWith('#')) continue;
+  const [, key, raw] = m;
+  if (key === undefined || raw === undefined) continue;
+  const value = raw.replace(/^(['"])(.*)\1$/, '$2');
+  if (process.env[key] === undefined) process.env[key] = value;
+}
 }
 
 function findCsv(): string {
@@ -72,9 +74,10 @@ async function main(): Promise<void> {
   }
   const csvPath = findCsv();
   console.log('Reading', csvPath);
-  const [header, ...data] = parseCsv(fs.readFileSync(csvPath, 'utf8'));
-  const col = (name: string): number => {
-    const i = header.indexOf(name);
+const [header, ...data] = parseCsv(fs.readFileSync(csvPath, 'utf8'));
+if (!header) throw new Error(`${csvPath} is empty: no header row found.`);
+const col = (name: string): number => {
+  const i = header.indexOf(name);
     if (i < 0) throw new Error(`The CSV has no "${name}" column. Use the _v2 file.`);
     return i;
   };
