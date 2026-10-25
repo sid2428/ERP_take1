@@ -20,6 +20,7 @@ import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
 import { apiRouter } from './routes/api-routes.js';
 import { placementFacultyRouter } from './routes/placement-routes.js';
+import { razorpayWebhookRouter } from './routes/finance-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
@@ -43,21 +44,28 @@ export function createApp(): express.Express {
   app.locals.NAV = NAV;
   app.locals.appName = 'PICT ERP';
 
-  app.use(helmet({
+    app.use(helmet({
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },   // lets the payment window open
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
-        styleSrcAttr: ["'unsafe-inline'"],         // bar widths; no inline <style> blocks or scripts allowed
+        styleSrcAttr: ["'unsafe-inline'"],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:'],
-        formAction: ["'self'"],
+        scriptSrc: ["'self'", 'https://*.razorpay.com'],
+        frameSrc: ["'self'", 'https://*.razorpay.com'],
+        connectSrc: ["'self'", 'https://*.razorpay.com'],
+        imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
+        formAction: ["'self'", 'https://*.razorpay.com'],
       },
     },
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '7d' }));
   app.get('/healthz', (_req, res) => { res.json({ ok: true }); });
+
+  // This route needs the raw body to verify Razorpay's webhook signature.
+  // Mount it before body parsers, sessions, and CSRF middleware.
+  app.use(razorpayWebhookRouter);
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));

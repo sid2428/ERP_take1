@@ -9,9 +9,10 @@ import PaymentSuccess from '../components/fees/PaymentSuccess';
 import { Button, Card, Notice, type Tone } from '../components/ui';
 import { createFeeOrder, createTopupOrder } from '../lib/api';
 import { totals } from '../lib/format';
-import { runCheckout, type CheckoutOutcome } from '../lib/razorpay';
+import { CheckoutOutcome } from '../lib/razorpay';
 import { useStudent } from '../lib/student';
 import { useFinance } from '../lib/useFinance';
+import SimulatedCheckoutHost, { runCheckoutAuto } from '../components/fees/SimulatedCheckout';
 import type { VerifyResult } from '../types';
 
 type Tab = 'statement' | 'history';
@@ -56,7 +57,7 @@ export default function FeesPage() {
   async function pay(kind: 'fee' | 'topup', createOrder: () => ReturnType<typeof createFeeOrder>, description: string) {
     setBusy(kind); setNotice(null); setTopupError(null);
     try {
-      await handleOutcome(await runCheckout({ createOrder, description, prefill }), kind);
+      await handleOutcome(await runCheckoutAuto({ createOrder, description, prefill }), kind);
     } catch (e) {
       if (kind === 'topup') setTopupError(errText(e)); else setNotice({ tone: 'err', text: errText(e) });
     } finally { setBusy(null); }
@@ -100,6 +101,7 @@ export default function FeesPage() {
           onReceipt={() => { setReceiptId(success.paymentId); setSuccess(null); }} onClose={() => setSuccess(null)} />
       )}
       {receiptPayment && <FeeReceipt student={student} statement={statement} payment={receiptPayment} onClose={() => setReceiptId(null)} />}
+              <SimulatedCheckoutHost />
     </>
   );
 }
