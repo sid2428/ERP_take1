@@ -106,7 +106,7 @@ financeApiRouter.get('/student/me', route(async (_req, res, studentId) => {
   if (!s) throw new ApiFail(404, 'Student record not found.');
   res.json({
     name: `${s.first_name} ${s.last_name}`,
-    initials: (s.first_name[0] + s.last_name[0]).toUpperCase(),
+    initials: (s.first_name.charAt(0) + s.last_name.charAt(0)).toUpperCase(),
     studentNo: s.student_number,
     admissionNo: s.admission_number,
     department: s.dept_name,
