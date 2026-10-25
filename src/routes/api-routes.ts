@@ -1,5 +1,21 @@
 import { Router } from 'express';
 import { query, queryOne } from '../db.js';
+import { requireLogin, requireRole } from '../middleware/auth.js';
+import {
+  getFacultyLeaveBalances,
+  getFacultyLeaveRequests,
+  getFacultyLeaveTypes,
+  submitLeaveRequest,
+  cancelLeaveRequest,
+  getFacultySalaryStructure,
+  getFacultyPayslips,
+  getPayslipDetail,
+  getAllLeaveRequests,
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  generateMonthlyPayroll,
+  updatePayrollStatus,
+} from '../queries/faculty-queries.js';
 
 export const apiRouter = Router();
 
@@ -28,71 +44,12 @@ apiRouter.use('/faculty/:id', (req, res, next) => {
   }
   next();
 });
-
-// In-memory persistent stores for Leave Requests and demo Payroll items
-interface LeaveRequestRecord {
-  leaveRequestId: number;
-  facultyId: number;
-  leaveTypeId: number;
-  leaveName: string;
-  fromDate: string;
-  toDate: string;
-  daysRequested: number;
-  reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-  approvedBy?: string;
-  decisionRemarks?: string;
-  createdAt: string;
-}
-
-const leaveRequestsStore: LeaveRequestRecord[] = [
-  {
-    leaveRequestId: 101,
-    facultyId: 74,
-    leaveTypeId: 1,
-    leaveName: 'Casual Leave',
-    fromDate: '2026-09-12',
-    toDate: '2026-09-12',
-    daysRequested: 1,
-    reason: 'Family function at hometown',
-    status: 'APPROVED',
-    approvedBy: 'Admin / HOD',
-    decisionRemarks: 'Approved as per casual leave quota',
-    createdAt: '2026-09-10T10:00:00Z',
-  },
-  {
-    leaveRequestId: 102,
-    facultyId: 74,
-    leaveTypeId: 3,
-    leaveName: 'Medical Leave',
-    fromDate: '2026-10-28',
-    toDate: '2026-10-29',
-    daysRequested: 2,
-    reason: 'Dental surgery and recovery',
-    status: 'PENDING',
-    approvedBy: '',
-    decisionRemarks: '',
-    createdAt: '2026-10-20T14:30:00Z',
-  },
-];
-
-let nextLeaveId = 103;
-
-function getLeaveTypeName(id: number): string {
-  switch (id) {
-    case 1: return 'Casual Leave';
-    case 2: return 'Earned Leave';
-    case 3: return 'Medical Leave';
-    default: return 'Loss of Pay';
-  }
-}
-
 // 1. DASHBOARD OVERVIEW
 apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
   try {
     const facultyId = Number(req.params.id);
 
-    const [faculty, dept, classesRes, timetableRes, lowAttRes] = await Promise.all([
+    const [faculty, dept, classesRes, timetableRes, lowAttRes, leaveBalances, leaveRequests, payslips] = await Promise.all([
       queryOne<{
         faculty_id: number;
         faculty_code: string;
@@ -152,6 +109,9 @@ apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
         FROM attendance_summary a
         JOIN teaching_assignment ta USING (assignment_id)
         WHERE ta.faculty_id = $1 AND a.attendance_pct < 75`, [facultyId]),
+      getFacultyLeaveBalances(facultyId),
+      getFacultyLeaveRequests(facultyId),
+      getFacultyPayslips(facultyId),
     ]);
 
     if (!faculty) {
@@ -181,9 +141,14 @@ apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
       ? Number((validClasses.reduce((s, c) => s + (c.avg_pct ?? 0), 0) / validClasses.length).toFixed(1))
       : 84.0;
 
-    const facLeave = leaveRequestsStore.filter((l) => l.facultyId === facultyId);
-    const pendingLeaveCount = facLeave.filter((l) => l.status === 'PENDING').length;
-    const usedCasual = facLeave.filter((l) => l.status === 'APPROVED' && l.leaveTypeId === 1).reduce((s, l) => s + l.daysRequested, 0);
+    const clBal = leaveBalances.find((b) => b.leave_type_id === 1 || b.leave_name.toLowerCase().includes('casual'));
+    const casualLeaveLeft = clBal ? Number(clBal.balance_days) : 12;
+    const casualLeaveTotal = clBal ? Number(clBal.annual_quota) : 12;
+    const pendingLeaveCount = leaveRequests.filter((l) => l.status === 'PENDING').length;
+    const latestSlip = payslips[0];
+    const latestPayslipPeriod = latestSlip ? latestSlip.period_text : 'N/A';
+    const latestPayslipStatus = latestSlip ? latestSlip.status : 'N/A';
+    const latestNetSalary = latestSlip ? Number(latestSlip.net_salary) : 0;
 
     const data = {
       profile: {
@@ -199,12 +164,12 @@ apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
       },
       isHod: dept?.hod_faculty_id === faculty.faculty_id,
       totalAssignedCourses: classesRes.length,
-      casualLeaveLeft: Math.max(0, 12 - usedCasual),
-      casualLeaveTotal: 12,
-      pendingLeaveRequests: pendingLeaveCount || 1,
-      latestPayslipPeriod: 'Aug 2026',
-      latestPayslipStatus: 'Paid',
-      latestNetSalary: 210000,
+      casualLeaveLeft,
+      casualLeaveTotal,
+      pendingLeaveRequests: pendingLeaveCount,
+      latestPayslipPeriod,
+      latestPayslipStatus,
+      latestNetSalary,
       overallAvgAttendance: avgAttendance,
       totalEnrolledStudents: totalStudents,
       totalSessionsMarked: totalSessions,
@@ -219,11 +184,14 @@ apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
         avgAttendancePct: c.avg_pct,
         studentsBelow75: c.below_min,
       })),
-      leaveBalances: [
-        { leaveName: 'Casual', annualQuota: 12, balanceDays: Math.max(0, 12 - usedCasual), paid: true },
-        { leaveName: 'Earned', annualQuota: 15, balanceDays: 15, paid: true },
-        { leaveName: 'Medical', annualQuota: 10, balanceDays: 8, paid: true },
-      ],
+      leaveBalances: leaveBalances.map((b) => ({
+        leaveTypeId: b.leave_type_id,
+        leaveName: b.leave_name,
+        annualQuota: Number(b.annual_quota),
+        balanceDays: Number(b.balance_days),
+        usedDays: Math.max(0, Number(b.annual_quota) - Number(b.balance_days)),
+        paid: b.is_paid,
+      })),
       todaySessions: todaySessions.length > 0 ? todaySessions : [
         {
           timeDisplay: '09:00–10:00',
@@ -443,7 +411,9 @@ apiRouter.post('/faculty/:id/attendance/sessions', async (req, res) => {
              marked_at = now()
       RETURNING session_id`, [courseOfferingId, sessionDate, sessionNumber, absentStudentIds, facultyId]);
 
-    res.json({ success: true, attendanceSessionId: inserted?.session_id });
+    const sessionId = inserted ? inserted.session_id : 0;
+
+    res.json({ success: true, attendanceSessionId: sessionId });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -629,137 +599,265 @@ apiRouter.get('/faculty/:id/attendance/audit', async (req, res) => {
 });
 
 // 11. LEAVE APPLICATION & REQUESTS
-apiRouter.post('/faculty/:id/leave/apply', (req, res) => {
-  const facultyId = Number(req.params.id);
-  const { leaveTypeId, fromDate, toDate, reason } = req.body;
-
-  if (!leaveTypeId || !fromDate || !toDate || !reason) {
-    return res.status(400).json({ error: 'Please provide all required fields.' });
+apiRouter.get('/leave/types', requireLogin, requireRole('faculty'), async (_req, res) => {
+  try {
+    const types = await getFacultyLeaveTypes();
+    res.json(types);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  const daysRequested = Number(req.body.daysRequested) || Math.max(1, Math.round((new Date(toDate).getTime() - new Date(fromDate).getTime()) / (1000 * 60 * 60 * 24)) + 1);
-
-  const reqRecord: LeaveRequestRecord = {
-    leaveRequestId: nextLeaveId++,
-    facultyId,
-    leaveTypeId: Number(leaveTypeId),
-    leaveName: getLeaveTypeName(Number(leaveTypeId)),
-    fromDate,
-    toDate,
-    daysRequested,
-    reason,
-    status: 'PENDING',
-    approvedBy: '',
-    decisionRemarks: '',
-    createdAt: new Date().toISOString(),
-  };
-
-  leaveRequestsStore.unshift(reqRecord);
-  res.status(200).json({ success: true, leaveRequestId: reqRecord.leaveRequestId, leaveRequest: reqRecord });
 });
 
-apiRouter.get('/faculty/:id/leave/requests', (req, res) => {
-  const facultyId = Number(req.params.id);
-  const requests = leaveRequestsStore.filter((r) => r.facultyId === facultyId);
-  res.json(requests);
-});
+apiRouter.post('/faculty/:id/leave/apply', async (req, res) => {
+  try {
+    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const leaveTypeId = Number(req.body.leaveTypeId);
+    const startDate = (req.body.startDate || req.body.fromDate || '').toString();
+    const endDate = (req.body.endDate || req.body.toDate || '').toString();
+    const reason = (req.body.reason || '').toString().trim();
 
-apiRouter.post('/faculty/:id/leave/requests/:reqId/cancel', (req, res) => {
-  const reqId = Number(req.params.reqId);
-  const found = leaveRequestsStore.find((r) => r.leaveRequestId === reqId);
-  if (!found || found.facultyId !== Number(req.params.id)) {
-    return res.status(404).json({ error: 'Leave request not found' });
+    if (!leaveTypeId || !startDate || !endDate || !reason) {
+      return res.status(400).json({ error: 'Please provide leaveTypeId, dates, and reason.' });
+    }
+
+    const startObj = new Date(startDate + 'T00:00:00');
+    const endObj = new Date(endDate + 'T00:00:00');
+    if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
+      return res.status(400).json({ error: 'Invalid start date or end date format.' });
+    }
+    if (endObj < startObj) {
+      return res.status(400).json({ error: 'The "To Date" must be on or after the "From Date".' });
+    }
+
+    const maxDays = Math.round((endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const requested = Number(req.body.daysRequested);
+    const daysRequested = (requested > 0 && requested <= maxDays) ? requested : maxDays;
+
+    const leaveRequestId = await submitLeaveRequest(facultyId, leaveTypeId, startDate, endDate, daysRequested, reason);
+
+    res.status(200).json({
+      success: true,
+      leaveRequestId,
+      leaveRequest: {
+        leaveRequestId,
+        facultyId,
+        leaveTypeId,
+        leaveName: '',
+        fromDate: startDate,
+        toDate: endDate,
+        daysRequested,
+        reason,
+        status: 'PENDING',
+      },
+    });
+  } catch (err: any) {
+    let msg = err.message || 'Failed to submit leave request';
+    if (msg.includes('faculty_leave_request_no_overlap')) {
+      msg = 'You already have an active or pending leave request overlapping with the selected dates.';
+    } else if (msg.includes('chk_leave_request_dates')) {
+      msg = 'The "To Date" must be on or after the "From Date".';
+    } else if (msg.includes('chk_leave_request_days_range')) {
+      msg = 'The requested days cannot exceed the date range.';
+    } else if (msg.includes('chk_leave_request_single_year')) {
+      msg = 'Leave requests cannot cross calendar years. Please submit separate requests for each year.';
+    } else if (msg.includes('Faculty member is inactive')) {
+      msg = 'This faculty account is not marked as active.';
+    } else if (msg.includes('Leave cannot start before the joining date')) {
+      msg = 'Leave start date cannot be earlier than your date of joining.';
+    }
+    res.status(400).json({ error: msg });
   }
-  found.status = 'CANCELLED';
-  found.decisionRemarks = req.query.remarks?.toString() || 'Cancelled by faculty';
-  res.json({ success: true });
 });
 
-apiRouter.get('/faculty/:id/leave/balance', (req, res) => {
-  const facultyId = Number(req.params.id);
-  const requests = leaveRequestsStore.filter((r) => r.facultyId === facultyId && r.status === 'APPROVED');
-  const usedCl = requests.filter((r) => r.leaveTypeId === 1).reduce((s, r) => s + r.daysRequested, 0);
-  const usedEl = requests.filter((r) => r.leaveTypeId === 2).reduce((s, r) => s + r.daysRequested, 0);
-  const usedMl = requests.filter((r) => r.leaveTypeId === 3).reduce((s, r) => s + r.daysRequested, 0);
+apiRouter.get('/faculty/:id/leave/requests', async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const requests = await getFacultyLeaveRequests(facultyId);
+    const mapped = requests.map((r) => ({
+      leaveRequestId: r.leave_request_id,
+      facultyId: r.faculty_id,
+      leaveTypeId: r.leave_type_id,
+      leaveName: r.leave_name,
+      leaveTypeName: r.leave_name,
+      fromDate: r.from_date,
+      toDate: r.to_date,
+      daysRequested: Number(r.days_requested),
+      reason: r.reason,
+      status: r.status,
+      approvedBy: r.approver_name || (r.approved_by ? `User #${r.approved_by}` : ''),
+      decisionRemarks: r.decision_remarks || '',
+      createdAt: r.created_at,
+    }));
+    res.json(mapped);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-  res.json([
-    { leaveName: 'Casual Leave', annualQuota: 12, balanceDays: Math.max(0, 12 - usedCl), paid: true },
-    { leaveName: 'Earned Leave', annualQuota: 15, balanceDays: Math.max(0, 15 - usedEl), paid: true },
-    { leaveName: 'Medical Leave', annualQuota: 10, balanceDays: Math.max(0, 10 - usedMl), paid: true },
-    { leaveName: 'Loss of Pay', annualQuota: 0, balanceDays: 0, paid: false },
-  ]);
+apiRouter.post('/faculty/:id/leave/requests/:reqId/cancel', async (req, res) => {
+  try {
+    const reqId = Number(req.params.reqId);
+    const remarks = req.body?.remarks || req.query?.remarks?.toString() || 'Cancelled by faculty';
+    await cancelLeaveRequest(reqId, req.user!.facultyId!, remarks);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+apiRouter.get('/faculty/:id/leave/balance', async (req, res) => {
+  try {
+    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const balances = await getFacultyLeaveBalances(facultyId);
+    const mapped = balances.map((b) => ({
+      leaveTypeId: b.leave_type_id,
+      leaveName: b.leave_name,
+      annualQuota: Number(b.annual_quota),
+      balanceDays: Number(b.balance_days),
+      usedDays: Math.max(0, Number(b.annual_quota) - Number(b.balance_days)),
+      paid: b.is_paid,
+    }));
+    res.json(mapped);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 12. PAYROLL & PAYSLIPS
-apiRouter.get('/faculty/:id/payroll/payslips', (_req, res) => {
-  res.json([
-    {
-      payrollId: 202608,
-      periodText: 'August 2026',
-      basicSalary: 140000,
-      allowances: 85000,
-      deductions: 15000,
-      leaveDeductions: 0,
-      netSalary: 210000,
-      status: 'PAID',
-      paidAt: '2026-08-31T17:00:00Z',
-    },
-    {
-      payrollId: 202607,
-      periodText: 'July 2026',
-      basicSalary: 140000,
-      allowances: 85000,
-      deductions: 15000,
-      leaveDeductions: 0,
-      netSalary: 210000,
-      status: 'PAID',
-      paidAt: '2026-07-31T17:00:00Z',
-    },
-    {
-      payrollId: 202606,
-      periodText: 'June 2026',
-      basicSalary: 140000,
-      allowances: 85000,
-      deductions: 15000,
-      leaveDeductions: 0,
-      netSalary: 210000,
-      status: 'PAID',
-      paidAt: '2026-06-30T17:00:00Z',
-    },
-  ]);
+apiRouter.get('/faculty/:id/payroll/payslips', async (req, res) => {
+  try {
+    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const slips = await getFacultyPayslips(facultyId);
+    const mapped = slips.map((s) => ({
+      payrollId: s.payroll_id,
+      periodMonth: s.payroll_month,
+      periodYear: s.payroll_year,
+      periodText: s.period_text,
+      basicSalary: Number(s.basic_salary),
+      allowances: Number(s.allowances),
+      deductions: Number(s.deductions),
+      leaveDeductions: Number(s.leave_deductions),
+      netSalary: Number(s.net_salary),
+      status: s.status,
+      paidAt: s.paid_at,
+    }));
+    res.json(mapped);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.get('/faculty/:id/payroll/payslips/:payrollId', (_req, res) => {
-  res.json({
-    payrollId: 202608,
-    periodText: 'August 2026',
-    status: 'PAID',
-    netSalary: 210000,
-    items: [
-      { componentName: 'Basic Pay (6th/7th Pay Scale)', componentType: 'BASIC', amount: 140000 },
-      { componentName: 'Dearness Allowance (DA)', componentType: 'ALLOWANCE', amount: 45000 },
-      { componentName: 'House Rent Allowance (HRA)', componentType: 'ALLOWANCE', amount: 28000 },
-      { componentName: 'Special / Academic Allowance', componentType: 'ALLOWANCE', amount: 12000 },
-      { componentName: 'Provident Fund (PF)', componentType: 'DEDUCTION', amount: 10000 },
-      { componentName: 'Professional Tax & TDS', componentType: 'DEDUCTION', amount: 5000 },
-    ],
-  });
+apiRouter.get('/faculty/:id/payroll/payslips/:payrollId', async (req, res) => {
+  try {
+    const payrollId = Number(req.params.payrollId);
+    const detail = await getPayslipDetail(payrollId, req.user!.facultyId!);
+    if (!detail) {
+      return res.status(404).json({ error: 'Payslip not found' });
+    }
+    res.json({
+      payrollId: detail.payroll_id,
+      periodText: detail.period_text,
+      status: detail.status,
+      basicSalary: Number(detail.basic_salary),
+      allowances: Number(detail.allowances),
+      deductions: Number(detail.deductions),
+      leaveDeductions: Number(detail.leave_deductions),
+      netSalary: Number(detail.net_salary),
+      items: (detail.items || []).map((i) => ({
+        componentName: i.component_name,
+        componentType: i.component_type,
+        amount: Number(i.amount),
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.get('/faculty/:id/payroll/salary-structure', (_req, res) => {
-  res.json([
-    {
-      salaryStructureId: 101,
-      active: true,
-      effectiveFrom: '2025-07-01',
-      effectiveTo: null,
-      basicSalary: 140000,
-      allowances: 85000,
-      deductions: 15000,
-      leaveDeductionPerDay: 4667,
-      estimatedNetSalary: 210000,
-    },
-  ]);
+apiRouter.get('/faculty/:id/payroll/salary-structure', async (req, res) => {
+  try {
+    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const structures = await getFacultySalaryStructure(facultyId);
+    const mapped = structures.map((s) => ({
+      salaryStructureId: s.salary_structure_id,
+      active: s.is_active,
+      effectiveFrom: s.effective_from,
+      effectiveTo: s.effective_to,
+      basicSalary: Number(s.basic_salary),
+      allowances: Number(s.allowances),
+      deductions: Number(s.deductions),
+      leaveDeductionPerDay: Number(s.leave_deduction_per_day),
+      estimatedNetSalary: Number(s.basic_salary) + Number(s.allowances) - Number(s.deductions),
+    }));
+    res.json(mapped);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ADMIN HR API
+apiRouter.use('/admin/hr', requireLogin, requireRole('admin'));
+apiRouter.get('/admin/hr/leave/requests', async (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const requests = await getAllLeaveRequests(status);
+    res.json(requests);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/hr/leave/requests/:reqId/approve', async (req, res) => {
+  try {
+    const reqId = Number(req.params.reqId);
+    const approverUserId = req.user!.userId;
+    await approveLeaveRequest(reqId, approverUserId);
+    res.json({ success: true, message: 'Leave request approved' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/hr/leave/requests/:reqId/reject', async (req, res) => {
+  try {
+    const reqId = Number(req.params.reqId);
+    const approverUserId = req.user!.userId;
+    const remarks = (req.body?.remarks || 'Rejected by HR/Admin').toString();
+    await rejectLeaveRequest(reqId, approverUserId, remarks);
+    res.json({ success: true, message: 'Leave request rejected' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/hr/payroll/generate', async (req, res) => {
+  try {
+    const month = Number(req.body.month);
+    const year = Number(req.body.year);
+    if (!month || !year || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Valid month (1-12) and year are required' });
+    }
+    const result = await generateMonthlyPayroll(month, year);
+    res.json({ success: true, generatedCount: result.length, payrolls: result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/hr/payroll/:payrollId/status', async (req, res) => {
+  try {
+    const payrollId = Number(req.params.payrollId);
+    const status = req.body.status;
+    if (!['APPROVED', 'PAID'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be APPROVED or PAID' });
+    }
+    const adminUserId = req.user!.userId;
+    await updatePayrollStatus(payrollId, status as 'APPROVED' | 'PAID', adminUserId);
+    res.json({ success: true, payrollId, status });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // 13. FACULTY PROFILE

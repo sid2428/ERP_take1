@@ -52,6 +52,16 @@ export const NAV: Record<Role, NavGroup[]> = {
     { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase' }] },
     {
+      label: 'LEAVE & HR', items: [
+        { key: 'leave', label: 'Leave management', href: '/faculty/leave', icon: 'calendar' },
+      ],
+    },
+    {
+      label: 'FINANCE', items: [
+        { key: 'payroll', label: 'Payslips & Salary', href: '/faculty/payroll', icon: 'wallet' },
+      ],
+    },
+    {
       label: 'RECORDS', items: [
         { key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' },
         { key: 'grievances', label: 'Grievances', href: '/faculty/grievances', icon: 'alert' },

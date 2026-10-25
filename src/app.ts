@@ -50,7 +50,7 @@ export function createApp(): express.Express {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
-        styleSrcAttr: ["'unsafe-inline'"],         // bar widths; no inline <style> blocks or scripts allowed
+        styleSrcAttr: ["'unsafe-inline'"],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         scriptSrc: ["'self'", 'https://*.razorpay.com'],
         frameSrc: ["'self'", 'https://*.razorpay.com'],

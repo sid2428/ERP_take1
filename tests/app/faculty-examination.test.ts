@@ -44,7 +44,7 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
       const schemeCreated=(await client.query(`INSERT INTO course_exam_scheme(course_id,internal_max,midsem_max,endsem_max,total_max)
         VALUES($1,20,20,60,100) ON CONFLICT(course_id) DO NOTHING RETURNING course_id`,[courseId])).rows.length>0;
       const cycle=await client.query<{exam_cycle_id:number}>(`INSERT INTO exam_cycle(academic_session_id,exam_type,start_date,end_date,status)
-        VALUES($1,'EndSem',current_date,current_date+1,'Upcoming') RETURNING exam_cycle_id`,[chosen.rows[0].session_id]);
+        VALUES($1,'EndSem',current_date+100,current_date+101,'Upcoming') RETURNING exam_cycle_id`,[chosen.rows[0].session_id]);
       fixture={courseId,cycleId:cycle.rows[0]!.exam_cycle_id,schemeCreated,gradeCreated};
       await client.query('COMMIT');
     } catch(error) { await client.query('ROLLBACK'); throw error; }
