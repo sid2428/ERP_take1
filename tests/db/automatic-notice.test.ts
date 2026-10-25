@@ -102,6 +102,29 @@ describe.skipIf(!hasDatabase)('T8 automatic notices', () => {
     });
   });
 
+  it('deduplicates retries by stable recipient/event identity without merging separate events', async () => {
+    await inRollback(async (db) => {
+      const p = await people(db);
+      const call = (eventKey: string, text: string) => db.query(
+        'CALL notify($1, $2, $3, $4, $5::notice_category, $6)',
+        [p.student.user_id, 'payment', text, '/student', 'Fees', eventKey]);
+      await call('fee-payment:payment-123:confirmed', 'Your payment is confirmed.');
+      // A retry may carry a refreshed display body; identity, not similar text, controls dedup.
+      await call('fee-payment:payment-123:confirmed', 'Your payment is confirmed.');
+      await call('fee-payment:payment-124:confirmed', 'Your payment is confirmed.');
+      const rows = await db.query<{ event_key: string; n: number }>(
+        `SELECT event_key, count(*)::int AS n FROM notification
+         WHERE user_id = $1 AND event_key LIKE 'fee-payment:%' GROUP BY event_key ORDER BY event_key`,
+        [p.student.user_id]);
+      expect(rows.rows).toEqual([
+        { event_key: 'fee-payment:payment-123:confirmed', n: 1 },
+        { event_key: 'fee-payment:payment-124:confirmed', n: 1 },
+      ]);
+      await expect(db.query('CALL notify($1, $2, $3, $4, $5::notice_category, $6)',
+        [p.student.user_id, 'payment', 'Bad key', null, 'Fees', ' '])).rejects.toThrow(/event key/);
+    });
+  });
+
   it('rejects invalid notify data and ignores inactive or unknown recipients', async () => {
     await inRollback(async (db) => {
       const p = await people(db);
