@@ -1,8 +1,7 @@
 -- 093 · Record how each fee payment was made (UPI, Card, Net Banking...).
--- Why a new file: 042 had already been applied to the shared database without this column, and an
--- applied migration must not be edited. Safe to run on a database that already has the column
--- (a fresh database built from the newer 042 gets the same result).
--- Depends on: 042.
+-- Keep this as a forward-only change after the fee schema migration. Existing databases that
+-- already have the column are handled without changing their data.
+-- Depends on: 091-fee-and-wallet.sql.
 SET search_path = erp, public;
 
 ALTER TABLE fee_payment ADD COLUMN IF NOT EXISTS method varchar(20);
