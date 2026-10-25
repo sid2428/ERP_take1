@@ -16,30 +16,30 @@ VALUES
   ('F',   0.00,  39.99,  0, 'Fail')
 ON CONFLICT (grade) DO NOTHING;
 
--- 2. Course examination schemes:
--- Internal assessment is strictly out of 20 marks (not 50).
--- Theory (TH): 20 Internal + 20 MidSem + 60 EndSem = 100 Total
--- Practical / Lab (LAB): 20 Internal + 0 MidSem + 80 EndSem Practical/Oral = 100 Total
--- Tutorial (TUT): 20 Internal + 0 MidSem + 5 EndSem = 25 Total
+-- 2. Course examination schemes. Preserve existing schemes; loader data uses
+-- the 20+20+60 theory and 50+50 lab scheme established by migration 088.
 INSERT INTO course_exam_scheme (course_id, internal_max, midsem_max, endsem_max, total_max, passing_percentage)
 SELECT
   c.course_id,
-  20 AS internal_max,
+  CASE WHEN c.course_type = 'LAB' THEN 50 ELSE 20 END AS internal_max,
   CASE WHEN c.course_type = 'TH' THEN 20 ELSE 0 END AS midsem_max,
-  CASE WHEN c.course_type = 'TH' THEN 60 WHEN c.course_type = 'LAB' THEN 80 ELSE 5 END AS endsem_max,
+  CASE WHEN c.course_type = 'TH' THEN 60 WHEN c.course_type = 'LAB' THEN 50 ELSE 5 END AS endsem_max,
   CASE WHEN c.course_type = 'TUT' THEN 25 ELSE 100 END AS total_max,
   40 AS passing_percentage
 FROM course c
-ON CONFLICT (course_id) DO UPDATE SET
-  internal_max = 20,
-  midsem_max = CASE WHEN EXCLUDED.midsem_max = 20 THEN 20 ELSE 0 END,
-  endsem_max = EXCLUDED.endsem_max,
-  total_max = EXCLUDED.total_max,
-  passing_percentage = 40;
+ON CONFLICT (course_id) DO NOTHING;
 
 -- 3. Examination cycles for current session 2026-ODD
 INSERT INTO exam_cycle (academic_session_id, exam_type, start_date, end_date, registration_open, registration_close, status)
-VALUES
-  ('2026-ODD', 'MidSem', '2026-10-05', '2026-10-10', '2026-09-15', '2026-09-30', 'Registration Closed'),
-  ('2026-ODD', 'EndSem', '2026-11-23', '2026-11-30', '2026-10-15', '2026-11-10', 'Upcoming')
-ON CONFLICT DO NOTHING;
+SELECT a.session_id, cycles.exam_type, cycles.start_date, cycles.end_date,
+       cycles.registration_open, cycles.registration_close, cycles.status
+FROM academic_session a
+CROSS JOIN (VALUES
+  ('MidSem'::exam_kind, DATE '2026-10-05', DATE '2026-10-10', DATE '2026-09-15', DATE '2026-09-30', 'Registration Closed'::exam_cycle_state),
+  ('EndSem'::exam_kind, DATE '2026-11-23', DATE '2026-11-30', DATE '2026-10-15', DATE '2026-11-10', 'Upcoming'::exam_cycle_state)
+) AS cycles(exam_type, start_date, end_date, registration_open, registration_close, status)
+WHERE a.session_id = '2026-ODD'
+  AND NOT EXISTS (
+    SELECT 1 FROM exam_cycle ec
+    WHERE ec.academic_session_id = a.session_id AND ec.exam_type = cycles.exam_type
+  );

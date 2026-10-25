@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query, queryOne } from '../db.js';
+import { requireLogin, requireRole } from '../middleware/auth.js';
 import {
   getFacultyLeaveBalances,
   getFacultyLeaveRequests,
@@ -598,7 +599,7 @@ apiRouter.get('/faculty/:id/attendance/audit', async (req, res) => {
 });
 
 // 11. LEAVE APPLICATION & REQUESTS
-apiRouter.get('/leave/types', async (_req, res) => {
+apiRouter.get('/leave/types', requireLogin, requireRole('faculty'), async (_req, res) => {
   try {
     const types = await getFacultyLeaveTypes();
     res.json(types);
@@ -698,7 +699,7 @@ apiRouter.post('/faculty/:id/leave/requests/:reqId/cancel', async (req, res) => 
   try {
     const reqId = Number(req.params.reqId);
     const remarks = req.body?.remarks || req.query?.remarks?.toString() || 'Cancelled by faculty';
-    await cancelLeaveRequest(reqId, remarks);
+    await cancelLeaveRequest(reqId, req.user!.facultyId!, remarks);
     res.json({ success: true });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -750,7 +751,7 @@ apiRouter.get('/faculty/:id/payroll/payslips', async (req, res) => {
 apiRouter.get('/faculty/:id/payroll/payslips/:payrollId', async (req, res) => {
   try {
     const payrollId = Number(req.params.payrollId);
-    const detail = await getPayslipDetail(payrollId);
+    const detail = await getPayslipDetail(payrollId, req.user!.facultyId!);
     if (!detail) {
       return res.status(404).json({ error: 'Payslip not found' });
     }
@@ -796,6 +797,7 @@ apiRouter.get('/faculty/:id/payroll/salary-structure', async (req, res) => {
 });
 
 // ADMIN HR API
+apiRouter.use('/admin/hr', requireLogin, requireRole('admin'));
 apiRouter.get('/admin/hr/leave/requests', async (req, res) => {
   try {
     const status = req.query.status ? String(req.query.status) : undefined;
@@ -809,7 +811,7 @@ apiRouter.get('/admin/hr/leave/requests', async (req, res) => {
 apiRouter.post('/admin/hr/leave/requests/:reqId/approve', async (req, res) => {
   try {
     const reqId = Number(req.params.reqId);
-    const approverUserId = req.user?.userId || 1;
+    const approverUserId = req.user!.userId;
     await approveLeaveRequest(reqId, approverUserId);
     res.json({ success: true, message: 'Leave request approved' });
   } catch (err: any) {
@@ -820,7 +822,7 @@ apiRouter.post('/admin/hr/leave/requests/:reqId/approve', async (req, res) => {
 apiRouter.post('/admin/hr/leave/requests/:reqId/reject', async (req, res) => {
   try {
     const reqId = Number(req.params.reqId);
-    const approverUserId = req.user?.userId || 1;
+    const approverUserId = req.user!.userId;
     const remarks = (req.body?.remarks || 'Rejected by HR/Admin').toString();
     await rejectLeaveRequest(reqId, approverUserId, remarks);
     res.json({ success: true, message: 'Leave request rejected' });
@@ -850,7 +852,7 @@ apiRouter.post('/admin/hr/payroll/:payrollId/status', async (req, res) => {
     if (!['APPROVED', 'PAID'].includes(status)) {
       return res.status(400).json({ error: 'Status must be APPROVED or PAID' });
     }
-    const adminUserId = req.user?.userId || 1;
+    const adminUserId = req.user!.userId;
     await updatePayrollStatus(payrollId, status as 'APPROVED' | 'PAID', adminUserId);
     res.json({ success: true, payrollId, status });
   } catch (err: any) {

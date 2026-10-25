@@ -7,7 +7,7 @@ const FACULTY = 'FAC-CSE-074';
 const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
 
 describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   type Agent = Awaited<ReturnType<typeof signIn>>['agent'];
   let agent: Agent;
 

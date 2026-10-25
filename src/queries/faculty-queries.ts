@@ -192,7 +192,12 @@ export async function submitLeaveRequest(
   return row!.leave_request_id;
 }
 
-export async function cancelLeaveRequest(leaveRequestId: number, remarks = 'Cancelled by faculty'): Promise<void> {
+export async function cancelLeaveRequest(leaveRequestId: number, facultyId: number, remarks = 'Cancelled by faculty'): Promise<void> {
+  const ownedRequest = await queryOne<{ leave_request_id: number }>(
+    'SELECT leave_request_id FROM faculty_leave_request WHERE leave_request_id = $1 AND faculty_id = $2',
+    [leaveRequestId, facultyId],
+  );
+  if (!ownedRequest) throw new Error('Leave request not found.');
   await query('CALL cancel_faculty_leave($1, $2)', [leaveRequestId, remarks]);
 }
 

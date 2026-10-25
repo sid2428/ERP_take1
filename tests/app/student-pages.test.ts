@@ -5,7 +5,7 @@ const DEMO = process.env.DEMO_PASSWORD ?? '';
 const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
 
 describe.skipIf(!hasAppEnv)('student attendance and examination pages', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
 
   it('renders each authenticated student records page with its client view', async () => {
     const { agent, res: login } = await signIn(app, 'STU202600004', DEMO);

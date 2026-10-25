@@ -6,7 +6,7 @@
     <span class="sub"><%= payslip.period_text %> · <%= payslip.faculty_name %> (<%= payslip.faculty_code %>)</span>
   </div>
   <div class="actions">
-    <button type="button" class="btn" onclick="window.print()">Print statement</button>
+    <button type="button" class="btn" data-action="print-payslip">Print statement</button>
     <a class="btn" href="/faculty/payroll">← Back to Payroll</a>
   </div>
 </div>
@@ -93,4 +93,5 @@
   </div>
 </section>
 
+<script src="/static/js/faculty-payslip.js" defer></script>
 <%- include('../partials/layout-end') %>

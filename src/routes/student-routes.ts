@@ -1,5 +1,6 @@
 import { getStudentSyllabusCoverage } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
+import { financeApiRouter } from './finance-routes.js';
 import { z } from 'zod';
 import { friendlyDbError, query, queryOne, pool } from '../db.js';
 import { audit } from '../lib/audit.js';
@@ -91,6 +92,7 @@ studentRouter.get('/offerings', async (req, res) => {
 studentRouter.get('/fee', (_req, res) => {
   res.render('student/fee', { title: 'Fee & D-Wallet', nav: 'fee' });
 });
+studentRouter.use('/fee/api', financeApiRouter);
 
 studentRouter.get('/profile', async (req, res) => {
   const profile = await getStudentProfile(req.user!.studentId!);

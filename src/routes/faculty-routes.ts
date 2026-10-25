@@ -164,7 +164,7 @@ facultyRouter.post('/leave/cancel/:id', async (req, res) => {
   const reqId = idParam(req.params.id);
   const remarks = String(req.body.remarks || 'Cancelled by faculty').trim();
   try {
-    await cancelLeaveRequest(reqId, remarks);
+    await cancelLeaveRequest(reqId, req.user!.facultyId!, remarks);
     flash(req, 'success', `Leave request #${reqId} was cancelled.`);
   } catch (err: any) {
     flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not cancel leave request.'));

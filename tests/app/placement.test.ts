@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { hasAppEnv, signIn } from './helpers.js';
+import { hasAdminEnv, signIn } from './helpers.js';
 
 const DEMO=process.env.DEMO_PASSWORD??'';
 const ADMIN=process.env.ADMIN_PASSWORD??'';
-const {createApp}=hasAppEnv?await import('../../src/app.js'):{createApp:null};
+const {createApp}=hasAdminEnv?await import('../../src/app.js'):{createApp:null};
 
-describe.skipIf(!hasAppEnv)('T7 placement pages and permissions',()=>{
-  const app=hasAppEnv?createApp!():null;
+describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
+  const app=hasAdminEnv?createApp!():null;
   let student:Awaited<ReturnType<typeof signIn>>['agent'];
   let admin:Awaited<ReturnType<typeof signIn>>['agent'];
   beforeAll(async()=>{
