@@ -5,8 +5,9 @@ live status alerts. Students, faculty, and admins see a role-specific bell in th
 bar. The bell links to `/student/notices`, `/faculty/notices`, or `/admin/inbox` and shows the
 current user's unread count across announcements and dedicated notifications.
 
-Migration: `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`,
-`migrations/083-notifications.sql`, and `migrations/084-attendance-shortage-notifications.sql` ·
+Migration: `migrations/080-grievances.sql`, `migrations/081-notices.sql`, `migrations/082-automatic-notices.sql`,
+`migrations/083-notifications.sql`, `migrations/084-attendance-shortage-notifications.sql`, and
+`migrations/092-notification-event-idempotency.sql` ·
 Seed: `scripts/db/seed-notices.ts` · Routes:
 `src/routes/notice-routes.ts`,
 `src/routes/notification-routes.ts`,
@@ -33,6 +34,11 @@ reaches a person when any target matches them:
 | `notice_target` | `target_id` primary key | audience filters or one personal `user_id` |
 | `notice_read` | composite primary key `(user_id, notice_id)` | read timestamp |
 | `notification` | `notification_id` primary key | one recipient's personal event message, kind, text, internal link, timestamps and read state |
+
+Migration 092 adds nullable event keys to notices and personal notifications. A key is an identity
+provided by the authoritative producer, not a hash of message content. Unique indexes prevent a
+publication from being created twice and prevent one recipient from receiving the same event twice.
+Legacy rows and calls have `NULL` event keys and retain their existing behavior.
 
 `v_user_audience` resolves active accounts to role, department, year, and division. The
 `v_user_notices` view combines live announcements with unexpired dedicated notifications and joins
@@ -137,9 +143,18 @@ CALL erp.notify($1, $2, $3, $4);
 
 -- T8 grievance trigger form, retaining the category used by the existing board filters.
 CALL erp.notify($1, $2, $3, $4, $5::erp.notice_category);
+
+-- Event-keyed overload: reuse the key only for a retry of the same source event.
+CALL erp.notify($1, $2, $3, $4, $5::erp.notice_category, $6);
 ```
 
-The `notification` table also keeps a display title, category, optional poster, expiry, and
+Four- and five-argument calls delegate with a null key and remain compatible. Event-keyed calls use
+a unique `(user_id, event_key)` index with `ON CONFLICT DO NOTHING`, so retries and concurrent calls
+produce one row per recipient/event without deduplicating merely similar messages. `post_notice_once`
+is the announcement counterpart: it serializes retries with a transaction advisory lock, returns the
+existing notice ID, and creates a new notice plus targets atomically for a new event key.
+
+The `notification` table also keeps a display title, category, optional poster, expiry, optional event key, and
 `legacy_notice_id` solely to preserve the existing UI and historical personal notices. Its primary
 key is `notification_id`; `user_id` is the recipient foreign key. A partial unread index supports
 the bell count, and the internal-link check accepts only portal paths beginning with `/`.
@@ -228,17 +243,29 @@ The assignment branch is evaluated before the standalone `Open` -> `In progress`
 update that changes only status produces the standalone transition notice. The closure trigger covers
 both resolution and rejection, with the status text reflected in each message.
 
-## Cross-module integration matrix
+## Cross-module integration contracts
 
-| Source | Event | Current implementation | Next step |
-|---|---|---|---|
-| T4 Attendance | student falls below required attendance | Live aggregate alert through `user_alerts(user_id)` plus the `attendance_summary` eligible-to-shortage trigger in `migrations/084-attendance-shortage-notifications.sql`; the stored event is current-session-only, active-student-only, and edge-triggered | Keep the live alert and stored transition event aligned if the attendance contract changes |
-| T5 Examinations | timetable/results published | `post_exam_timetable_notice(...)` and `post_results_notice(...)` helpers exist and are covered by database tests; no timetable/results publication caller was found in the repository | Wire the relevant helper into the real publication workflow when that workflow exists; do not notify from ordinary marks saves |
-| T6 Fees | fee pending/overdue | Optional live alert reads `v_student_fee_status` when that view exists; no current T6 view definition, payment/due event caller, or stored-notification caller was found | Provide the verified T6 status/event contract before adding an integration |
-| T1 Student | request/certificate decision | No caller found in the repository | Coordinate when the event/API exists |
-| T2 Faculty | leave/request decision | No caller found in the repository | Coordinate when the event/API exists |
-| T7 Placement | new drive published | `src/routes/placement-routes.ts` calls `notify_eligible_placement_drive(...)` inside the placement admin transaction after creating a drive as `Open` and after changing a drive status to `Open`; migrations 086/090 filter eligible active students and deduplicate by recipient and drive link | Keep the call sites inside their transactions and extend regression coverage when placement eligibility changes |
-| T8 Grievances | creation, assignment, reply, resolution/rejection | Implemented by database triggers redefined in `migrations/083-notifications.sql` through `notify(...)`; covered by T8 database/app tests | Preserve and extend when grievance events change |
+Event-keyed calls must execute in the same database transaction as the authoritative state change.
+The producer supplies a stable key for retries and a different key for a distinct event. T8 validates
+recipient activity, message fields, and internal links; it does not authorize upstream transitions
+or decide eligibility. Invalid input aborts the surrounding transaction; unknown or inactive
+recipients are ignored. The canonical prepared-statement shape is
+`CALL erp.notify($1, $2, $3, $4, $5::erp.notice_category, $6)`.
+
+| Team / event | Authoritative producer and payload | Recipient resolution | T8 interface, validation, transaction and idempotency | Tests and owner |
+|---|---|---|---|---|
+| T1 `certificate_request.decision` — report request outcome | The work assignment specifies `certificate_request` and `Requested → Approved/Rejected → Issued`, but this checkout has no schema/route. Payload adapter needs the request ID, student ID, resulting status, and stable transition key from that authoritative row. | T1 resolves active `app_user` via the request's student FK; T8 does not infer the student from client input. | Six-argument `notify`, category `Academic`, called only after a real transition in its transaction. Key combines request identity and transition identity. | T1 adds decision, recipient, and retry tests when its workflow lands; shared validation/retry tests are in `automatic-notice.test.ts`. Owner: T1. |
+| T2 `faculty_request.decision` — report leave/request outcome | No faculty leave/request table, status enum, or producer exists in this checkout. No row ID or status mapping is asserted here. Producer passes the resolved faculty user ID, decision message, internal route, and stable source event key. | T2 resolves the active target from its own authoritative request record; never trust a client-supplied recipient. | Six-argument `notify`, category `Academic`, after the actual decision in the same transaction. No T2-specific state is invented. | T2 owns producer tests for authorization, decisions, retries, and missing accounts; shared boundary tests are in `automatic-notice.test.ts`. Owner: T2. |
+| T4 `attendance.shortage.entered` — persist an eligible-to-shortage edge | `attendance_summary` trigger uses the current-session row, course minimum and existing `last_updated`. Identity payload: `student_id int`, `course_id int`, `academic_session_id varchar(10)`, `last_updated timestamptz`. | Active student account joined from the summary's student ID; inactive students are excluded. | Six-argument `notify`, category `Academic`, key `attendance-shortage:<student>:<course>:<session>:<last_updated>`. Stored notification commits/rolls back with the summary update. Live `user_alerts` remains an aggregate of present conditions, not a stored/read event. | `automatic-notice.test.ts` covers live alert and notification contract; T4 owns summary semantics, T8 owns delivery. |
+| T5 `exam.timetable.published` / `exam.results.published` — announce publication | `exam_cycle`, `exam_schedule`, and result tables exist, but this checkout has no publication state/caller. Producer payload includes `exam_cycle_id` and verified audience filters; saved marks/results alone are not publication. | Resolve the actual cycle audience from exam/curriculum data, then pass role/department/year targets. | Call `post_notice_once` with a stable publication event key, e.g. `exam-timetable:<cycle-id>:<publication-id>` or `exam-results:<cycle-id>:<publication-id>`. It applies existing notice audience/poster validation and runs in the publication transaction. Existing `post_exam_timetable_notice` and `post_results_notice` remain compatible but are not retry-idempotent. | `notice.test.ts` verifies one publication per event and unchanged first payload. `automatic-notice.test.ts` tests legacy helpers, not publication. Owner: T5 connects actual publication workflow. |
+| T6 `fee.payment.succeeded` — confirm recorded payment; due/no-dues later | Migration 091 defines `fee_payment(payment_id int, student_id int, purpose, status)` and `apply_fee_payment(...)`; no payment event caller, `v_student_fee_status`, due date, or no-dues view exists. Producer uses payment ID and student from the row after successful application. | Resolve active student account from `fee_payment.student_id`, not a callback parameter. | Six-argument `notify`, category `Fees`, key `fee-payment:<payment_id>:succeeded`, in the payment transaction after success. No due/no-dues notification is implemented without a real date/status contract. | T6 owns route/webhook and retry/recipient tests; shared retry is covered in `automatic-notice.test.ts`. Owner: T6. |
+| T7 `placement_drive.opened` — announce drive to eligible students | Existing admin route calls `notify_eligible_placement_drive(drive_id int)` after creating/opening a drive. The procedure reads `placement_drive` and calls T7 `is_eligible`. | Active student accounts passing T7's eligibility function; T8 does not duplicate eligibility logic. | Procedure calls six-argument `notify`, category `Placement`, key `placement-drive:<drive_id>`, inside the drive transaction. Unique recipient/event index handles concurrent retries. | `tests/db/placement.test.ts`, `tests/app/placement.test.ts`, and generic retry coverage. Owner: T7 owns source/eligibility; T8 owns delivery. |
+| T8 grievance lifecycle — creation, assignment, progress, comments, resolution/rejection | Existing grievance insert/update/comment triggers. Identities: `grievance_id int`, assignment `assigned_at`, `comment_id bigint`, status transition. | Active admins on creation; assignee and raiser on assignment; other current participants on comments; raiser and assignee on close. | Triggers call six-argument `notify`; stable keys use grievance ID plus creation, transition/assignment identity, or comment ID. Trigger validation and notifications are atomic with the grievance write. | `automatic-notice.test.ts`, `grievance.test.ts`, `app/grievance.test.ts`. Owner: T8. |
+
+T1, T2, T5 publication, and T6 producers are explicitly unconnected because their authoritative
+workflows are absent. T6 payment success is a usable contract based on migration 091, awaiting T6
+wiring. The optional fee branch in `user_alerts` remains guarded by `to_regclass`; migration 091 does
+not create `v_student_fee_status`.
 
 ## Architecture and migration compatibility
 

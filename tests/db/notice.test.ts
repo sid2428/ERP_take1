@@ -170,4 +170,22 @@ describe.skipIf(!hasDatabase)('T8-1 notices', () => {
       expect(await sees(db, f.faculty, id)).toBe(false);
     });
   });
+
+  it('post_notice_once returns the original publication for event retries', async () => {
+    await inRollback(async (db) => {
+      const f = await fixture(db);
+      const publish = (title: string) => one<{ id: number }>(db,
+        `SELECT post_notice_once($1, $2, $3, 'Results published for semester five.', 'Exam',
+          '[{"role":"student"}]'::jsonb, true) AS id`,
+        ['exam-results:cycle-42', f.admin, title]).then((r) => r.id);
+      const first = await publish('Semester V results published');
+      const retry = await publish('Retry must not rewrite the posted notice');
+      expect(retry).toBe(first);
+      const count = await one<{ n: number }>(db,
+        `SELECT count(*)::int AS n FROM notice WHERE event_key = 'exam-results:cycle-42'`);
+      expect(count.n).toBe(1);
+      const stored = await one<{ title: string }>(db, 'SELECT title FROM notice WHERE notice_id = $1', [first]);
+      expect(stored.title).toBe('Semester V results published');
+    });
+  });
 });
