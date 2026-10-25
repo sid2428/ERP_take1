@@ -4,17 +4,17 @@
  */
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { hasAppEnv, postForm, signIn } from './helpers.js';
+import { hasAdminEnv, postForm, signIn } from './helpers.js';
 
 const DEMO = process.env.DEMO_PASSWORD ?? '';
 const ADMIN = process.env.ADMIN_PASSWORD ?? '';
 const FACULTY = 'FAC-CSE-074';
 
-const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
-const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
+const { createApp } = hasAdminEnv ? await import('../../src/app.js') : { createApp: null };
+const { pool } = hasAdminEnv ? await import('../../src/db.js') : { pool: null };
 
-describe.skipIf(!hasAppEnv)('T8-2 grievances (pages and permissions)', () => {
-  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
+describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
+  const app = hasAdminEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
   type Agent = Awaited<ReturnType<typeof signIn>>['agent'];
   let admin: Agent;

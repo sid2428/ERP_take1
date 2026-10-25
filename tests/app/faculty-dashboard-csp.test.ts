@@ -6,7 +6,7 @@ const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp
 const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
 
 describe.skipIf(!hasAppEnv)('faculty dashboard CSP interactions', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   let faculty: Awaited<ReturnType<typeof signIn>>['agent'];
   let facultyId = 0;
 

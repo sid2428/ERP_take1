@@ -10,7 +10,7 @@ const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp
 const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
 
 describe.skipIf(!hasAppEnv)('Faculty Dashboard API Endpoints', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   type Agent = Awaited<ReturnType<typeof signIn>>['agent'];
   let agent: Agent;
   let csrfToken = '';
