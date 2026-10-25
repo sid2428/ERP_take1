@@ -43,7 +43,7 @@ function findOldScheduledDate(calendar: {
 }
 
 describe.skipIf(!hasAppEnv)('faculty attendance', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
   let faculty: Awaited<ReturnType<typeof signIn>>['agent'];
   let facultyId = 0;

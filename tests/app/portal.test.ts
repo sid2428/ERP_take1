@@ -4,18 +4,18 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashPassword } from '../../src/auth/password.js';
-import { hasAppEnv, postForm, signIn } from './helpers.js';
+import { hasAdminEnv, postForm, signIn } from './helpers.js';
 
 const DEMO = process.env.DEMO_PASSWORD ?? '';
 const ADMIN = process.env.ADMIN_PASSWORD ?? '';
 const TEMP_PASSWORD = 'Temp-pass-2026';
 
 // the app reads its configuration on import, so only load it when the environment is set up
-const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
-const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
+const { createApp } = hasAdminEnv ? await import('../../src/app.js') : { createApp: null };
+const { pool } = hasAdminEnv ? await import('../../src/db.js') : { pool: null };
 
-describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
-  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
+describe.skipIf(!hasAdminEnv)('PICT ERP portal', () => {
+  const app = hasAdminEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
 
   beforeAll(async () => {

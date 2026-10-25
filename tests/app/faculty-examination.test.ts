@@ -10,7 +10,7 @@ const { saveFacultyExamMarks } = hasAppEnv
   : { saveFacultyExamMarks: null };
 
 describe.skipIf(!hasAppEnv)('faculty examination', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
   let faculty: Awaited<ReturnType<typeof signIn>>['agent'];
   let facultyId = 0;
