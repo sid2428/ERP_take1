@@ -101,7 +101,7 @@ DATABASE_URL=postgres://postgres:localpass123@localhost:54329/erp
 DATABASE_SSL=false
 
 APP_DB_PASSWORD=<16+ random characters>
-APP_DATABASE_URL=postgres://erp_app:<same APP_DB_PASSWORD>@localhost:54329/erp
+APP_DATABASE_URL=postgres://erp_app:<same APP_DB_PASSWORD>@127.0.0.1:54329/erp
 
 SESSION_SECRET=<32+ random characters>
 PORT=3100

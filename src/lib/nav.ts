@@ -6,7 +6,13 @@ export interface NavGroup { label: string; items: NavItem[]; }
 /** Sidebar per role. Only modules that are built appear here (no dead links). */
 export const NAV: Record<Role, NavGroup[]> = {
   student: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' },
+        { key: 'notices', label: 'Notices', href: '/student/notices', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/student/placement', icon: 'briefcase' },
+      ],
+    },
     {
       label: 'ACADEMICS', items: [
         { key: 'curriculum', label: 'Curriculum', href: '/student/curriculum', icon: 'list' },
@@ -15,19 +21,51 @@ export const NAV: Record<Role, NavGroup[]> = {
       ],
     },
     {
-      label: 'FINANCE', items: [
-        { key: 'fee', label: 'Fees & D-Wallet', href: '/student/fee', icon: 'wallet' },
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-summary', label: 'Attendance Summary', href: '/student/attendance', icon: 'check' },
+        { key: 'attendance-detail', label: 'Attendance Detail', href: '/student/attendance/detail', icon: 'list' },
       ],
     },
-    { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' }] },
+    {
+      label: 'EXAMINATION', items: [
+        { key: 'exam-schedule', label: 'Exam Schedule', href: '/student/exams', icon: 'calendar' },
+        { key: 'hall-ticket', label: 'Hall Ticket', href: '/student/hall-ticket', icon: 'briefcase' },
+        { key: 'results', label: 'Results', href: '/student/results', icon: 'check' },
+      ],
+    },
+    {
+      label: 'RECORDS', items: [
+        { key: 'profile', label: 'Profile', href: '/student/profile', icon: 'user' },
+        { key: 'fee', label: 'Fees & D-Wallet', href: '/student/fee', icon: 'wallet' },
+        { key: 'grievances', label: 'Grievances', href: '/student/grievances', icon: 'alert' },
+      ],
+    },
   ],
   faculty: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' }] },
-    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
-    { label: 'RECORDS', items: [{ key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' },
+        { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
+      ],
+    },
+    { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
+    { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
+    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase' }] },
+    {
+      label: 'RECORDS', items: [
+        { key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' },
+        { key: 'grievances', label: 'Grievances', href: '/faculty/grievances', icon: 'alert' },
+      ],
+    },
   ],
   admin: [
-    { label: 'OVERVIEW', items: [{ key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' }] },
+    {
+      label: 'OVERVIEW', items: [
+        { key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' },
+        { key: 'inbox', label: 'Inbox', href: '/admin/inbox', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/admin/placement', icon: 'briefcase' },
+      ],
+    },
     {
       label: 'ACADEMIC STRUCTURE', items: [
         { key: 'departments', label: 'Departments', href: '/admin/departments', icon: 'building' },
@@ -42,6 +80,17 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'PEOPLE', items: [
         { key: 'students', label: 'Students', href: '/admin/students', icon: 'user' },
         { key: 'faculty', label: 'Faculty', href: '/admin/faculty', icon: 'briefcase' },
+      ],
+    },
+    {
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-unlocks', label: 'Attendance unlocks', href: '/admin/attendance-unlocks', icon: 'check' },
+      ],
+    },
+    {
+      label: 'COMMUNICATION', items: [
+        { key: 'notices', label: 'Notices', href: '/admin/notices', icon: 'bell' },
+        { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },
       ],
     },
     { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },

@@ -1,0 +1,73 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>#<%= g.grievance_id %> · <%= g.subject %></h1><span class="sub"><a href="/admin/grievances">← Grievance queue</a></span></div>
+<% const closed = g.status === 'Resolved' || g.status === 'Rejected'; %>
+<div class="grid2">
+<div class="stack" style="gap:0">
+  <section class="card" style="margin-bottom:16px">
+    <div class="hd"><h2>Details</h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
+    <dl class="dl" style="margin-bottom:14px">
+      <div><dt>Category</dt><dd><%= g.category %></dd></div>
+      <div><dt>Raised by</dt><dd><%= g.raised_by_name %>
+        <div class="muted" style="font-size:12.5px"><%= g.raised_by_login %> · <%= g.raised_by_role %><%= g.raised_by_dept ? ' · ' + g.raised_by_dept : '' %></div></dd></div>
+      <div><dt>Raised on</dt><dd><%= fmt.dateTime(g.created_at) %></dd></div>
+      <div><dt>Assigned to</dt><dd><%= g.assigned_name ? g.assigned_name + ' (' + g.assigned_code + ')' : '–' %></dd></div>
+    </dl>
+    <div class="thread"><div class="body"><%= g.description %></div></div>
+  </section>
+  <%- include('../partials/grievance-thread') %>
+</div>
+
+<div class="stack">
+<% if (closed) { %>
+  <section class="card">
+    <div class="hd"><h2><%= g.status %></h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
+    <p class="muted">Closed on <%= fmt.dateTime(g.resolved_at) %>, <%= g.age_days %> days after it was raised. Closed grievances cannot be changed.</p>
+  </section>
+<% } else { %>
+  <section class="card">
+    <div class="hd"><h2>Decision</h2></div>
+    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/resolve" class="stack" style="gap:10px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="rn">Note to <%= g.raised_by_name %></label>
+        <textarea id="rn" name="note" rows="4" minlength="5" maxlength="2000" required placeholder="What was done, or why it is rejected"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit" name="outcome" value="Resolved">Resolve</button>
+        <button class="btn danger" type="submit" name="outcome" value="Rejected">Reject</button>
+      </div>
+      <p class="note" style="margin:0">Either choice closes the grievance for good.</p>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Assign</h2></div>
+    <p class="note">The assigned faculty member can see this grievance and reply. Assigning also moves it to In progress.</p>
+    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/assign" class="stack" style="gap:10px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="fa">Faculty code</label>
+        <input id="fa" type="text" name="faculty_code" list="fac-list" maxlength="15" value="<%= g.assigned_code || '' %>" placeholder="e.g. FAC-CSE-014" autocomplete="off">
+        <datalist id="fac-list">
+          <% for (const f of faculty) { %><option value="<%= f.faculty_code %>"><%= f.name %> · <%= f.is_hod ? 'HOD' : f.designation %></option><% } %>
+        </datalist>
+        <span class="hint"><%= g.raised_by_dept ? 'Suggestions: ' + g.raised_by_dept + ' department, HOD first.' : 'Type any faculty code.' %> Leave empty to remove the assignment.</span>
+      </div>
+      <div class="actions"><button class="btn" type="submit"><%= g.assigned_code ? 'Change assignment' : 'Assign' %></button></div>
+    </form>
+  </section>
+
+  <% if (g.status === 'Open') { %>
+  <section class="card">
+    <div class="hd"><h2>Pick it up</h2></div>
+    <p class="note">Handle it in the office without assigning anyone.</p>
+    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/progress">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn" type="submit">Mark In progress</button>
+    </form>
+  </section>
+  <% } %>
+<% } %>
+</div>
+</div>
+<%- include('../partials/layout-end') %>

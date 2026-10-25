@@ -16,12 +16,18 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration — ${problems}`);
 }
 
+const databaseUrl = new URL(parsed.data.APP_DATABASE_URL);
+if (databaseUrl.hostname === 'localhost') databaseUrl.hostname = '127.0.0.1';
+
 export const config = {
   env: parsed.data.NODE_ENV,
   isProduction: parsed.data.NODE_ENV === 'production',
   isServerless: Boolean(parsed.data.VERCEL),
-  databaseUrl: parsed.data.APP_DATABASE_URL,
+  databaseUrl: databaseUrl.toString(),
   databaseSsl: parsed.data.DATABASE_SSL !== 'false',
   sessionSecret: parsed.data.SESSION_SECRET,
   port: parsed.data.PORT,
 } as const;
+
+export const ATTENDANCE_WEEKEND_DAYS = [6, 7] as const;
+export { LOCK_DAYS, UNLOCK_HOURS } from './lib/attendance-lock.js';

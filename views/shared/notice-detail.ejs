@@ -1,0 +1,29 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1><%= n.title %></h1><span class="sub"><a href="<%= base %>">← Notices</a></span></div>
+<div class="grid2">
+<section class="card">
+  <div class="hd">
+    <div><% if (n.is_important) { %><span class="pill r">Important</span> <% } %><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span></div>
+    <span class="muted"><%= fmt.dateTime(n.posted_at) %></span>
+  </div>
+  <div class="notice-body"><%= n.body %></div>
+  <% if (n.link) { %><div class="actions" style="margin-top:14px"><a class="btn primary" href="<%= n.link %>">Open →</a></div><% } %>
+  <p class="note" style="margin:16px 0 0">Posted by <%= n.posted_by_name || 'Academic office' %><% if (n.expires_at) { %> · shown until <%= fmt.dateTime(n.expires_at) %><% } %></p>
+</section>
+<% if (isPoster) { %>
+<section class="card">
+  <div class="hd"><h2>Your notice</h2><% if (withdrawnAt) { %><span class="pill r">Withdrawn</span><% } %></div>
+  <dl class="dl" style="margin-bottom:14px">
+    <div><dt>Audience</dt><dd><%= audience %></dd></div>
+    <div><dt>Read by</dt><dd><%= reach ? `${fmt.num(reach.reads)} of ${fmt.num(reach.recipients)}` : '–' %></dd></div>
+  </dl>
+  <% if (!withdrawnAt) { %>
+  <form method="post" action="<%= base %>/<%= n.notice_id %>/withdraw" data-confirm="Withdraw this notice? Students will no longer see it.">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="btn danger" type="submit">Withdraw</button>
+  </form>
+  <% } else { %><p class="muted">Withdrawn on <%= fmt.dateTime(withdrawnAt) %>.</p><% } %>
+</section>
+<% } %>
+</div>
+<%- include('../partials/layout-end') %>

@@ -1,10 +1,20 @@
+import { getFacultySyllabusPct, getRecentSessions, getSyllabusSummary, getUnitProgress } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
 import { isoWeekday, termProgress, todayIso } from '../lib/format.js';
 import { forbidden, notFound } from '../lib/http-error.js';
 import { getAssignment, getFacultyClasses, getFacultyProfile, getRoster, teachesStudent } from '../queries/faculty-queries.js';
 import { getFacultyTimetable, getStudentCourses, getStudentProfile, nextClassDay } from '../queries/shared-queries.js';
+import { grievanceRouter } from './grievance-routes.js';
+import { noticeRouter } from './notice-routes.js';
+import { noticeSummary } from '../queries/notice-queries.js';
+import { facultyAttendanceRouter } from './faculty-attendance-routes.js';
+import { facultyExaminationRouter } from './faculty-examination-routes.js';
 
 export const facultyRouter = Router();
+facultyRouter.use('/attendance', facultyAttendanceRouter);
+facultyRouter.use('/examination', facultyExaminationRouter);
+facultyRouter.use('/grievances', grievanceRouter);
+facultyRouter.use('/notices', noticeRouter);
 
 function idParam(value: string | undefined): number {
   const n = Number(value);
@@ -14,8 +24,9 @@ function idParam(value: string | undefined): number {
 
 facultyRouter.get('/', async (req, res) => {
   const facultyId = req.user!.facultyId!;
-  const [profile, classes, timetable] = await Promise.all([
+  const [profile, classes, timetable, notices] = await Promise.all([
     getFacultyProfile(facultyId), getFacultyClasses(facultyId), getFacultyTimetable(facultyId),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   if (!profile) throw notFound('Faculty record');
 
@@ -35,7 +46,7 @@ facultyRouter.get('/', async (req, res) => {
   const today = todayIso();
 
   res.render('faculty/dashboard', {
-    title: 'Dashboard', nav: 'dashboard', profile, classes,
+    title: 'Dashboard', nav: 'dashboard', profile, classes, notices, noticeBase: '/faculty/notices',
     stats: {
       classes: classes.length,
       weeklyHours: timetable.reduce((h, t) => h + t.periods, 0),
@@ -52,7 +63,8 @@ facultyRouter.get('/', async (req, res) => {
 
 facultyRouter.get('/classes', async (req, res) => {
   const classes = await getFacultyClasses(req.user!.facultyId!);
-  res.render('faculty/classes', { title: 'My classes', nav: 'classes', classes });
+  const syllabus = await getFacultySyllabusPct(req.user!.facultyId!);
+  res.render('faculty/classes', { title: 'My classes', nav: 'classes', classes, syllabus });
 });
 
 facultyRouter.get('/classes/:id', async (req, res) => {
@@ -83,4 +95,16 @@ facultyRouter.get('/profile', async (req, res) => {
   const profile = await getFacultyProfile(req.user!.facultyId!);
   if (!profile) throw notFound('Faculty record');
   res.render('faculty/profile', { title: 'Profile', nav: 'profile', profile });
+});
+
+// T3-3: syllabus coverage of one of this faculty member's classes (planned vs delivered lectures per unit).
+facultyRouter.get('/classes/:id/syllabus', async (req, res) => {
+  const cls = await getAssignment(idParam(req.params.id), req.user!.facultyId!);
+  if (!cls) throw notFound('Class');                       // not one of this faculty member's classes
+  const [summary, units, recent] = await Promise.all([
+    getSyllabusSummary(cls.assignment_id), getUnitProgress(cls.assignment_id), getRecentSessions(cls.assignment_id),
+  ]);
+  res.render('faculty/syllabus-coverage', {
+    title: `Syllabus · ${cls.course_code}`, nav: 'classes', cls, summary, units, recent,
+  });
 });

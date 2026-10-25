@@ -1,6 +1,6 @@
--- 042 · Fees, online payments (Razorpay) and the D-Wallet.
+-- 091 · Fees, online payments (Razorpay) and the D-Wallet.
 -- Depends on: 001 (touch_updated_at), 003 (student), 007 (the erp_app role).
--- Check the file number against the other branches (e.g. t3-3-syllabus-coverage) before merging.
+-- Originally 042; renumbered because main already has 042-syllabus-coverage and 084–090.
 --
 -- Design:
 --   * Money is stored as integer PAISE (1 rupee = 100 paise): no rounding errors, and it is

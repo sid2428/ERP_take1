@@ -1,0 +1,35 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head">
+  <h1>Attendance unlock requests</h1>
+  <span class="sub">Approve a single locked session for editing for 48 hours.</span>
+</div>
+<section class="card t">
+  <% if (!requests.length) { %>
+    <div class="empty">There are no pending attendance unlock requests.</div>
+  <% } else { %>
+    <div class="sc"><table>
+      <thead><tr><th>Session</th><th>Faculty</th><th>Reason</th><th>Requested</th><th>Decision</th></tr></thead>
+      <tbody>
+        <% for (const r of requests) { %>
+          <tr>
+            <td><strong><%= r.course_code %></strong> · <%= r.class_label %><br><span class="muted"><%= fmt.date(r.session_date) %></span></td>
+            <td><%= r.faculty_name %><br><span class="muted"><%= r.requester_login %></span></td>
+            <td><%= r.reason %></td>
+            <td class="nw"><%= fmt.dateTime(r.created_at) %></td>
+            <td><div class="actions">
+              <form method="post" action="/admin/attendance-unlocks/<%= r.request_id %>/approved">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn primary" type="submit">Approve</button>
+              </form>
+              <form method="post" action="/admin/attendance-unlocks/<%= r.request_id %>/rejected">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn danger" type="submit">Reject</button>
+              </form>
+            </div></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table></div>
+  <% } %>
+</section>
+<%- include('../partials/layout-end') %>

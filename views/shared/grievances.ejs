@@ -1,0 +1,41 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Grievances</h1><span class="sub">Raise a problem with the academic office and follow it until it is resolved</span></div>
+
+<% const row = (g, showRaiser) => { %>
+<tr>
+  <td class="nw"><a href="<%= base %>/<%= g.grievance_id %>"><b>#<%= g.grievance_id %></b></a></td>
+  <td><a href="<%= base %>/<%= g.grievance_id %>"><%= g.subject %></a><% if (showRaiser) { %><div class="muted" style="font-size:12.5px"><%= g.raised_by_name %> · <%= g.raised_by_login %></div><% } %></td>
+  <td><%= g.category %></td>
+  <td class="nw"><%= fmt.date(g.created_at) %></td>
+  <td class="num"><%= g.comment_count %></td>
+  <td><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></td>
+</tr>
+<% } %>
+
+<% if (isFaculty) { %>
+<section class="card t" style="margin-bottom:16px">
+  <div class="hd"><h2>Assigned to me</h2><span class="muted">The academic office asked you to help with these</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>No.</th><th>Subject</th><th>Category</th><th>Raised</th><th class="num">Replies</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!assigned.length) { %><tr><td colspan="6" class="empty">Nothing is assigned to you.</td></tr><% } %>
+      <% for (const g of assigned) row(g, true); %>
+    </tbody>
+  </table></div>
+</section>
+<% } %>
+
+<section class="card t">
+  <div class="hd">
+    <h2><%= isFaculty ? 'Raised by me' : 'My grievances' %></h2>
+    <a class="btn primary small" href="<%= base %>/new">Raise a grievance</a>
+  </div>
+  <div class="sc"><table>
+    <thead><tr><th>No.</th><th>Subject</th><th>Category</th><th>Raised</th><th class="num">Replies</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!mine.length) { %><tr><td colspan="6" class="empty">You have not raised any grievances.</td></tr><% } %>
+      <% for (const g of mine) row(g, false); %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

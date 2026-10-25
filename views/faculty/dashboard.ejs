@@ -1,96 +1,643 @@
-<%- include('../partials/layout-start') %>
-<% const f = profile; const name = f.first_name + ' ' + f.last_name; %>
-<h1>Dashboard</h1>
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/static/css/faculty-dashboard.css">
+<body>
+<div class="app" data-faculty-id="<%= profile.faculty_id %>">
 
-<section class="hero">
-  <svg class="deco" width="420" height="420" viewBox="0 0 420 420" aria-hidden="true"><circle cx="210" cy="210" r="90"/><circle cx="210" cy="210" r="140"/><circle cx="210" cy="210" r="190"/></svg>
-  <div class="hr">
-    <div class="who">
-      <div class="big"><%= fmt.initials(name) %></div>
-      <div style="min-width:0">
-        <div class="name"><%= f.qualification === 'Ph.D.' ? 'Dr. ' : '' %><%= name %></div>
-        <div class="sub"><%= f.designation %> · <%= f.dept_name %></div>
-        <div class="tags">
-          <span class="tag<%= f.status === 'Active' ? ' ok' : '' %>"><%= f.status %></span>
-          <% if (f.is_hod) { %><span class="tag">Head of Department</span><% } %>
-          <span class="tag"><%= stats.classes %> class<%= stats.classes === 1 ? '' : 'es' %> this term</span>
+<!-- SIDEBAR -->
+<aside class="side" id="sidebar" aria-label="Main navigation">
+  <a class="brand" href="/faculty"><div class="logo">P</div>PICT Faculty Portal</a>
+
+  <div class="grp">OVERVIEW</div>
+  <a href="#" data-action="navigate" class="nav on" data-target="dashboard"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 11l9-8 9 8v10H15v-6H9v6H3z"/></svg>Dashboard</a>
+  <a class="nav" href="/faculty/notices"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/></svg>Notices Board</a>
+
+  <div class="grp">TEACHING</div>
+  <a href="#" data-action="navigate" class="nav" data-target="courses"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/></svg>My courses</a>
+  <a href="#" data-action="navigate" class="nav" data-target="timetable"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2"/></svg>Timetable</a>
+  <a href="#" data-action="navigate" class="nav" data-target="students"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M3 20c0-3 3-5 6-5s6 2 6 5 M17 8h4 M17 12h4"/></svg>Student lists</a>
+
+  <div class="grp">ATTENDANCE</div>
+  <a href="#" data-action="navigate" class="nav" data-target="mark-attendance"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M8 12l3 3 5-6"/></svg>Mark attendance</a>
+  <a href="#" data-action="navigate" class="nav" data-target="session-records"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 6h12 M8 12h12 M8 18h12 M4 6h.01 M4 12h.01 M4 18h.01"/></svg>Session records</a>
+  <a href="#" data-action="navigate" class="nav" data-target="low-attendance"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4l9 16H3z M12 10v4 M12 17h.01"/></svg>Low attendance<span class="n bad" id="badgeLowAtt">0</span></a>
+  <a href="#" data-action="navigate" class="nav" data-target="correction-history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 3h8l4 4v14H7z M15 3v4h4"/></svg>Correction history</a>
+
+  <div class="grp">LEAVE</div>
+  <a href="#" data-action="navigate" class="nav" data-target="apply-leave"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v14H4z M4 10h16 M9 3v4 M15 3v4"/></svg>Apply for leave</a>
+  <a href="#" data-action="navigate" class="nav" data-target="my-requests"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 4h14v16H5z M9 9h6 M9 13h6"/></svg>My requests<span class="n" id="badgeLeavePending">0</span></a>
+  <a href="#" data-action="navigate" class="nav" data-target="leave-balance"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20V10 M10 20V4 M16 20v-8 M22 20H2"/></svg>Leave balance</a>
+
+  <div class="grp">PAYROLL</div>
+  <a href="#" data-action="navigate" class="nav" data-target="payslips"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4z M4 7l12-3v3 M16 14h2"/></svg>Payslips</a>
+  <a href="#" data-action="navigate" class="nav" data-target="salary-structure"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v18 M16 7.5C16 6 14.2 5 12 5s-4 1-4 2.5S9.8 10 12 10s4 1 4 2.5S14.2 15 12 15s-4-1-4-2.5"/></svg>Salary structure</a>
+
+  <div class="grp">RECORDS</div>
+  <a href="#" data-action="navigate" class="nav" data-target="profile"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</a>
+  <a href="#" data-action="navigate" class="nav" data-target="grievance"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v11H9l-5 4z"/></svg>Grievance</a>
+</aside>
+
+<div class="col">
+<!-- TOPBAR -->
+<header class="top">
+  <button type="button" class="menu-btn" id="facultyMenuToggle" data-menu aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" stroke="#7A8497" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="globalSearchInput" aria-label="Search" placeholder="Search students, courses, leave requests"></label>
+  <div class="sp"></div>
+  <button class="btn" id="btnTermSelector"><%= currentSession ? currentSession.session_name : 'Odd Semester 2026–27' %> ▾</button>
+  
+  <div style="position:relative">
+    <% const bellUnread = Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0); %>
+    <a class="notification-link" href="/faculty/notices" id="btnBell" aria-label="Notifications, <%= bellUnread ? `${bellUnread} unread` : 'no unread notifications' %>">
+      <svg width="20" height="20" viewBox="0 0 24 24" stroke="#3B4458" stroke-width="1.7"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/></svg>
+      <% if (bellUnread > 0) { %><span class="notification-badge" id="bellCount" aria-hidden="true"><%= bellUnread %></span><% } %>
+    </a>
+  </div>
+
+  <div class="me-wrap">
+    <button type="button" class="me" id="btnUserMenu" aria-expanded="false" aria-controls="userMenuDropdown">
+      <span class="av" id="topAvatar"><%= fmt.initials(profile.first_name + ' ' + profile.last_name) %></span>
+      <span class="me-details">
+        <strong id="topName"><%= (profile.qualification === 'Ph.D.' ? 'Dr. ' : 'Prof. ') + profile.first_name + ' ' + profile.last_name %></strong>
+        <small id="topEmpCode"><%= profile.faculty_code %></small>
+      </span>
+    </button>
+    <div class="dropdown-box" id="userMenuDropdown">
+      <div style="padding:10px 16px 6px;font-weight:600;font-size:12px;color:#7A8497">ACCOUNT</div>
+      <div class="dropdown-divider"></div>
+      <button type="button" class="dropdown-item" data-action="navigate" data-target="profile">View My Profile</button>
+      <a class="dropdown-item" href="/account/password">Change password</a>
+      <form method="post" action="/logout" style="margin:0">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="dropdown-item" style="width:100%;border:0;background:transparent;text-align:left;font:inherit">Sign out</button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 1. DASHBOARD VIEW -->
+  <section class="view-panel active" id="view-dashboard">
+    <div class="page-head">
+      <div>
+        <h1>Dashboard</h1>
+        <p>Real-time academic, attendance and institutional workload statistics.</p>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <svg width="420" height="420" viewBox="0 0 420 420" aria-hidden="true"><circle cx="210" cy="210" r="90"/><circle cx="210" cy="210" r="140"/><circle cx="210" cy="210" r="190"/></svg>
+      <div class="hr">
+        <div class="who">
+          <div class="big" id="heroAvatar"><%= fmt.initials(profile.first_name + ' ' + profile.last_name) %></div>
+          <div>
+            <div class="name" id="heroFullName"><%= (profile.qualification === 'Ph.D.' ? 'Dr. ' : 'Prof. ') + profile.first_name + ' ' + profile.last_name %></div>
+            <div class="sub" id="heroSub"><%= profile.designation %> · <%= profile.dept_name %></div>
+            <div class="tags">
+              <span class="tag ok" id="heroStatus"><%= profile.status %></span>
+              <span class="tag" id="heroRoleTag">Primary faculty · <%= classes.length %> classes</span>
+              <span class="tag hod" id="heroHodTag" style="<%= profile.is_hod ? '' : 'display:none' %>">HOD</span>
+            </div>
+            <div class="kv">
+              <div><small>Employee code</small><span id="heroEmpCode"><%= profile.faculty_code %></span></div>
+              <div><small>Joined</small><span id="heroJoined"><%= fmt.date(profile.date_of_joining) %></span></div>
+              <div><small>Contact</small><span id="heroContact"><%= profile.mobile_number || '—' %></span></div>
+            </div>
+          </div>
         </div>
-        <div class="kv">
-          <div><small>Faculty code</small><span><%= f.faculty_code %></span></div>
-          <div><small>Joined</small><span><%= fmt.date(f.date_of_joining) %></span></div>
-          <div><small>Contact</small><span><%= f.mobile_number %></span></div>
+        <div class="term">
+          <div class="l">
+            <div id="heroTermTitle"><%= currentSession ? currentSession.session_name : 'Current Term' %> · Active</div>
+            <div id="heroTermProgress"><%= progress ? `Week ${progress.week} of ${progress.totalWeeks} · ${progress.pct}% complete · ${progress.daysLeft} days left` : 'Academic Term In Progress' %></div>
+          </div>
+          <div class="wk"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="now"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i><i class="todo"></i></div>
+          <div class="wkl"><span>Wk 1</span><span>Wk 11</span><span>Wk 22</span></div>
+          <p id="heroTermSessions"><%= currentSession ? `${fmt.date(currentSession.start_date)} → ${fmt.date(currentSession.end_date)}` : '' %> · Sessions held so far: <%= stats.sessionsHeld %></p>
+        </div>
+      </div>
+      <div class="facts">
+        <div><small>Casual leave left</small><span id="heroFactCl">12 of 12 days</span></div>
+        <div><small>Pending requests</small><span id="heroFactPending">1</span></div>
+        <div><small>Latest payslip</small><span id="heroFactPayslip">Aug 2026 · Paid</span></div>
+        <div><small>PostgreSQL Status</small><span style="color:#9BE8C8">● Connected (Live)</span></div>
+      </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="cards">
+      <div class="card">
+        <div class="hd"><h2>Average class attendance</h2></div>
+        <div class="note">Orange tick marks the 75% minimum</div>
+        <div class="kpi" id="kpiAvgAttendance"><%= fmt.pct(stats.avgAttendance, 1) %></div>
+        <div class="bar"><i id="kpiAvgBar" style="width:<%= stats.avgAttendance || 84 %>%"></i><u style="left:75%"></u></div>
+        <div class="sm" id="kpiAvgSub">Above minimum across assigned offerings</div>
+      </div>
+      <div class="card">
+        <div class="hd"><h2>Attendance by course</h2></div>
+        <div class="note">Average of enrolled students</div>
+        <div id="courseAttendanceRows">
+          <% for (const c of courseBars) { %>
+            <div class="row"><span><%= c.code %> · <%= c.name %></span><div class="bar"><i style="width:<%= c.pct %>%"></i><u style="left:75%"></u></div><b><%= fmt.pct(c.pct) %></b></div>
+          <% } %>
+        </div>
+        <div class="sm" id="courseAttendanceSub">Live data from attendance register</div>
+      </div>
+      <div class="card">
+        <div class="hd"><h2>Leave balance · 2026</h2></div>
+        <div class="note">Quota minus approved days</div>
+        <div id="leaveBalanceRows">
+          <div class="row"><span>Casual</span><div class="bar"><i style="width:100%"></i></div><b>12</b></div>
+          <div class="row"><span>Earned</span><div class="bar"><i style="width:100%"></i></div><b>15</b></div>
+          <div class="row"><span>Medical</span><div class="bar"><i style="width:80%"></i></div><b>8</b></div>
+        </div>
+        <div class="sm">Unpaid (Loss of Pay) leave is deducted in payroll</div>
+      </div>
+      <div class="card">
+        <div class="hd"><h2>Net salary</h2></div>
+        <div class="note">Last two payroll months (₹)</div>
+        <div class="pay"><div><i style="height:100%"></i>Aug</div><div><i class="d" style="height:100%"></i>Sep</div></div>
+        <div class="sm" id="kpiSalarySub">Aug ₹2,10,000 paid · Sep draft</div>
+      </div>
+    </div>
+
+    <!-- TEACHING DAY AND WORKLOAD -->
+    <div class="new-grid" aria-label="Teaching day and workload">
+      <div class="card">
+        <div class="section-title">
+          <div>
+            <h2>Today's teaching day</h2>
+            <div class="note">Session status and quick attendance actions</div>
+          </div>
+          <button class="action-link" data-action="navigate" data-target="timetable">View timetable</button>
+        </div>
+        <div class="timeline" id="todayTimeline">
+          <!-- Populated from DB / Timetable -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">
+          <div>
+            <h2>Weekly teaching workload</h2>
+            <div class="note">Scheduled teaching hours by day</div>
+          </div>
+          <span class="pill">This week</span>
+        </div>
+        <div class="load-chart" role="img">
+          <div class="load-day"><span class="load-value">4 h</span><div class="load-track"><i class="load-bar" style="height:80%"></i></div><label>Mon</label></div>
+          <div class="load-day"><span class="load-value">3 h</span><div class="load-track"><i class="load-bar" style="height:60%"></i></div><label>Tue</label></div>
+          <div class="load-day"><span class="load-value">5 h</span><div class="load-track"><i class="load-bar today" style="height:100%"></i></div><label>Wed</label></div>
+          <div class="load-day"><span class="load-value">2 h</span><div class="load-track"><i class="load-bar" style="height:40%"></i></div><label>Thu</label></div>
+          <div class="load-day"><span class="load-value">4 h</span><div class="load-track"><i class="load-bar" style="height:80%"></i></div><label>Fri</label></div>
+        </div>
+        <div class="load-legend"><span class="legend-swatch"></span>Scheduled teaching hours <span class="muted-help" style="margin:0">· Total <%= stats.weeklyHours %> h / week</span></div>
+      </div>
+    </div>
+
+    <!-- HOD ONLY -->
+    <div class="card hod-only <%= profile.is_hod ? 'is-visible' : '' %>" id="hodWorkload">
+      <div class="section-title">
+        <div>
+          <h2>Department teaching-load comparison</h2>
+          <div class="note">HOD view · compare scheduled teaching hours across faculty</div>
+        </div>
+        <span class="pill">HOD only</span>
+      </div>
+      <div class="dept-bars">
+        <div class="dept-row"><span>You (HOD)</span><div class="bar"><i style="width:75%"></i></div><b><%= stats.weeklyHours %> h</b></div>
+        <div class="dept-row"><span>Faculty 02</span><div class="bar"><i style="width:58%"></i></div><b>14 h</b></div>
+        <div class="dept-row"><span>Faculty 03</span><div class="bar"><i style="width:92%"></i></div><b>22 h</b></div>
+        <div class="dept-row"><span>Faculty 04</span><div class="bar"><i style="width:67%"></i></div><b>16 h</b></div>
+      </div>
+    </div>
+
+    <!-- COURSES TABLE -->
+    <div class="card t">
+      <div class="hd"><h2>Courses taught · <%= currentSession ? currentSession.session_name : 'Current Term' %></h2><button class="action-link" data-action="navigate" data-target="courses">View full course list</button></div>
+      <div class="sc">
+      <table id="dashCoursesTable">
+        <thead><tr><th>Code</th><th>Course</th><th>Section</th><th>Role</th><th>Students</th><th>Sessions</th><th>Avg attendance</th><th>Below 75%</th></tr></thead>
+        <tbody>
+          <% for (const c of classes) { %>
+            <tr>
+              <td><strong><%= c.course_code %></strong></td>
+              <td><%= c.course_name %></td>
+              <td><span class="pill n"><%= c.batch_code || c.class_label %></span></td>
+              <td><span class="pill"><%= c.session_type %></span></td>
+              <td><%= c.students %></td>
+              <td><%= c.sessions_held %></td>
+              <td><div class="pc"><%= c.avg_pct != null ? c.avg_pct + '%' : '–' %><div class="bar"><i style="width:<%= c.avg_pct || 0 %>%"></i></div></div></td>
+              <td><span class="pill <%= c.below_min ? 'o' : 'g' %>"><%= c.below_min ? c.below_min + ' students' : 'None' %></span></td>
+            </tr>
+          <% } %>
+        </tbody>
+        <tfoot><tr><td colspan="4">Total</td><td id="dashTotalStudents"><%= stats.totalStudents || classes.reduce((s, c) => s + c.students, 0) %></td><td id="dashTotalSessions"><%= stats.sessionsHeld %></td><td colspan="2">Minimum attendance threshold: 75%</td></tr></tfoot>
+      </table>
+      </div>
+    </div>
+
+    <!-- STACK CARDS -->
+    <div class="stack">
+      <div class="card">
+        <div class="hd"><h2>Needs attention</h2></div>
+        <div id="dashNeedsAttention">
+          <div class="item"><span class="dot r"></span><div class="t"><div><%= stats.belowMin %> students below 75% attendance</div><button type="button" class="action-link" data-action="navigate" data-target="low-attendance">View list</button></div></div>
+          <div class="item"><span class="dot b"></span><div class="t"><div>1 leave request pending approval</div><button type="button" class="action-link" data-action="navigate" data-target="my-requests">Track request</button></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><h2>Upcoming sessions</h2><button class="action-link" data-action="navigate" data-target="timetable">Timetable</button></div>
+        <div id="dashUpcomingSessions"></div>
+      </div>
+      <div class="card">
+        <div class="hd"><h2>Recent attendance corrections</h2><button class="action-link" data-action="navigate" data-target="correction-history">View all</button></div>
+        <div id="dashRecentCorrections"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. MY COURSES VIEW -->
+  <section class="view-panel" id="view-courses">
+    <div class="page-head">
+      <div>
+        <h1>My Courses</h1>
+        <p>Courses and teaching assignments assigned to your profile in the current academic session.</p>
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="fullCoursesTable">
+          <thead><tr><th>Code</th><th>Course Title</th><th>Credits</th><th>Section</th><th>Academic Term</th><th>Role</th><th>Enrolled Students</th><th>Sessions Conducted</th><th>Avg Attendance</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. TIMETABLE VIEW -->
+  <section class="view-panel" id="view-timetable">
+    <div class="page-head">
+      <div>
+        <h1>Timetable</h1>
+        <p>Scheduled lectures, tutorials, and practical lab sessions for <%= currentSession ? currentSession.session_name : 'Current Term' %>.</p>
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="fullTimetableTable">
+          <thead><tr><th>Day</th><th>Time Slot</th><th>Course Code</th><th>Course Title</th><th>Section</th><th>Type</th><th>Room / Venue</th><th>Assignment Role</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. STUDENT LISTS VIEW -->
+  <section class="view-panel" id="view-students">
+    <div class="page-head">
+      <div>
+        <h1>Student Lists</h1>
+        <p>Enrolled students in your assigned course offerings with real-time attendance statistics.</p>
+      </div>
+    </div>
+    <div class="controls-bar">
+      <div class="form-group" style="min-width:240px">
+        <select id="studentOfferingFilter" data-action="student-offering-filter"><option value="0">All Assigned Offerings</option></select>
+      </div>
+      <div class="search" style="max-width:300px">
+        <svg width="14" height="14" viewBox="0 0 24 24" stroke="#7A8497"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="studentSearchInput" placeholder="Filter by name or enrollment..." data-action="filter-students">
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="studentsTable">
+          <thead><tr><th>Enrollment No</th><th>Student Name</th><th>Department</th><th>Admission Year</th><th>Course</th><th>Section</th><th>Sessions (Attended / Total)</th><th>Attendance %</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. MARK ATTENDANCE VIEW -->
+  <section class="view-panel" id="view-mark-attendance">
+    <div class="page-head">
+      <div>
+        <h1>Mark Attendance</h1>
+        <p>Record a new lecture or practical attendance session directly into PostgreSQL.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Select Course Offering</label>
+          <select id="markOfferingSelect" data-action="mark-offering-change"></select>
+        </div>
+        <div class="form-group">
+          <label>Session Date</label>
+          <input type="date" id="markSessionDate">
+        </div>
+        <div class="form-group">
+          <label>Start Time</label>
+          <input type="time" id="markStartTime" value="09:00">
+        </div>
+        <div class="form-group">
+          <label>End Time</label>
+          <input type="time" id="markEndTime" value="10:00">
+        </div>
+        <div class="form-group full">
+          <label>Lecture Topic / Laboratory Unit</label>
+          <input type="text" id="markTopic" placeholder="e.g. Relational Calculus and Advanced Joins">
         </div>
       </div>
     </div>
-    <div class="termbox">
-      <% if (progress) { %>
-        <div class="l"><div><%= currentSession.session_name %> · Active</div><div>Week <%= progress.week %> of <%= progress.totalWeeks %> · <%= progress.pct %>% complete · <%= progress.daysLeft %> days left</div></div>
-        <div class="progress"><i style="width:<%= progress.pct %>%"></i></div>
-        <p><%= fmt.date(currentSession.start_date) %> → <%= fmt.date(currentSession.end_date) %> · Sessions held so far: <%= fmt.num(stats.sessionsHeld) %></p>
-      <% } %>
+
+    <div class="card t">
+      <div class="hd">
+        <h2>Student Register</h2>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn sm" data-action="mark-all" data-status="PRESENT">Mark All Present</button>
+          <button type="button" class="btn sm" data-action="mark-all" data-status="ABSENT">Mark All Absent</button>
+        </div>
+      </div>
+      <div class="sc">
+        <table id="markAttendanceTable">
+          <thead><tr><th>Enrollment No</th><th>Student Name</th><th>Attendance Status</th><th>Remarks</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div style="padding:16px 20px;border-top:1px solid #EEF0F5;display:flex;justify-content:flex-end">
+        <button type="button" class="btn primary" data-action="submit-attendance">Save Attendance to Database</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. SESSION RECORDS VIEW -->
+  <section class="view-panel" id="view-session-records">
+    <div class="page-head">
+      <div>
+        <h1>Session Records</h1>
+        <p>Historic attendance sessions conducted for your assigned courses.</p>
+      </div>
+    </div>
+    <div class="controls-bar">
+      <div class="form-group" style="min-width:240px">
+        <select id="recordsOfferingFilter" data-action="records-offering-filter"><option value="0">All Offerings</option></select>
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="sessionRecordsTable">
+          <thead><tr><th>Date</th><th>Time</th><th>Course</th><th>Section</th><th>Topic</th><th>Present</th><th>Late</th><th>Absent</th><th>Excused</th><th>Attendance %</th><th>Register</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. LOW ATTENDANCE VIEW -->
+  <section class="view-panel" id="view-low-attendance">
+    <div class="page-head">
+      <div>
+        <h1>Low Attendance Report</h1>
+        <p>Students falling below the mandatory 75% attendance threshold.</p>
+      </div>
+      <button type="button" class="btn" data-action="export-low-attendance"><svg width="14" height="14" viewBox="0 0 24 24" stroke="#5B6578"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"/></svg> Export CSV</button>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="lowAttendanceTable">
+          <thead><tr><th>Enrollment No</th><th>Student Name</th><th>Department</th><th>Course</th><th>Section</th><th>Attended / Total</th><th>Absent</th><th>Attendance %</th><th>Recommended Action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. CORRECTION HISTORY VIEW -->
+  <section class="view-panel" id="view-correction-history">
+    <div class="page-head">
+      <div>
+        <h1>Attendance Correction History</h1>
+        <p>Audit trail of attendance modifications stored in the PostgreSQL audit log.</p>
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="auditHistoryTable">
+          <thead><tr><th>Timestamp</th><th>Student Name</th><th>Enrollment No</th><th>Course</th><th>Status Change</th><th>Reason / Justification</th><th>Changed By User</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. APPLY FOR LEAVE VIEW -->
+  <section class="view-panel" id="view-apply-leave">
+    <div class="page-head">
+      <div>
+        <h1>Apply for Leave</h1>
+        <p>Submit a formal leave application subject to database balance validation and admin approval.</p>
+      </div>
+    </div>
+    <div class="form-card">
+      <div id="applyLeaveAlert"></div>
+      <form id="leaveApplyForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Leave Type</label>
+            <select id="applyLeaveType" required>
+              <option value="1">Casual Leave (12 days quota)</option>
+              <option value="2">Earned Leave (15 days quota)</option>
+              <option value="3">Medical Leave (10 days quota)</option>
+              <option value="4">Loss of Pay (Unpaid)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Days Requested</label>
+            <input type="number" step="0.5" min="0.5" id="applyDaysRequested" placeholder="e.g. 1 or 2" required>
+          </div>
+          <div class="form-group">
+            <label>From Date</label>
+            <input type="date" id="applyFromDate" required data-action="calculate-leave-days">
+          </div>
+          <div class="form-group">
+            <label>To Date</label>
+            <input type="date" id="applyToDate" required data-action="calculate-leave-days">
+          </div>
+          <div class="form-group full">
+            <label>Reason for Leave</label>
+            <textarea id="applyReason" placeholder="Specify reason for leave..." required></textarea>
+          </div>
+        </div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end">
+          <button type="submit" class="btn primary">Submit Leave Application</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- 10. MY REQUESTS VIEW -->
+  <section class="view-panel" id="view-my-requests">
+    <div class="page-head">
+      <div>
+        <h1>My Leave Requests</h1>
+        <p>Track statuses, decision remarks, and cancellations for your submitted leave requests.</p>
+      </div>
+      <button type="button" class="btn primary" data-action="navigate" data-target="apply-leave">+ Apply for Leave</button>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="leaveRequestsTable">
+          <thead><tr><th>Request ID</th><th>Leave Type</th><th>Period</th><th>Days</th><th>Reason</th><th>Status</th><th>Decision By</th><th>Decision Remarks</th><th>Action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. LEAVE BALANCE VIEW -->
+  <section class="view-panel" id="view-leave-balance">
+    <div class="page-head">
+      <div>
+        <h1>Leave Balance · 2026</h1>
+        <p>Live leave quota, utilized days, and remaining balances calculated via PostgreSQL procedures.</p>
+      </div>
+    </div>
+    <div class="cards" id="leaveBalanceCards">
+      <!-- Populated from DB -->
+    </div>
+  </section>
+
+  <!-- 12. PAYSLIPS VIEW -->
+  <section class="view-panel" id="view-payslips">
+    <div class="page-head">
+      <div>
+        <h1>Faculty Payslips</h1>
+        <p>Authorized monthly payroll statements and itemized earnings/deductions.</p>
+      </div>
+    </div>
+    <div class="card t">
+      <div class="sc">
+        <table id="payslipsTable">
+          <thead><tr><th>Period</th><th>Basic Salary</th><th>Allowances</th><th>Deductions</th><th>Leave Deduction</th><th>Net Salary</th><th>Status</th><th>Paid At</th><th>Action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13. SALARY STRUCTURE VIEW -->
+  <section class="view-panel" id="view-salary-structure">
+    <div class="page-head">
+      <div>
+        <h1>Salary Structure</h1>
+        <p>Confidential compensation details, allowances, and per-day deduction rules.</p>
+      </div>
+    </div>
+    <div class="cards" id="salaryStructureCards"></div>
+  </section>
+
+  <!-- 14. PROFILE VIEW -->
+  <section class="view-panel" id="view-profile">
+    <div class="page-head">
+      <div>
+        <h1>Faculty Profile</h1>
+        <p>Official academic records, employee identification, and contact information.</p>
+      </div>
+    </div>
+    <div class="card form-card">
+      <div id="profileAlert"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Employee Code</label><input type="text" id="profEmpCode" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>User ID</label><input type="text" id="profUserId" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Full Name</label><input type="text" id="profFullName" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Email Address</label><input type="text" id="profEmail" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Department</label><input type="text" id="profDepartment" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Designation</label><input type="text" id="profDesignation" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Joining Date</label><input type="text" id="profJoiningDate" readonly style="background:#F8F9FB"></div>
+        <div class="form-group"><label>Status</label><input type="text" id="profStatus" readonly style="background:#F8F9FB"></div>
+        <div class="form-group full"><label>Contact Mobile Number (Editable)</label><input type="text" id="profContact"></div>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:flex-end">
+        <button type="button" class="btn primary" data-action="update-profile">Update Contact Info</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15. GRIEVANCE VIEW -->
+  <section class="view-panel" id="view-grievance">
+    <div class="page-head">
+      <div>
+        <h1>Faculty Grievances & Redressal</h1>
+        <p>Submit and track academic, administrative, and payroll-related grievances.</p>
+      </div>
+      <button type="button" class="btn primary" data-action="open-grievance-form">+ Submit New Grievance</button>
+    </div>
+
+    <div class="card form-card" id="grievanceFormCard" style="display:none;margin-bottom:16px">
+      <form id="grievanceForm">
+      <div class="hd"><h2>New Grievance Submission</h2><button type="button" class="modal-close" data-action="close-grievance-form" aria-label="Close grievance form">✕</button></div>
+      <div id="grievanceAlert"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="grievanceCategory">
+            <option value="ACADEMIC">Academic / Timetable</option>
+            <option value="ADMINISTRATIVE">Administrative</option>
+            <option value="PAYROLL">Payroll / Salary</option>
+            <option value="INFRASTRUCTURE">Campus / Lab Infrastructure</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Subject / Title</label>
+          <input type="text" id="grievanceTitle" placeholder="Brief subject of grievance">
+        </div>
+        <div class="form-group full">
+          <label>Detailed Description</label>
+          <textarea id="grievanceDescription" placeholder="Describe the concern in detail..."></textarea>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" data-action="close-grievance-form">Cancel</button>
+        <button type="submit" class="btn primary">Submit Grievance</button>
+      </div>
+      </form>
+    </div>
+
+    <div class="card t">
+      <div class="sc">
+        <table id="grievanceTable">
+          <thead><tr><th>ID</th><th>Submitted On</th><th>Category</th><th>Subject</th><th>Status</th><th>Resolution Remarks</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">PICT Faculty ERP Module · Connected to PostgreSQL database <code>erp</code> · PICT Pune.</div>
+</main>
+</div>
+</div>
+
+<!-- PAYSLIP MODAL -->
+<div class="modal-backdrop" id="payslipModal">
+  <div class="modal-content">
+    <div class="modal-head">
+      <h2 id="payslipModalTitle">Payslip Statement</h2>
+      <button type="button" class="modal-close" data-action="close-modal" aria-label="Close payslip">✕</button>
+    </div>
+    <div id="payslipModalBody"></div>
+    <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+      <button type="button" class="btn" data-action="print-payslip">Print Payslip</button>
+      <button type="button" class="btn primary" data-action="close-modal">Close</button>
     </div>
   </div>
-  <div class="facts">
-    <div><small>Teaching load</small><span><%= stats.weeklyHours %> h / week</span></div>
-    <div><small>Classes</small><span><%= stats.classes %></span></div>
-    <div><small>Students below minimum</small><span><%= fmt.num(stats.belowMin) %></span></div>
-    <div><small>Average attendance</small><span><%= fmt.pct(stats.avgAttendance, 1) %></span></div>
-  </div>
-</section>
+</div>
 
-<section class="cards">
-  <div class="card">
-    <div class="hd"><h2>Average class attendance</h2></div>
-    <div class="note">Orange tick marks the 75% minimum</div>
-    <div class="kpi"><%= fmt.pct(stats.avgAttendance, 1) %></div>
-    <div class="bar"><% if (stats.avgAttendance !== null) { %><i style="width:<%= stats.avgAttendance %>%"></i><% } %><u style="left:75%"></u></div>
-    <div class="sm"><% if (stats.avgAttendance !== null) { %><%= (stats.avgAttendance - 75).toFixed(1) %> points <%= stats.avgAttendance >= 75 ? 'above' : 'below' %> minimum, weighted by class size<% } else { %>No sessions recorded yet<% } %></div>
-  </div>
-  <div class="card">
-    <div class="hd"><h2>Attendance by course</h2></div>
-    <div class="note">Average of enrolled students</div>
-    <% if (!courseBars.length) { %><div class="empty">No sessions recorded yet.</div><% } %>
-    <% for (const c of courseBars) { %>
-      <div class="row" title="<%= c.name %>"><span><%= c.code %> · <%= c.name %></span>
-        <div class="bar"><i class="<%= c.pct < 75 ? 'bad' : '' %>" style="width:<%= c.pct %>%"></i><u style="left:75%"></u></div><b><%= fmt.pct(c.pct) %></b></div>
-    <% } %>
-  </div>
-  <div class="card">
-    <div class="hd"><h2>Needs attention</h2></div>
-    <div class="note">Classes with students under the minimum</div>
-    <% if (!attention.length) { %><div class="item"><span class="dot g"></span><div class="t"><div>No shortages in your classes</div></div></div><% } %>
-    <% for (const c of attention) { %>
-      <div class="item"><span class="dot r"></span><div class="t"><div><%= c.below_min %> student<%= c.below_min === 1 ? '' : 's' %> below <%= c.min_attendance_pct %>%</div>
-        <a href="/faculty/classes/<%= c.assignment_id %>?filter=below"><%= c.course_code %> · <%= c.batch_code || c.class_label %></a></div></div>
-    <% } %>
-  </div>
-  <div class="card">
-    <div class="hd"><h2><%= classDay && classDay.offset === 0 ? 'Today' : 'Next teaching day' %></h2><span class="muted"><%= classDay ? fmt.day(classDay.day) : '' %></span></div>
-    <% if (!classDay) { %><div class="empty">No classes scheduled.</div><% } else { for (const t of classDay.rows) { %>
-      <div class="tt-slot"><div class="tt-time"><b><%= fmt.time(t.start_time) %></b><%= fmt.time(t.end_time) %></div>
-        <div class="t"><div><%= t.course_code %> · <%= t.batch_code || t.division_code || ('Honors ' + t.offering_section) %></div>
-          <div class="s"><%= t.session_type %> · <%= t.room_code %></div></div></div>
-    <% } } %>
-  </div>
-</section>
-
-<section class="card t">
-    <div class="hd"><h2>Classes taught · <%= currentSession.session_name %></h2><a href="/faculty/classes">All classes</a></div>
-    <div class="sc"><table>
-      <thead><tr><th>Code</th><th>Course</th><th>Class</th><th class="num">Students</th><th class="num">Sessions</th><th>Avg attendance</th><th>Below min</th></tr></thead>
-      <tbody>
-        <% for (const c of classes) { %>
-          <tr>
-            <td class="code"><%= c.course_code %></td>
-            <td><a href="/faculty/classes/<%= c.assignment_id %>"><%= c.course_name %></a></td>
-            <td class="nw"><%= c.batch_code || c.class_label %> <span class="pill<%= c.session_type === 'Lab' ? ' g' : '' %>"><%= c.session_type %></span></td>
-            <td class="num"><%= c.students %></td>
-            <td class="num"><%= c.sessions_held %></td>
-            <td><%- include('../partials/pct-bar', { value: c.avg_pct, min: c.min_attendance_pct }) %></td>
-            <td><span class="pill <%= c.below_min ? 'o' : 'g' %>"><%= c.below_min ? c.below_min + ' student' + (c.below_min === 1 ? '' : 's') : 'None' %></span></td>
-          </tr>
-        <% } %>
-      </tbody>
-    </table></div>
-  </section>
-<%- include('../partials/layout-end') %>
+<script src="/static/js/faculty-dashboard.js" defer></script>
+</body>
+</html>

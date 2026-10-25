@@ -1,3 +1,4 @@
+import { getStudentSyllabusCoverage } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
 import { financeApiRouter } from './finance-routes.js';
 import { z } from 'zod';
@@ -8,17 +9,48 @@ import { notFound } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { getCurriculum, getStudentCourses, getStudentProfile, getStudentTimetable, nextClassDay } from '../queries/shared-queries.js';
 import { getStudentElectiveOfferings, getStudentElectiveResult, getStudentElectiveWindows } from '../queries/academic-queries.js';
+import { grievanceRouter } from './grievance-routes.js';
+import { noticeRouter } from './notice-routes.js';
+import { noticeSummary } from '../queries/notice-queries.js';
+import { placementStudentRouter } from './placement-routes.js';
+import { studentApiRouter } from './student-api-routes.js';
+
 export const studentRouter = Router();
+studentRouter.use('/api', studentApiRouter);
+studentRouter.use('/placement', placementStudentRouter);
+studentRouter.use('/grievances', grievanceRouter);
+studentRouter.use('/notices', noticeRouter);
+
+studentRouter.get('/attendance', (_req, res) => {
+  res.render('student/attendance-summary', { title: 'Attendance Summary', nav: 'attendance-summary' });
+});
+
+studentRouter.get('/attendance/detail', (_req, res) => {
+  res.render('student/attendance-detail', { title: 'Attendance Detail', nav: 'attendance-detail' });
+});
+
+studentRouter.get('/exams', (_req, res) => {
+  res.render('student/exam-schedule', { title: 'Exam Schedule', nav: 'exam-schedule' });
+});
+
+studentRouter.get('/hall-ticket', (_req, res) => {
+  res.render('student/hall-ticket', { title: 'Hall Ticket', nav: 'hall-ticket' });
+});
+
+studentRouter.get('/results', (_req, res) => {
+  res.render('student/results', { title: 'Results', nav: 'results' });
+});
 
 studentRouter.get('/', async (req, res) => {
   const studentId = req.user!.studentId!;
-  const [profile, courses, timetable, overall] = await Promise.all([
+  const [profile, courses, timetable, overall, notices] = await Promise.all([
     getStudentProfile(studentId),
     getStudentCourses(studentId),
     getStudentTimetable(studentId),
     queryOne<{ total_sessions: number; attended: number; overall_pct: number | null }>(
       `SELECT total_sessions, attended, overall_pct FROM v_student_attendance_overall
         WHERE student_id = $1 AND academic_session_id = current_session_id()`, [studentId]),
+    noticeSummary(req.user!.userId, 4, res.locals.notificationUnreadCount),
   ]);
   if (!profile) throw notFound('Student record');
 
@@ -31,7 +63,7 @@ studentRouter.get('/', async (req, res) => {
   }, { total: 0, theory: 0, lab: 0 });
 
   res.render('student/dashboard', {
-    title: 'Dashboard', nav: 'dashboard', profile, courses, overall, credits,
+    title: 'Dashboard', nav: 'dashboard', profile, courses, overall, credits, notices, noticeBase: '/student/notices',
     progress: session ? termProgress(session.start_date, session.end_date, today) : null,
     shortage: courses.filter((c) => c.eligibility === 'Shortage'),
     classDay: nextClassDay(timetable, isoWeekday(today)),
@@ -53,7 +85,8 @@ studentRouter.get('/offerings', async (req, res) => {
   if (!profile) throw notFound('Student record');
   const courses = await getStudentCourses(req.user!.studentId!);
   const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
-  res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits });
+  const coverage = await getStudentSyllabusCoverage(req.user!.studentId!);
+  res.render('student/offerings', { title: 'Course offerings', nav: 'offerings', profile, courses, totalCredits, coverage });
 });
 
 studentRouter.get('/fee', (_req, res) => {

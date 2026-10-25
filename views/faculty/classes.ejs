@@ -2,9 +2,9 @@
 <div class="page-head"><h1>My classes</h1><span class="sub"><%= currentSession.session_name %> · <%= classes.length %> teaching assignments</span></div>
 <section class="card t">
   <div class="sc"><table>
-    <thead><tr><th>Code</th><th>Course</th><th>Class</th><th>Type</th><th class="num">Per week</th><th class="num">Students</th><th class="num">Held</th><th>Last session</th><th>Avg attendance</th><th>Below min</th></tr></thead>
+    <thead><tr><th>Code</th><th>Course</th><th>Class</th><th>Type</th><th class="num">Per week</th><th class="num">Students</th><th class="num">Held</th><th>Last session</th><th>Avg attendance</th><th>Below min</th><th>Syllabus</th></tr></thead>
     <tbody>
-      <% if (!classes.length) { %><tr><td colspan="10" class="empty">No classes assigned this term.</td></tr><% } %>
+      <% if (!classes.length) { %><tr><td colspan="11" class="empty">No classes assigned this term.</td></tr><% } %>
       <% for (const c of classes) { %>
         <tr>
           <td class="code"><%= c.course_code %></td>
@@ -17,6 +17,7 @@
           <td class="nw"><%= fmt.shortDate(c.last_session) %></td>
           <td><%- include('../partials/pct-bar', { value: c.avg_pct, min: c.min_attendance_pct }) %></td>
           <td><% if (c.below_min) { %><a class="pill o" href="/faculty/classes/<%= c.assignment_id %>?filter=below"><%= c.below_min %></a><% } else { %><span class="pill g">None</span><% } %></td>
+          <td><%- include('../partials/pct-bar', { value: syllabus.has(c.assignment_id) ? syllabus.get(c.assignment_id) : null, min: 1 }) %><a class="muted" href="/faculty/classes/<%= c.assignment_id %>/syllabus">Units</a></td>
         </tr>
       <% } %>
     </tbody>

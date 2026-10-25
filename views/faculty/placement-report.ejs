@@ -1,0 +1,4 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Department placement report</h1><span class="sub">Read-only report for your department. Placement status counts accepted full-time offers.</span></div>
+<div class="table-wrap card"><table><thead><tr><th>Program</th><th>Active students</th><th>Placed</th><th>Placed %</th><th>Highest LPA</th></tr></thead><tbody><% rows.forEach(r=>{ %><tr><td><%= r.program_name %></td><td><%= r.active_students %></td><td><%= r.placed_students %></td><td><%= r.placed_pct??'—' %></td><td><%= r.highest_package_lpa??'—' %></td></tr><% }) %></tbody></table></div>
+<%- include('../partials/layout-end') %>
