@@ -62,12 +62,9 @@ export function createApp(): express.Express {
   app.use(express.json());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
   app.use(sessionMiddleware);
-  app.use(csrf);
   app.use(currentUser);
+  app.use(csrf);
   app.use('/api/notifications', notificationRouter);
-
-  app.use('/api', apiRouter);
-  app.use('/faculty/api', apiRouter);
 
   app.use('/api', apiRouter);
   app.use('/faculty/api', apiRouter);
