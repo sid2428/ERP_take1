@@ -44,13 +44,13 @@ export function createApp(): express.Express {
   app.locals.NAV = NAV;
   app.locals.appName = 'PICT ERP';
 
-    app.use(helmet({
+  app.use(helmet({
     crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },   // lets the payment window open
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
-        styleSrcAttr: ["'unsafe-inline'"],
+        styleSrcAttr: ["'unsafe-inline'"],         // bar widths; no inline <style> blocks or scripts allowed
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         scriptSrc: ["'self'", 'https://*.razorpay.com'],
         frameSrc: ["'self'", 'https://*.razorpay.com'],
