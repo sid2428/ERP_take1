@@ -1,0 +1,155 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <h1>Leave Management</h1>
+  <span class="sub">Annual quotas, formal leave applications and decision records.</span>
+</div>
+
+<section class="cards">
+  <% for (const b of balances) { %>
+    <div class="card">
+      <div class="hd">
+        <h2><%= b.leave_name %></h2>
+        <span class="pill <%= b.is_paid ? 'g' : 'o' %>"><%= b.is_paid ? 'Paid' : 'Loss of Pay' %></span>
+      </div>
+      <div class="kpi"><%= b.balance_days %> <small>/ <%= b.annual_quota %> d</small></div>
+      <div class="bar">
+        <i style="width:<%= Math.min(100, Math.round((Number(b.balance_days) / (b.annual_quota || 1)) * 100)) %>%"></i>
+      </div>
+      <div class="sm"><%= b.is_paid ? 'Institutional quota for calendar year 2026' : 'Salary deduction calculated per day' %></div>
+    </div>
+  <% } %>
+</section>
+
+<div class="grid2" style="margin-top:20px">
+  <section class="card">
+    <div class="hd">
+      <h2>Apply for Leave</h2>
+      <span class="note">Requires admin approval before balance deduction</span>
+    </div>
+
+    <form method="post" action="/faculty/leave/apply" id="leaveApplicationForm">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      
+      <div class="form-grid">
+        <div class="field">
+          <label for="leaveTypeId">Leave Type</label>
+          <select name="leave_type_id" id="leaveTypeId" required>
+            <% for (const t of types) { %>
+              <option value="<%= t.leave_type_id %>"><%= t.leave_name %> (<%= t.annual_quota %> days quota)</option>
+            <% } %>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="daysRequested">Days Requested</label>
+          <input type="number" step="0.5" min="0.5" max="30" name="days_requested" id="daysRequested" placeholder="e.g. 1 or 2" required>
+        </div>
+
+        <div class="field">
+          <label for="fromDate">From Date</label>
+          <input type="date" name="from_date" id="fromDate" required>
+        </div>
+
+        <div class="field">
+          <label for="toDate">To Date</label>
+          <input type="date" name="to_date" id="toDate" required>
+        </div>
+
+        <div class="field full">
+          <label for="leaveReason">Reason for Leave</label>
+          <textarea name="reason" id="leaveReason" rows="3" placeholder="Provide detailed justification for leave..." required></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;justify-content:flex-end">
+        <button type="submit" class="btn primary">Submit Leave Application</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <div class="hd"><h2>Leave Guidelines</h2></div>
+      <div class="item">
+        <span class="dot g"></span>
+        <div class="t">
+          <div>Casual Leave (CL)</div>
+          <div class="s">Credited annually (12 days). Subject to teaching replacement arrangement.</div>
+        </div>
+      </div>
+      <div class="item">
+        <span class="dot o"></span>
+        <div class="t">
+          <div>Earned Leave (EL)</div>
+          <div class="s">Must be applied at least 3 days in advance for non-emergency periods.</div>
+        </div>
+      </div>
+      <div class="item">
+        <span class="dot r"></span>
+        <div class="t">
+          <div>Loss of Pay (LOP)</div>
+          <div class="s">Unpaid absence automatically deducted during monthly payroll generation.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="card t" style="margin-top:20px">
+  <div class="hd">
+    <h2>My Leave Requests</h2>
+    <span class="note">All submitted leave applications</span>
+  </div>
+  <div class="sc">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Leave Type</th>
+          <th>Duration</th>
+          <th class="num">Days</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Decision By</th>
+          <th>Decision Remarks</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!requests.length) { %>
+          <tr><td colspan="9" class="empty">No leave requests submitted yet.</td></tr>
+        <% } %>
+        <% for (const r of requests) { %>
+          <tr>
+            <td class="code">#<%= r.leave_request_id %></td>
+            <td><strong><%= r.leave_name %></strong></td>
+            <td class="nw"><%= fmt.shortDate(r.from_date) %> → <%= fmt.shortDate(r.to_date) %></td>
+            <td class="num"><strong><%= r.days_requested %></strong></td>
+            <td><%= r.reason || '—' %></td>
+            <td>
+              <span class="pill <%= r.status === 'APPROVED' ? 'g' : (r.status === 'REJECTED' ? 'r' : (r.status === 'CANCELLED' ? 'n' : 'o')) %>">
+                <%= r.status %>
+              </span>
+            </td>
+            <td><%= r.approver_name || '—' %></td>
+            <td><%= r.decision_remarks || '—' %></td>
+            <td>
+              <% if (r.status === 'PENDING') { %>
+                <form method="post" action="/faculty/leave/cancel/<%= r.leave_request_id %>" style="margin:0" data-confirm="Are you sure you want to cancel leave request #<%= r.leave_request_id %>?">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn small danger">Cancel</button>
+                </form>
+              <% } else { %>
+                <span class="muted">—</span>
+              <% } %>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script src="/static/js/faculty-leave.js" defer></script>
+<%- include('../partials/layout-end') %>

@@ -7,5 +7,5 @@
   <div class="student-state">Loading your assigned courses…</div>
 </section>
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<script src="/static/js/faculty-examination.js" defer></script>
+<script src="/static/js/faculty-examination.js?v=<%= Date.now() %>" defer></script>
 <%- include('../partials/layout-end') %>
