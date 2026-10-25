@@ -13,7 +13,7 @@ const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp
 const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
 
 describe.skipIf(!hasAppEnv)('T3-3 syllabus coverage (pages and permissions)', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
 
   afterAll(async () => {

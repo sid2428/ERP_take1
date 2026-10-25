@@ -1,7 +1,27 @@
 // Centralized API Configuration
-const appRootEl = document.getElementById('facultyApp') || document.querySelector('.app');
-let currentFacultyId = Number(appRootEl?.dataset?.facultyId || window.__FACULTY_ID__ || 74);
+const appRootEl =
+    document.getElementById('facultyApp') ||
+    document.querySelector('.app');
+
+// Prefer the faculty ID rendered by the server.
+// Retain the fallback for existing configurations.
+const currentFacultyId = Number(
+    appRootEl?.dataset?.facultyId ||
+    window.__FACULTY_ID__ ||
+    74
+);
+
 const API_BASE = '/api';
+
+function apiFetch(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+  }
+  return fetch(url, { credentials: 'same-origin', ...options, headers });
+}
 
 // Cached Data
 let cachedCourses = [];
@@ -57,7 +77,7 @@ function navigateTo(targetId) {
 // 1. DASHBOARD LOADER
 async function loadDashboard() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/dashboard`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/dashboard`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     cachedDashboard = data;
@@ -197,7 +217,7 @@ async function loadDashboard() {
               <div class="status-text ${idx === 0 ? 'done' : 'pending'}">${idx === 0 ? 'Scheduled' : 'Upcoming'}</div>
             </div>
             <div class="session-actions">
-              <button class="action-link primary" data-target="mark-attendance" onclick="navigateTo('mark-attendance')">Mark attendance</button>
+              <button type="button" class="action-link primary" data-action="navigate" data-target="mark-attendance">Mark attendance</button>
             </div>
           </div>
         `).join('');
@@ -210,8 +230,8 @@ async function loadDashboard() {
     const needsAtt = document.getElementById('dashNeedsAttention');
     if (needsAtt) {
       needsAtt.innerHTML = `
-        <div class="item"><span class="dot r"></span><div class="t"><div>${lowCount} students below 75% attendance</div><a href="javascript:void(0)" data-target="low-attendance" onclick="navigateTo('low-attendance')">View low attendance list</a></div></div>
-        <div class="item"><span class="dot b"></span><div class="t"><div>${data.pendingLeaveRequests} leave request pending approval</div><a href="javascript:void(0)" data-target="my-requests" onclick="navigateTo('my-requests')">Track request</a></div></div>
+        <div class="item"><span class="dot r"></span><div class="t"><div>${lowCount} students below 75% attendance</div><button type="button" class="action-link" data-action="navigate" data-target="low-attendance">View low attendance list</button></div></div>
+        <div class="item"><span class="dot b"></span><div class="t"><div>${data.pendingLeaveRequests} leave request pending approval</div><button type="button" class="action-link" data-action="navigate" data-target="my-requests">Track request</button></div></div>
       `;
     }
 
@@ -249,7 +269,7 @@ async function loadDashboard() {
 // 2. COURSES
 async function loadCourses() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
     const courses = await res.json();
     cachedCourses = courses;
     const tb = document.querySelector('#fullCoursesTable tbody');
@@ -269,7 +289,7 @@ async function loadCourses() {
         <td>${c.enrolledStudents}</td>
         <td>${c.totalSessions}</td>
         <td><div class="pc">${c.avgAttendancePct != null ? c.avgAttendancePct + '%' : '–'}<div class="bar"><i style="width:${c.avgAttendancePct || 0}%"></i></div></div></td>
-        <td><button type="button" class="btn sm" data-action="view-offering-students" data-id="${c.courseOfferingId}" onclick="viewOfferingStudents(${c.courseOfferingId})">Roster</button></td>
+        <td><button type="button" class="btn sm" data-action="view-roster" data-offering-id="${c.courseOfferingId}">Roster</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -280,7 +300,7 @@ async function loadCourses() {
 // 3. TIMETABLE
 async function loadTimetable() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/timetable`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/timetable`);
     const slots = await res.json();
     const tb = document.querySelector('#fullTimetableTable tbody');
     if (!tb) return;
@@ -313,7 +333,7 @@ async function loadStudentList() {
     
     // populate select options if needed
     if (offSelect && offSelect.options.length <= 1) {
-      const crsRes = await fetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
+      const crsRes = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
       const courses = await crsRes.json();
       courses.forEach(c => {
         const opt = document.createElement('option');
@@ -325,7 +345,7 @@ async function loadStudentList() {
 
     let url = `${API_BASE}/faculty/${currentFacultyId}/students?`;
     if (selectedOff > 0) url += `offeringId=${selectedOff}&`;
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const students = await res.json();
     cachedStudents = students;
     renderStudents(students);
@@ -378,7 +398,7 @@ function viewOfferingStudents(offeringId) {
 async function initMarkAttendance() {
   const sel = document.getElementById('markOfferingSelect');
   if (!sel) return;
-  const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
+  const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
   const courses = await res.json();
   sel.innerHTML = courses.map(c => `
     <option value="${c.courseOfferingId}">${c.courseCode} - ${c.sectionName} (${c.courseName})</option>
@@ -393,7 +413,7 @@ async function onMarkOfferingChange() {
   const offSelect = document.getElementById('markOfferingSelect');
   const offId = offSelect ? offSelect.value : null;
   if (!offId) return;
-  const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/courses/${offId}/students`);
+  const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/courses/${offId}/students`);
   const students = await res.json();
   const tb = document.querySelector('#markAttendanceTable tbody');
   if (!tb) return;
@@ -448,7 +468,7 @@ async function submitAttendanceSession() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/sessions`, {
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -474,7 +494,7 @@ async function loadSessionRecords() {
   try {
     const offSelect = document.getElementById('recordsOfferingFilter');
     if (offSelect && offSelect.options.length <= 1) {
-      const crsRes = await fetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
+      const crsRes = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/courses`);
       const courses = await crsRes.json();
       courses.forEach(c => {
         const opt = document.createElement('option');
@@ -486,7 +506,7 @@ async function loadSessionRecords() {
 
     let url = `${API_BASE}/faculty/${currentFacultyId}/attendance/sessions`;
     if (offSelect && offSelect.value > 0) url += `?offeringId=${offSelect.value}`;
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const sessions = await res.json();
     const tb = document.querySelector('#sessionRecordsTable tbody');
     if (!tb) return;
@@ -506,7 +526,7 @@ async function loadSessionRecords() {
         <td><span class="pill r">${s.absentCount}</span></td>
         <td><span class="pill n">${s.excusedCount}</span></td>
         <td><strong>${s.attendancePct != null ? s.attendancePct + '%' : '–'}</strong></td>
-        <td><button type="button" class="btn sm" data-action="view-session-register" data-id="${s.attendanceSessionId}" onclick="viewSessionRegister(${s.attendanceSessionId})">View Register</button></td>
+        <td><button type="button" class="btn sm" data-action="view-session-register" data-session-id="${s.attendanceSessionId}">View Register</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -516,7 +536,7 @@ async function loadSessionRecords() {
 
 async function viewSessionRegister(sessionId) {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/sessions/${sessionId}/records`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/sessions/${sessionId}/records`);
     const records = await res.json();
     let html = `
       <table style="width:100%;margin-top:12px">
@@ -546,7 +566,7 @@ async function viewSessionRegister(sessionId) {
 // 7. LOW ATTENDANCE
 async function loadLowAttendance() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/low?threshold=75.0`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/low?threshold=75.0`);
     const list = await res.json();
     const tb = document.querySelector('#lowAttendanceTable tbody');
     if (!tb) return;
@@ -573,7 +593,7 @@ async function loadLowAttendance() {
 }
 
 function exportLowAttendanceCSV() {
-  fetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/low?threshold=75.0`)
+  apiFetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/low?threshold=75.0`)
     .then(r => r.json())
     .then(data => {
       let csv = 'Enrollment No,Student Name,Department,Course Code,Section,Attended,Total,Attendance %,Recommendation\n';
@@ -591,7 +611,7 @@ function exportLowAttendanceCSV() {
 // 8. AUDIT HISTORY
 async function loadCorrectionHistory() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/audit`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/attendance/audit`);
     const history = await res.json();
     const tb = document.querySelector('#auditHistoryTable tbody');
     if (!tb) return;
@@ -696,7 +716,7 @@ async function submitLeaveApplication(e) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/apply`, {
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/leave/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -732,7 +752,7 @@ async function submitLeaveApplication(e) {
 // 10. LEAVE REQUESTS
 async function loadLeaveRequests() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests?t=${Date.now()}`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests?t=${Date.now()}`);
     const reqs = await res.json();
     const tb = document.querySelector('#leaveRequestsTable tbody');
     if (!tb) return;
@@ -758,7 +778,7 @@ async function loadLeaveRequests() {
         <td>${r.approvedBy || '—'}</td>
         <td>${r.decisionRemarks || '—'}</td>
         <td>
-          ${(r.status === 'PENDING' || r.status === 'APPROVED') ? `<button type="button" class="btn sm danger" data-cancel-leave="${r.leaveRequestId}" onclick="cancelLeaveRequest(${r.leaveRequestId})">Cancel</button>` : '—'}
+          ${(r.status === 'PENDING' || r.status === 'APPROVED') ? `<button type="button" class="btn sm danger" data-action="cancel-leave" data-request-id="${r.leaveRequestId}">Cancel</button>` : '—'}
         </td>
       </tr>
     `).join('');
@@ -770,7 +790,7 @@ async function loadLeaveRequests() {
 async function cancelLeaveRequest(reqId) {
   if (!confirm(`Are you sure you want to cancel leave request #${reqId}?`)) return;
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests/${reqId}/cancel?remarks=Cancelled%20by%20faculty`, {
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/leave/requests/${reqId}/cancel?remarks=Cancelled%20by%20faculty`, {
       method: 'POST'
     });
     const result = await res.json();
@@ -785,7 +805,7 @@ async function cancelLeaveRequest(reqId) {
 // 11. LEAVE BALANCE
 async function loadLeaveBalance() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/leave/balance`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/leave/balance`);
     const balances = await res.json();
     const el = document.getElementById('leaveBalanceCards');
     if (!el) return;
@@ -809,7 +829,7 @@ async function loadLeaveBalance() {
 // 12. PAYSLIPS
 async function loadPayslips() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/payslips`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/payslips`);
     const payslips = await res.json();
     const tb = document.querySelector('#payslipsTable tbody');
     if (!tb) return;
@@ -827,7 +847,7 @@ async function loadPayslips() {
         <td><strong style="color:#1D6B4A">${formatCurrency(p.netSalary)}</strong></td>
         <td><span class="pill ${p.status === 'PAID' ? 'g' : (p.status === 'APPROVED' ? 'o' : 'n')}">${p.status}</span></td>
         <td>${formatDate(p.paidAt)}</td>
-        <td><button type="button" class="btn sm" data-view-payslip="${p.payrollId}" onclick="viewPayslipDetail(${p.payrollId})">View Payslip</button></td>
+        <td><button type="button" class="btn sm" data-action="view-payslip" data-payroll-id="${p.payrollId}">View Payslip</button></td>
       </tr>
     `).join('');
   } catch(e) {
@@ -837,7 +857,7 @@ async function loadPayslips() {
 
 async function viewPayslipDetail(payrollId) {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/payslips/${payrollId}`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/payslips/${payrollId}`);
     const p = await res.json();
     const body = `
       <div style="background:#F8F9FB;padding:16px;border-radius:8px;margin-bottom:16px">
@@ -879,7 +899,7 @@ function closePayslipModal() {
 // 13. SALARY STRUCTURE
 async function loadSalaryStructure() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/salary-structure`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/payroll/salary-structure`);
     const list = await res.json();
     const el = document.getElementById('salaryStructureCards');
     if (!el) return;
@@ -911,7 +931,7 @@ async function loadSalaryStructure() {
 // 14. PROFILE
 async function loadProfile() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}`);
     const f = await res.json();
     const ec = document.getElementById('profEmpCode');
     if (ec) ec.value = f.employeeCode;
@@ -942,7 +962,7 @@ async function updateFacultyContact() {
   const newContact = document.getElementById('profContact')?.value.trim();
 
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/profile`, {
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contact: newContact })
@@ -959,7 +979,7 @@ async function updateFacultyContact() {
 // 15. GRIEVANCE
 async function loadGrievances() {
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/grievance`);
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/grievance`);
     const list = await res.json();
     const tb = document.querySelector('#grievanceTable tbody');
     if (!tb) return;
@@ -982,7 +1002,8 @@ async function loadGrievances() {
   }
 }
 
-async function submitGrievance() {
+async function submitGrievance(e) {
+  e?.preventDefault();
   const cat = document.getElementById('grievanceCategory')?.value;
   const title = document.getElementById('grievanceTitle')?.value.trim();
   const desc = document.getElementById('grievanceDescription')?.value.trim();
@@ -994,7 +1015,7 @@ async function submitGrievance() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/faculty/${currentFacultyId}/grievance`, {
+    const res = await apiFetch(`${API_BASE}/faculty/${currentFacultyId}/grievance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category: cat, title: title, description: desc })
@@ -1012,11 +1033,6 @@ async function submitGrievance() {
   }
 }
 
-function switchFaculty(id) {
-  currentFacultyId = id;
-  loadDashboard();
-}
-
 // Global search input
 document.getElementById('globalSearchInput')?.addEventListener('input', (e) => {
   const q = e.target.value.toLowerCase().trim();
@@ -1028,7 +1044,7 @@ document.getElementById('globalSearchInput')?.addEventListener('input', (e) => {
   else if (q.includes('attendance') || q.includes('mark')) navigateTo('mark-attendance');
 });
 
-// Explicit window bindings so inline onclicks always succeed regardless of execution environment
+// Explicit window bindings so functions can be called if needed
 window.navigateTo = navigateTo;
 window.switchFaculty = switchFaculty;
 window.loadDashboard = loadDashboard;
@@ -1060,17 +1076,37 @@ window.exportLowAttendanceCSV = exportLowAttendanceCSV;
 window.submitGrievance = submitGrievance;
 window.updateFacultyContact = updateFacultyContact;
 
-// Dashboard Application Initializer
-function initDashboardApp() {
-  const root = document.getElementById('facultyApp') || document.querySelector('.app');
-  if (root && root.dataset.facultyId) {
-    currentFacultyId = Number(root.dataset.facultyId);
-  }
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const pageParam = urlParams.get('page') || (window.location.hash ? window.location.hash.substring(1) : null);
-  const facultyParam = urlParams.get('facultyId');
-  if (facultyParam && Number(facultyParam) > 0) currentFacultyId = Number(facultyParam);
+// Dropdowns and UI Setup
+document.addEventListener('DOMContentLoaded', () => {
+  const menuToggle = document.getElementById('facultyMenuToggle');
+  const sidebar = document.getElementById('sidebar');
+  const setNavigationOpen = (open, restoreFocus = false) => {
+    document.body.classList.toggle('nav-open', open);
+    menuToggle?.setAttribute('aria-expanded', String(open));
+    menuToggle?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    if (restoreFocus) menuToggle?.focus();
+  };
+  menuToggle?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setNavigationOpen(!document.body.classList.contains('nav-open'));
+  });
+  sidebar?.addEventListener('click', (event) => {
+    if (event.target.closest('a')) setNavigationOpen(false);
+  });
+  document.addEventListener('click', (event) => {
+    if (document.body.classList.contains('nav-open')
+      && !sidebar?.contains(event.target) && !menuToggle?.contains(event.target)) {
+      setNavigationOpen(false);
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.body.classList.contains('nav-open')) {
+      setNavigationOpen(false, true);
+    }
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) setNavigationOpen(false);
+  });
 
   const btnBell = document.getElementById('btnBell');
   const bellDropdown = document.getElementById('bellDropdown');
@@ -1084,7 +1120,8 @@ function initDashboardApp() {
   const userMenuDropdown = document.getElementById('userMenuDropdown');
   btnUserMenu?.addEventListener('click', (e) => {
     e.stopPropagation();
-    userMenuDropdown?.classList.toggle('open');
+    const isOpen = userMenuDropdown?.classList.toggle('open') || false;
+    btnUserMenu.setAttribute('aria-expanded', String(isOpen));
     bellDropdown?.classList.remove('open');
   });
 
@@ -1093,123 +1130,79 @@ function initDashboardApp() {
     userMenuDropdown?.classList.remove('open');
   });
 
-  // Attach nav listeners (for direct clicks)
-  document.querySelectorAll('.side .nav, .side .nav-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-      const target = link.dataset.target;
-      if (target) {
-        e.preventDefault();
-        navigateTo(target);
+  // Delegated handlers cover static controls and rows rendered after API responses.
+  document.addEventListener('click', (event) => {
+    const control = event.target.closest('[data-action]');
+    if (!control) {
+      const navControl = event.target.closest('[data-target]');
+      if (navControl && (navControl.matches('a') || navControl.classList.contains('nav') || navControl.classList.contains('nav-link') || navControl.classList.contains('action-link'))) {
+        if (navControl.matches('a')) event.preventDefault();
+        if (navControl.dataset.target) navigateTo(navControl.dataset.target);
       }
-    });
+      return;
+    }
+    const { action } = control.dataset;
+    if (control.matches('a')) event.preventDefault();
+    switch (action) {
+      case 'navigate': if (control.dataset.target) navigateTo(control.dataset.target); break;
+      case 'view-roster': {
+        const id = Number(control.dataset.offeringId);
+        if (Number.isSafeInteger(id) && id > 0) viewOfferingStudents(id);
+        break;
+      }
+      case 'view-session-register': {
+        const id = Number(control.dataset.sessionId);
+        if (Number.isSafeInteger(id) && id > 0) viewSessionRegister(id);
+        break;
+      }
+      case 'mark-all':
+        if (['PRESENT', 'ABSENT'].includes(control.dataset.status)) markAllStatus(control.dataset.status);
+        break;
+      case 'submit-attendance': submitAttendanceSession(); break;
+      case 'export-low-attendance': exportLowAttendanceCSV(); break;
+      case 'cancel-leave': {
+        const id = Number(control.dataset.requestId);
+        if (Number.isSafeInteger(id) && id > 0) cancelLeaveRequest(id);
+        break;
+      }
+      case 'view-payslip': {
+        const id = Number(control.dataset.payrollId);
+        if (Number.isSafeInteger(id) && id > 0) viewPayslipDetail(id);
+        break;
+      }
+      case 'update-profile': updateFacultyContact(); break;
+      case 'open-grievance-form': document.getElementById('grievanceFormCard').style.display = 'block'; break;
+      case 'close-grievance-form': document.getElementById('grievanceFormCard').style.display = 'none'; break;
+      case 'close-modal': closePayslipModal(); break;
+      case 'print-payslip': window.print(); break;
+    }
   });
 
-  // Attach quick-action buttons
+  document.addEventListener('input', (event) => {
+    if (event.target.matches('[data-action="filter-students"]')) filterStudentsClient();
+  });
+  document.addEventListener('change', (event) => {
+    const action = event.target.dataset.action;
+    if (action === 'student-offering-filter') loadStudentList();
+    else if (action === 'mark-offering-change') onMarkOfferingChange();
+    else if (action === 'records-offering-filter') loadSessionRecords();
+    else if (action === 'calculate-leave-days') calculateLeaveDays();
+  });
+  document.addEventListener('submit', (event) => {
+    if (event.target.id === 'leaveApplyForm') submitLeaveApplication(event);
+    else if (event.target.id === 'grievanceForm') submitGrievance(event);
+  });
+
   document.getElementById('btnGoToApplyLeave')?.addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('apply-leave');
   });
 
-  // Attach explicit submit listener on leave application form
-  document.getElementById('leaveApplyForm')?.addEventListener('submit', submitLeaveApplication);
-
+  const urlParams = new URLSearchParams(window.location.search);
+  const pageParam = urlParams.get('page') || (window.location.hash ? window.location.hash.substring(1) : null);
   if (pageParam && pageParam !== 'dashboard') {
     navigateTo(pageParam);
   } else {
     loadDashboard();
   }
-}
-
-// Global click event delegation for robust handling even if inline onclick is blocked by CSP
-document.addEventListener('click', (e) => {
-  // Navigation targets
-  const navEl = e.target.closest('[data-target]');
-  if (navEl) {
-    const target = navEl.dataset.target;
-    if (target) {
-      e.preventDefault();
-      navigateTo(target);
-      return;
-    }
-  }
-
-  // Switch faculty testing
-  const switchEl = e.target.closest('[data-switch-faculty]');
-  if (switchEl) {
-    e.preventDefault();
-    const id = Number(switchEl.dataset.switchFaculty);
-    if (id) switchFaculty(id);
-    return;
-  }
-
-  // Cancel leave request
-  const cancelEl = e.target.closest('[data-cancel-leave]');
-  if (cancelEl) {
-    e.preventDefault();
-    const reqId = Number(cancelEl.dataset.cancelLeave);
-    if (reqId) cancelLeaveRequest(reqId);
-    return;
-  }
-
-  // View payslip
-  const payslipEl = e.target.closest('[data-view-payslip]');
-  if (payslipEl) {
-    e.preventDefault();
-    const pId = Number(payslipEl.dataset.viewPayslip);
-    if (pId) viewPayslipDetail(pId);
-    return;
-  }
-
-  // Other UI action buttons
-  const actionEl = e.target.closest('[data-action]');
-  if (actionEl) {
-    const act = actionEl.dataset.action;
-    const id = Number(actionEl.dataset.id);
-    if (act === 'view-offering-students' && id) {
-      e.preventDefault();
-      viewOfferingStudents(id);
-    } else if (act === 'view-session-register' && id) {
-      e.preventDefault();
-      viewSessionRegister(id);
-    } else if (act === 'export-low-att') {
-      e.preventDefault();
-      exportLowAttendanceCSV();
-    } else if (act === 'mark-all-present') {
-      e.preventDefault();
-      markAllStatus('PRESENT');
-    } else if (act === 'mark-all-absent') {
-      e.preventDefault();
-      markAllStatus('ABSENT');
-    } else if (act === 'save-attendance') {
-      e.preventDefault();
-      submitAttendanceSession();
-    } else if (act === 'open-grievance-form') {
-      e.preventDefault();
-      const g = document.getElementById('grievanceFormCard');
-      if (g) g.style.display = 'block';
-    } else if (act === 'close-grievance-form') {
-      e.preventDefault();
-      const g = document.getElementById('grievanceFormCard');
-      if (g) g.style.display = 'none';
-    } else if (act === 'submit-grievance') {
-      e.preventDefault();
-      submitGrievance();
-    } else if (act === 'update-contact') {
-      e.preventDefault();
-      updateFacultyContact();
-    } else if (act === 'close-payslip-modal') {
-      e.preventDefault();
-      closePayslipModal();
-    } else if (act === 'print-payslip') {
-      e.preventDefault();
-      window.print();
-    }
-  }
 });
-
-// Run immediately if DOM already parsed, or wait for DOMContentLoaded
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initDashboardApp);
-} else {
-  initDashboardApp();
-}

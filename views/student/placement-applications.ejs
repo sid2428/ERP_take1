@@ -1,0 +1,8 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>My placement applications</h1><span class="sub">Round remarks are private to placement administrators.</span></div>
+<% if (!applications.length) { %><div class="empty">You have not applied to any drives.</div><% } %>
+<div class="stack"><% applications.forEach(a=>{ %><article class="card"><h2><%= a.title %> · <%= a.company_name %></h2><p><%= a.role_title %> · <%= a.drive_type %> · applied <%= new Date(a.applied_at).toLocaleDateString() %></p><p>Status: <span class="pill"><%= a.status %></span></p><% if (a.rounds.length) { %><h3>Rounds</h3><ol><% a.rounds.forEach(r=>{ %><li><%= r.name %> — <%= r.status||'Result pending' %></li><% }) %></ol><% } %>
+<% if (a.status==='Applied'||a.status==='Shortlisted') { %><form method="post" action="/student/placement/applications/<%= a.application_id %>/withdraw"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn secondary">Withdraw</button></form><% } %>
+<% if (a.offer_id) { %><p>Offer: <%= a.package_lpa!=null?`${a.package_lpa} LPA`:`₹${fmt.num(a.stipend_monthly)} / month` %> · response by <%= new Date(a.response_deadline).toLocaleString() %> · <%= a.offer_status %></p><% if (a.offer_status==='Pending') { %><form class="actions" method="post" action="/student/placement/offers/<%= a.offer_id %>/respond"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn" name="response" value="accept">Accept offer</button><button class="btn secondary" name="response" value="decline">Decline</button></form><% } %><% } %>
+</article><% }) %></div>
+<%- include('../partials/layout-end') %>

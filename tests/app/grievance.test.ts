@@ -14,7 +14,7 @@ const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp
 const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
 
 describe.skipIf(!hasAppEnv)('T8-2 grievances (pages and permissions)', () => {
-  const app = createApp!();
+  const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
   type Agent = Awaited<ReturnType<typeof signIn>>['agent'];
   let admin: Agent;

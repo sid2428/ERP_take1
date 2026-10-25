@@ -1,0 +1,13 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Placement profile</h1><span class="sub">Add skills and links for recruiters. Do not upload files here.</span></div>
+<% if (errors?.length) { %><div class="flash error"><ul><% errors.forEach(e=>{ %><li><%= e %></li><% }) %></ul></div><% } %>
+<form class="card form-grid" method="post" action="/student/placement/profile">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <label class="wide">Skills<textarea name="skills" maxlength="2000" rows="5"><%= profile?.skills ?? '' %></textarea><small>Separate skills with commas.</small></label>
+  <label>Resume URL<input type="url" name="resume_url" value="<%= profile?.resume_url ?? '' %>" placeholder="https://..."></label>
+  <label>LinkedIn URL<input type="url" name="linkedin_url" value="<%= profile?.linkedin_url ?? '' %>" placeholder="https://..."></label>
+  <label>GitHub URL<input type="url" name="github_url" value="<%= profile?.github_url ?? '' %>" placeholder="https://..."></label>
+  <label>Portfolio URL<input type="url" name="portfolio_url" value="<%= profile?.portfolio_url ?? '' %>" placeholder="https://..."></label>
+  <div class="wide"><button class="btn" type="submit">Save profile</button></div>
+</form>
+<%- include('../partials/layout-end') %>

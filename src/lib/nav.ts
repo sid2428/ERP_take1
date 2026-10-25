@@ -10,6 +10,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' },
         { key: 'notices', label: 'Notices', href: '/student/notices', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/student/placement', icon: 'briefcase' },
       ],
     },
     {
@@ -49,7 +50,7 @@ export const NAV: Record<Role, NavGroup[]> = {
     },
     { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
     { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
-    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
+    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase' }] },
     {
       label: 'LEAVE & HR', items: [
         { key: 'leave', label: 'Leave management', href: '/faculty/leave', icon: 'calendar' },
@@ -72,6 +73,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' },
         { key: 'inbox', label: 'Inbox', href: '/admin/inbox', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/admin/placement', icon: 'briefcase' },
       ],
     },
     {

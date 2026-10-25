@@ -7,6 +7,7 @@ import { electiveRouter } from './elective-routes.js';
 import { grievanceAdminRouter } from './grievance-routes.js';
 import { noticeAdminRouter } from './notice-routes.js';
 import { noticeRouter } from '../notice-routes.js';
+import { placementAdminRouter } from '../placement-routes.js';
 import { attendanceUnlockAdminRouter } from './attendance-unlock-routes.js';
 
 export const adminRouter = Router();
@@ -18,4 +19,5 @@ adminRouter.use(electiveRouter);
 adminRouter.use(grievanceAdminRouter);
 adminRouter.use(noticeAdminRouter);
 adminRouter.use(attendanceUnlockAdminRouter);
+adminRouter.use('/placement', placementAdminRouter);
 adminRouter.use('/inbox', noticeRouter);

@@ -14,6 +14,7 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
   const db = pool!;
   let faculty: Awaited<ReturnType<typeof signIn>>['agent'];
   let facultyId = 0;
+  let fixture: { courseId: number; cycleId: number; schemeCreated: boolean; gradeCreated: boolean } | undefined;
 
   beforeAll(async () => {
     const login = await signIn(app, 'FAC-CSE-074', DEMO);
@@ -22,9 +23,40 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
     const result = await db.query<{ faculty_id: number }>(
       `SELECT faculty_id FROM faculty WHERE faculty_code = 'FAC-CSE-074'`);
     facultyId = result.rows[0]!.faculty_id;
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL search_path=erp,public');
+      const gradeCreated = (await client.query(`INSERT INTO grade_scale(grade,min_percentage,max_percentage,grade_points,description)
+        VALUES('X2',0,100,8,'faculty examination test') ON CONFLICT(grade) DO NOTHING RETURNING grade`)).rows.length > 0;
+      const chosen = await client.query<{course_id:number;session_id:string}>(`
+        SELECT c.course_id,ta.academic_session_id AS session_id FROM teaching_assignment ta
+        JOIN course c USING(course_id) JOIN v_assignment_roster r USING(assignment_id)
+        WHERE ta.faculty_id=$1 AND ta.academic_session_id=current_session_id() AND c.course_type='TH'
+          AND (NOT EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=c.course_id)
+            OR EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=c.course_id
+              AND (s.internal_max,s.midsem_max,s.endsem_max,s.total_max)=(20,20,60,100)))
+          AND NOT EXISTS(SELECT 1 FROM exam_marks m WHERE m.course_id=c.course_id)
+          AND NOT EXISTS(SELECT 1 FROM course_result cr WHERE cr.course_id=c.course_id)
+        ORDER BY c.course_id LIMIT 1`,[facultyId]);
+      if (!chosen.rows[0]) throw new Error('No unused assigned theory course for faculty examination fixture');
+      const courseId=chosen.rows[0].course_id;
+      const schemeCreated=(await client.query(`INSERT INTO course_exam_scheme(course_id,internal_max,midsem_max,endsem_max,total_max)
+        VALUES($1,20,20,60,100) ON CONFLICT(course_id) DO NOTHING RETURNING course_id`,[courseId])).rows.length>0;
+      const cycle=await client.query<{exam_cycle_id:number}>(`INSERT INTO exam_cycle(academic_session_id,exam_type,start_date,end_date,status)
+        VALUES($1,'EndSem',current_date+100,current_date+101,'Upcoming') RETURNING exam_cycle_id`,[chosen.rows[0].session_id]);
+      fixture={courseId,cycleId:cycle.rows[0]!.exam_cycle_id,schemeCreated,gradeCreated};
+      await client.query('COMMIT');
+    } catch(error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   });
 
   afterAll(async () => {
+    if(fixture) {
+      await db.query('DELETE FROM exam_cycle WHERE exam_cycle_id=$1',[fixture.cycleId]);
+      if(fixture.schemeCreated) await db.query('DELETE FROM course_exam_scheme WHERE course_id=$1',[fixture.courseId]);
+      if(fixture.gradeCreated) await db.query("DELETE FROM grade_scale WHERE grade='X2' AND description='faculty examination test'");
+    }
     await db.end();
   });
 
@@ -81,11 +113,12 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
   it('validates scheme maxima and updates marks and course results transactionally', async () => {
     const response = await faculty.get('/faculty/examination/courses').set('Accept', 'application/json');
     const course = response.body.courses.find((item: {
+      course_id: number;
       roster_size: number;
       exam_cycle_id: number | null;
       total_max: number | null;
       course_type: string;
-    }) => item.roster_size > 0 && item.exam_cycle_id !== null
+    }) => item.course_id===fixture?.courseId && item.roster_size > 0 && item.exam_cycle_id === fixture.cycleId
       && item.total_max === 100 && item.course_type === 'TH');
     expect(course).toBeDefined();
 

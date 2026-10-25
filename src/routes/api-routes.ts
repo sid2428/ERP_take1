@@ -18,10 +18,35 @@ import {
 
 export const apiRouter = Router();
 
+/** Protect every legacy faculty endpoint regardless of which compatibility mount is used. */
+apiRouter.use('/faculty/:id', (req, res, next) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+  if (req.user.role !== 'faculty' || req.user.facultyId == null) {
+    res.status(403).json({ error: 'Faculty access is required.' });
+    return;
+  }
+  if (!/^[0-9]+$/.test(req.params.id)) {
+    res.status(400).json({ error: 'Faculty ID must be a positive integer.' });
+    return;
+  }
+  const requestedId = Number(req.params.id);
+  if (!Number.isSafeInteger(requestedId) || requestedId <= 0) {
+    res.status(400).json({ error: 'Faculty ID must be a positive integer.' });
+    return;
+  }
+  if (requestedId !== req.user.facultyId) {
+    res.status(403).json({ error: 'You cannot access another faculty member’s data.' });
+    return;
+  }
+  next();
+});
 // 1. DASHBOARD OVERVIEW
 apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
 
     const [faculty, dept, classesRes, timetableRes, lowAttRes, leaveBalances, leaveRequests, payslips] = await Promise.all([
       queryOne<{
@@ -199,7 +224,7 @@ apiRouter.get('/faculty/:id/dashboard', async (req, res) => {
 // 2. MY COURSES
 apiRouter.get('/faculty/:id/courses', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const courses = await query<{
       courseOfferingId: number;
       courseCode: string;
@@ -243,7 +268,7 @@ apiRouter.get('/faculty/:id/courses', async (req, res) => {
 // 3. TIMETABLE
 apiRouter.get('/faculty/:id/timetable', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const rows = await query<{
       day_of_week: number;
       start_time: string;
@@ -278,7 +303,7 @@ apiRouter.get('/faculty/:id/timetable', async (req, res) => {
 // 4. STUDENT LISTS
 apiRouter.get('/faculty/:id/students', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const offeringId = req.query.offeringId ? Number(req.query.offeringId) : 0;
 
     let sql = `
@@ -322,6 +347,12 @@ apiRouter.get('/faculty/:id/students', async (req, res) => {
 apiRouter.get('/faculty/:id/courses/:offeringId/students', async (req, res) => {
   try {
     const offeringId = Number(req.params.offeringId);
+    const facultyId = Number(req.params.id);
+    const ownedAssignment = await queryOne<{ assignment_id: number }>(
+      'SELECT assignment_id FROM teaching_assignment WHERE assignment_id = $1 AND faculty_id = $2',
+      [offeringId, facultyId],
+    );
+    if (!ownedAssignment) return res.status(404).json({ error: 'Course offering not found.' });
     const students = await query<{
       studentId: number;
       enrollmentNo: string;
@@ -344,12 +375,18 @@ apiRouter.get('/faculty/:id/courses/:offeringId/students', async (req, res) => {
 // 6. SUBMIT ATTENDANCE SESSION
 apiRouter.post('/faculty/:id/attendance/sessions', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const { courseOfferingId, sessionDate, startTime, endTime, topic, records } = req.body;
 
     if (!courseOfferingId || !sessionDate || !records || !Array.isArray(records)) {
       return res.status(400).json({ error: 'Missing required session parameters.' });
     }
+
+    const ownedAssignment = await queryOne<{ assignment_id: number }>(
+      'SELECT assignment_id FROM teaching_assignment WHERE assignment_id = $1 AND faculty_id = $2',
+      [Number(courseOfferingId), facultyId],
+    );
+    if (!ownedAssignment) return res.status(404).json({ error: 'Course offering not found.' });
 
     const absentStudentIds = records
       .filter((r: any) => r.attendanceStatus === 'ABSENT')
@@ -362,29 +399,18 @@ apiRouter.post('/faculty/:id/attendance/sessions', async (req, res) => {
     );
     const sessionNumber = numRes?.next_num || 1;
 
-    const existing = await queryOne<{ session_id: number }>(
-      'SELECT session_id FROM attendance_session WHERE assignment_id = $1 AND session_date = $2 AND is_extra = false',
-      [courseOfferingId, sessionDate],
-    );
+    const inserted = await queryOne<{ session_id: number }>(`
+      INSERT INTO attendance_session (
+        assignment_id, session_date, session_number, duration_hrs,
+        session_status, absent_student_ids, marked_by, marked_at
+      ) VALUES ($1, $2, $3, 1.0, 'Conducted', $4, $5, now())
+      ON CONFLICT (assignment_id, session_date) WHERE is_extra = false DO UPDATE
+         SET absent_student_ids = EXCLUDED.absent_student_ids,
+             marked_by = EXCLUDED.marked_by,
+             marked_at = now()
+      RETURNING session_id`, [courseOfferingId, sessionDate, sessionNumber, absentStudentIds, facultyId]);
 
-    let sessionId: number;
-    if (existing) {
-      await query(
-        `UPDATE attendance_session
-            SET absent_student_ids = $1, marked_by = $2, marked_at = now()
-          WHERE session_id = $3`,
-        [absentStudentIds, facultyId, existing.session_id],
-      );
-      sessionId = existing.session_id;
-    } else {
-      const inserted = await queryOne<{ session_id: number }>(`
-        INSERT INTO attendance_session (
-          assignment_id, session_date, session_number, duration_hrs,
-          session_status, absent_student_ids, marked_by, marked_at
-        ) VALUES ($1, $2, $3, 1.0, 'Conducted', $4, $5, now())
-        RETURNING session_id`, [courseOfferingId, sessionDate, sessionNumber, absentStudentIds, facultyId]);
-      sessionId = inserted!.session_id;
-    }
+    const sessionId = inserted ? inserted.session_id : 0;
 
     res.json({ success: true, attendanceSessionId: sessionId });
   } catch (err: any) {
@@ -395,7 +421,7 @@ apiRouter.post('/faculty/:id/attendance/sessions', async (req, res) => {
 // 7. SESSION RECORDS
 apiRouter.get('/faculty/:id/attendance/sessions', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const offeringId = req.query.offeringId ? Number(req.query.offeringId) : 0;
 
     let sql = `
@@ -453,8 +479,10 @@ apiRouter.get('/faculty/:id/attendance/sessions/:sessionId/records', async (req,
   try {
     const sessionId = Number(req.params.sessionId);
     const session = await queryOne<{ assignment_id: number; absent_student_ids: number[] }>(
-      'SELECT assignment_id, absent_student_ids FROM attendance_session WHERE session_id = $1',
-      [sessionId],
+      `SELECT s.assignment_id, s.absent_student_ids
+       FROM attendance_session s JOIN teaching_assignment ta USING (assignment_id)
+       WHERE s.session_id = $1 AND ta.faculty_id = $2`,
+      [sessionId, Number(req.params.id)],
     );
 
     if (!session) {
@@ -489,7 +517,7 @@ apiRouter.get('/faculty/:id/attendance/sessions/:sessionId/records', async (req,
 // 9. LOW ATTENDANCE
 apiRouter.get('/faculty/:id/attendance/low', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const threshold = Number(req.query.threshold) || 75.0;
 
     const list = await query<{
@@ -535,7 +563,7 @@ apiRouter.get('/faculty/:id/attendance/low', async (req, res) => {
 // 10. CORRECTION HISTORY / AUDIT
 apiRouter.get('/faculty/:id/attendance/audit', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const audit = await query<{
       changedAt: string;
       studentName: string;
@@ -833,7 +861,7 @@ apiRouter.post('/admin/hr/payroll/:payrollId/status', async (req, res) => {
 // 13. FACULTY PROFILE
 apiRouter.get('/faculty/:id', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const f = await queryOne<{
       faculty_id: number;
       faculty_code: string;
@@ -874,7 +902,7 @@ apiRouter.get('/faculty/:id', async (req, res) => {
 
 apiRouter.put('/faculty/:id/profile', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const contact = req.body.contact || req.body.mobileNumber;
     await query('UPDATE faculty SET mobile_number = $1 WHERE faculty_id = $2', [contact, facultyId]);
     res.json({ success: true, contact, mobileNumber: contact });
@@ -886,7 +914,7 @@ apiRouter.put('/faculty/:id/profile', async (req, res) => {
 // 14. GRIEVANCE
 apiRouter.get('/faculty/:id/grievance', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const userRes = await queryOne<{ user_id: number }>('SELECT user_id FROM app_user WHERE faculty_id = $1', [facultyId]);
     const userId = userRes?.user_id || req.user?.userId;
 
@@ -921,7 +949,7 @@ apiRouter.get('/faculty/:id/grievance', async (req, res) => {
 
 apiRouter.post('/faculty/:id/grievance', async (req, res) => {
   try {
-    const facultyId = Number(req.params.id) || req.user?.facultyId || 74;
+    const facultyId = Number(req.params.id);
     const userRes = await queryOne<{ user_id: number }>('SELECT user_id FROM app_user WHERE faculty_id = $1', [facultyId]);
     const userId = userRes?.user_id || req.user?.userId;
 
