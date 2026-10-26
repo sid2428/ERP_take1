@@ -182,6 +182,66 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
     }finally{await dispose(f);}
   });
 
+  it('creates a draft drive for an active company and rejects inactive companies or programs',async()=>{
+    const f=await fixture();
+    let createdId:number|undefined;
+    const marker=`created-workflow-${randomUUID()}`;
+    try{
+      const form=await admin.get('/admin/placement/drives/new');
+      expect(form.status).toBe(200);
+      const csrf=csrfFrom(form.text);
+      const fields={_csrf:csrf,company_id:String(f.companyId),title:marker,role_title:'Graduate Engineer',drive_type:'FullTime',description:'Created through the admin route',job_location:'Pune',package_lpa:'11',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()-3600000).toISOString(),deadline:new Date(Date.now()+86400000).toISOString(),drive_date:'',status:'Draft',program_ids:f.programId};
+      const created=await admin.post('/admin/placement/drives').type('form').send(fields);
+      expect(created.status).toBe(302);
+      const saved=await pool!.query(`SELECT drive_id,status,title FROM placement_drive WHERE title=$1`,[marker]);
+      expect(saved.rows).toHaveLength(1);
+      createdId=saved.rows[0].drive_id as number;
+      expect(saved.rows[0]).toMatchObject({status:'Draft',title:marker});
+      const programs=await pool!.query(`SELECT program_id FROM drive_program WHERE drive_id=$1`,[createdId]);
+      expect(programs.rows.map(row=>row.program_id)).toEqual([f.programId]);
+
+      await pool!.query(`UPDATE company SET is_active=false WHERE company_id=$1`,[f.companyId]);
+      const inactiveCompany=await admin.post('/admin/placement/drives').type('form').send({...fields,title:`${marker}-inactive-company`}).set('Accept','application/json');
+      expect(inactiveCompany.status).toBe(400);
+      await pool!.query(`UPDATE company SET is_active=true WHERE company_id=$1`,[f.companyId]);
+      const invalidProgram=await admin.post('/admin/placement/drives').type('form').send({...fields,title:`${marker}-invalid-program`,program_ids:'NO_SUCH_PROGRAM'}).set('Accept','application/json');
+      expect(invalidProgram.status).toBe(400);
+      const rejected=await pool!.query(`SELECT count(*)::int AS count FROM placement_drive WHERE title LIKE $1`,[`${marker}-%`]);
+      expect(rejected.rows[0].count).toBe(0);
+    }finally{
+      if(createdId)await pool!.query(`DELETE FROM placement_drive WHERE drive_id=$1`,[createdId]);
+      await pool!.query(`UPDATE company SET is_active=true WHERE company_id=$1`,[f.companyId]);
+      await dispose(f);
+    }
+  });
+
+  it('allows a student to decline their own offer and records the response',async()=>{
+    const f=await fixture({status:'Open'});
+    try{
+      const applied=await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
+      expect(applied.status).toBe(302);
+      const application=await pool!.query(`SELECT application_id FROM placement_application WHERE student_id=$1 AND drive_id=$2`,[studentId,f.driveId]);
+      const applicationId=application.rows[0].application_id as number;
+      const adminPage=await admin.get(`/admin/placement/drives/${f.driveId}`);
+      const csrf=csrfFrom(adminPage.text);
+      await admin.post(`/admin/placement/applications/${applicationId}/status`).type('form').send({_csrf:csrf,status:'Shortlisted'});
+      await admin.post(`/admin/placement/applications/${applicationId}/status`).type('form').send({_csrf:csrf,status:'Selected'});
+      const offerResponse=await admin.post(`/admin/placement/applications/${applicationId}/offers`).type('form').send({_csrf:csrf,package_lpa:'10',stipend_monthly:'',response_deadline:new Date(Date.now()+86400000).toISOString(),joining_date:''});
+      expect(offerResponse.status).toBe(302);
+      const offer=await pool!.query(`SELECT offer_id FROM placement_offer WHERE application_id=$1`,[applicationId]);
+      const history=await student.get('/student/placement/applications');
+      const declined=await student.post(`/student/placement/offers/${offer.rows[0].offer_id}/respond`).type('form').send({_csrf:csrfFrom(history.text),response:'decline'});
+      expect(declined.status).toBe(302);
+      const saved=await pool!.query(`SELECT status,responded_at FROM placement_offer WHERE offer_id=$1`,[offer.rows[0].offer_id]);
+      expect(saved.rows[0].status).toBe('Declined');
+      expect(saved.rows[0].responded_at).not.toBeNull();
+      expect((await student.get('/student/placement/applications')).text).toContain('Declined');
+      const company=await pool!.query(`SELECT company_name FROM company WHERE company_id=$1`,[f.companyId]);
+      const statistics=await admin.get('/admin/placement/statistics');
+      expect(statistics.text).toContain(company.rows[0].company_name);
+    }finally{await dispose(f);}
+  });
+
   it('allows admins to schedule rounds and enforces round state transitions',async()=>{
     const f=await fixture();
     try{
@@ -215,6 +275,7 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       expect((await student.get(`/admin/placement/drives/${f.driveId}/edit`)).status).toBe(403);
       const round=await pool!.query(`INSERT INTO drive_round(drive_id,sequence_no,round_name) VALUES($1,1,'Technical') RETURNING round_id`,[f.driveId]);
       const page=await student.get(`/student/placement`);
+      expect((await student.post('/admin/placement/drives').type('form').send({_csrf:csrfFrom(page.text),title:'Unauthorized drive'})).status).toBe(403);
       expect((await student.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrfFrom(page.text)})).status).toBe(403);
       expect((await student.post(`/admin/placement/drives/${f.driveId}/rounds/${round.rows[0].round_id}/status`).type('form').send({_csrf:csrfFrom(page.text),status:'Cancelled'})).status).toBe(403);
     }finally{await dispose(f);}

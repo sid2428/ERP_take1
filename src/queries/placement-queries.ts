@@ -71,6 +71,15 @@ export async function getAdminPlacementOverview() {
     JOIN placement_drive d USING(drive_id) JOIN student s USING(student_id)`);
 }
 
+export async function getCompanyPlacementOffers() {
+  return query(`SELECT c.company_id,c.company_name,count(o.offer_id)::int AS total_offers,
+      count(o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime')::int AS accepted_fulltime,
+      count(o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='Internship')::int AS accepted_internships
+    FROM company c JOIN placement_drive d USING(company_id)
+    JOIN placement_application a USING(drive_id) JOIN placement_offer o USING(application_id)
+    GROUP BY c.company_id,c.company_name ORDER BY total_offers DESC,lower(c.company_name)`);
+}
+
 export async function getDepartmentPlacementReport(deptId: string) {
   return query(`SELECT p.program_id,p.program_name,count(DISTINCT s.student_id)::int AS active_students,
       count(DISTINCT s.student_id) FILTER (WHERE ps.is_placed)::int AS placed_students,

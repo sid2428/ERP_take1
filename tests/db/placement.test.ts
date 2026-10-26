@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { hasDatabase, inRollback, one } from './helpers.js';
 import { getStudentDrives } from '../../src/queries/placement-queries.js';
 import type { Db } from '../../src/db.js';
@@ -67,6 +69,30 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     expect(eligibility).toMatchObject({ eligible: true, reasons: [] });
     await db.query('INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)', [f.student_id,f.driveId]);
     expect(await fails(db,'INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)',[f.student_id,f.driveId])).toMatch(/unique/i);
+  }));
+
+  it('builds the placement management summary view from current database records', async () => inRollback(async db => {
+    const f=await fixture(db);
+    await db.query('INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)',[f.student_id,f.driveId]);
+    const migration=await readFile(resolve('migrations/092-placement-drive-summary.sql'),'utf8');
+    await db.query(migration);
+    const summary=await one<{applicants:number;offers:number;accepted_offers:number}>(db,
+      'SELECT applicants,offers,accepted_offers FROM v_placement_drive_summary WHERE drive_id=$1',[f.driveId]);
+    expect(summary).toEqual({applicants:1,offers:0,accepted_offers:0});
+  }));
+
+  it('does not allow an unrelated student to respond to a placement offer', async () => inRollback(async db => {
+    const f=await fixture(db);
+    const app=await one<{application_id:number}>(db,`INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`,[f.student_id,f.driveId]);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`,[app.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`,[app.application_id]);
+    const offer=await one<{offer_id:number}>(db,`INSERT INTO placement_offer(application_id,package_lpa,response_deadline)
+      VALUES($1,10,now()+interval '1 day') RETURNING offer_id`,[app.application_id]);
+    const other=await one<{student_id:number}>(db,'SELECT student_id FROM student WHERE student_id<>$1 ORDER BY student_id LIMIT 1',[f.student_id]);
+    expect(await fails(db,'SELECT respond_placement_offer($1,$2,false)',[offer.offer_id,other.student_id])).toMatch(/unavailable/i);
+    const unchanged=await one<{status:string}>(db,'SELECT status FROM placement_offer WHERE offer_id=$1',[offer.offer_id]);
+    expect(unchanged.status).toBe('Pending');
   }));
 
   it('enforces the application recruitment-stage order', async () => inRollback(async db => {

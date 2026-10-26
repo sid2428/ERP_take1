@@ -6,7 +6,7 @@ import { forbidden, notFound, HttpError } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { parsePlacementDrivePagination } from '../lib/placement-pagination.js';
 import { getAdminDrives, getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
-  getDriveApplicants, getPlacementDashboard, getPlacementProfile, getStudentApplications, getStudentDrives } from '../queries/placement-queries.js';
+  getCompanyPlacementOffers, getDriveApplicants, getPlacementDashboard, getPlacementProfile, getStudentApplications, getStudentDrives } from '../queries/placement-queries.js';
 
 export const placementStudentRouter = Router();
 const emptyToNull = z.preprocess((v) => v === '' ? null : v,
@@ -156,12 +156,18 @@ placementAdminRouter.post('/companies/:id/toggle',async(req,res)=>{
   const id=Number(req.params.id);const row=await transaction(async db=>{const r=await db.query(`UPDATE company SET is_active=NOT is_active WHERE company_id=$1 RETURNING is_active`,[id]);if(!r.rowCount)throw notFound('Company');await audit(req,{action:'PLACEMENT_COMPANY_TOGGLE',entity:'company',entityId:id,details:{is_active:r.rows[0].is_active}},db);return r.rows[0];});
   flash(req,'success',row.is_active?'Company activated.':'Company deactivated.');res.redirect('/admin/placement/companies');
 });
-placementAdminRouter.get('/drives/new',async(_req,res)=>res.render('admin/placement-drive-form',{title:'Create drive',nav:'placement',companies:await query(`SELECT company_id,company_name FROM company WHERE is_active ORDER BY company_name`),programs:await query(`SELECT program_id,program_name FROM program WHERE is_active ORDER BY program_name`),errors:null,form:{}}));
+placementAdminRouter.get('/drives/new',async(_req,res)=>res.render('admin/placement-drive-form',{title:'Create drive',nav:'placement',companies:await query(`SELECT company_id,company_name FROM company WHERE is_active ORDER BY company_name`),programs:await query(`SELECT program_id,program_name FROM program WHERE is_active ORDER BY program_name`),errors:null,isEdit:false,action:'/admin/placement/drives',form:{}}));
 placementAdminRouter.post('/drives',async(req,res)=>{
-  const p=driveSchema.safeParse(req.body);if(!p.success){const [companies,programs]=await Promise.all([query(`SELECT company_id,company_name FROM company WHERE is_active ORDER BY company_name`),query(`SELECT program_id,program_name FROM program WHERE is_active ORDER BY program_name`)]);res.status(400).render('admin/placement-drive-form',{title:'Create drive',nav:'placement',companies,programs,errors:p.error.issues.map(i=>i.message),form:req.body});return;}
+  const p=driveSchema.safeParse(req.body);if(!p.success){const [companies,programs]=await Promise.all([query(`SELECT company_id,company_name FROM company WHERE is_active ORDER BY company_name`),query(`SELECT program_id,program_name FROM program WHERE is_active ORDER BY program_name`)]);res.status(400).render('admin/placement-drive-form',{title:'Create drive',nav:'placement',companies,programs,errors:p.error.issues.map(i=>i.message),isEdit:false,action:'/admin/placement/drives',form:req.body});return;}
   const v=p.data,programIds=[...new Set(v.program_ids.split(',').map(x=>x.trim()).filter(Boolean))];
   if(programIds.some(x=>x.length>20))throw new HttpError(400,'Invalid program selection.');
   const id=await transaction(async db=>{
+    const company=await db.query(`SELECT 1 FROM company WHERE company_id=$1 AND is_active FOR SHARE`,[v.company_id]);
+    if(!company.rowCount)throw new HttpError(400,'Choose an active company.');
+    if(programIds.length){
+      const valid=await db.query(`SELECT program_id FROM program WHERE program_id=ANY($1::varchar[]) AND is_active FOR SHARE`,[programIds]);
+      if(valid.rowCount!==programIds.length)throw new HttpError(400,'One or more selected programs are unavailable.');
+    }
     const r=await db.query(`INSERT INTO placement_drive(company_id,title,role_title,drive_type,description,job_location,package_lpa,stipend_monthly,min_year,min_cgpa,max_active_backlogs,min_attendance_pct,opens_at,deadline,drive_date,status,created_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING drive_id`,
       [v.company_id,v.title,v.role_title,v.drive_type,v.description,v.job_location||null,v.package_lpa??null,v.stipend_monthly??null,v.min_year,v.min_cgpa,v.max_active_backlogs,v.min_attendance_pct,v.opens_at,v.deadline,v.drive_date||null,v.status,req.user!.userId]);
@@ -279,7 +285,8 @@ placementAdminRouter.get('/drives/:id/applicants.csv',async(req,res)=>{
 });
 placementAdminRouter.get('/statistics',async(_req,res)=>{
   const byDepartment=await query(`SELECT d.dept_name,count(DISTINCT s.student_id)::int AS active_students,count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)::int AS placed_students,round(100.0*count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)/NULLIF(count(DISTINCT s.student_id),0),2) AS placed_pct,max(ps.best_offer_lpa) AS highest_package_lpa FROM department d JOIN program p USING(dept_id) JOIN student s USING(program_id) JOIN v_student_placement_status ps USING(student_id) WHERE s.status='Active' GROUP BY d.dept_name ORDER BY d.dept_name`);
-  const overview=await getAdminPlacementOverview();res.render('admin/placement-statistics',{title:'Placement statistics',nav:'placement',overview,byDepartment});
+  const [overview,companyOffers]=await Promise.all([getAdminPlacementOverview(),getCompanyPlacementOffers()]);
+  res.render('admin/placement-statistics',{title:'Placement statistics',nav:'placement',overview,byDepartment,companyOffers});
 });
 
 export const placementFacultyRouter=Router();
