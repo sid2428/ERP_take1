@@ -5,6 +5,7 @@ import { audit } from '../lib/audit.js';
 import { forbidden, notFound, HttpError } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import { parsePlacementDrivePagination } from '../lib/placement-pagination.js';
+import { escapeCsvCell } from '../lib/csv.js';
 import { getAdminDrives, getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
   getCompanyPlacementOffers, getDriveApplicants, getPlacementDashboard, getPlacementProfile, getStudentApplications, getStudentDrives } from '../queries/placement-queries.js';
 
@@ -286,8 +287,7 @@ placementAdminRouter.post('/applications/:id/offers',async(req,res)=>{
 });
 placementAdminRouter.get('/drives/:id/applicants.csv',async(req,res)=>{
   const driveId=Number(req.params.id);const rows=await query(`SELECT s.student_number,s.first_name,s.last_name,p.program_name,a.status,a.applied_at FROM placement_application a JOIN student s USING(student_id) JOIN program p USING(program_id) WHERE a.drive_id=$1 ORDER BY a.applied_at`,[driveId]);
-  const cell=(v:unknown)=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;};
-  res.type('text/csv').attachment(`placement-applicants-${driveId}.csv`).send(['Student number,First name,Last name,Program,Status,Applied at',...rows.map(r=>[r.student_number,r.first_name,r.last_name,r.program_name,r.status,r.applied_at].map(cell).join(','))].join('\r\n'));
+  res.type('text/csv').attachment(`placement-applicants-${driveId}.csv`).send(['Student number,First name,Last name,Program,Status,Applied at',...rows.map(r=>[r.student_number,r.first_name,r.last_name,r.program_name,r.status,r.applied_at].map(escapeCsvCell).join(','))].join('\r\n'));
 });
 placementAdminRouter.get('/statistics',async(_req,res)=>{
   const byDepartment=await query(`SELECT d.dept_name,count(DISTINCT s.student_id)::int AS active_students,count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)::int AS placed_students,round(100.0*count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)/NULLIF(count(DISTINCT s.student_id),0),2) AS placed_pct,max(ps.best_offer_lpa) AS highest_package_lpa FROM department d JOIN program p USING(dept_id) JOIN student s USING(program_id) JOIN v_student_placement_status ps USING(student_id) WHERE s.status='Active' GROUP BY d.dept_name ORDER BY d.dept_name`);
