@@ -235,6 +235,71 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
     }
   });
 
+  it('creates, edits, and deactivates a company through the admin routes',async()=>{
+    const page=await admin.get('/admin/placement/companies');
+    const csrf=csrfFrom(page.text);
+    const initialName=`placement-company-${randomUUID()}`;
+    let companyId:number|undefined;
+    try{
+      const created=await admin.post('/admin/placement/companies').type('form').send({_csrf:csrf,company_name:initialName,industry:'Software',description:'Test company',website_url:'https://example.test',contact_name:'',contact_email:'',contact_phone:'',headquarters:''});
+      expect(created.status).toBe(302);
+      const row=await pool!.query(`SELECT company_id FROM company WHERE company_name=$1`,[initialName]);
+      expect(row.rows).toHaveLength(1);
+      companyId=row.rows[0].company_id as number;
+      const editedName=`${initialName}-edited`;
+      const edited=await admin.post(`/admin/placement/companies/${companyId}`).type('form').send({_csrf:csrf,company_name:editedName,industry:'Technology',description:'Updated test company',website_url:'https://example.test/company',contact_name:'',contact_email:'',contact_phone:'',headquarters:''});
+      expect(edited.status).toBe(302);
+      const toggled=await admin.post(`/admin/placement/companies/${companyId}/toggle`).type('form').send({_csrf:csrf});
+      expect(toggled.status).toBe(302);
+      const saved=await pool!.query(`SELECT company_name,industry,is_active FROM company WHERE company_id=$1`,[companyId]);
+      expect(saved.rows[0]).toEqual({company_name:editedName,industry:'Technology',is_active:false});
+    }finally{
+      if(companyId)await pool!.query(`DELETE FROM company WHERE company_id=$1`,[companyId]);
+    }
+  });
+
+  it('exports applicant CSV rows to admins and denies student access',async()=>{
+    const f=await fixture({status:'Open'});
+    try{
+      const submitted=await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
+      expect(submitted.status).toBe(302);
+      const csv=await admin.get(`/admin/placement/drives/${f.driveId}/applicants.csv`);
+      expect(csv.status).toBe(200);
+      expect(csv.headers['content-type']).toContain('text/csv');
+      expect(csv.headers['content-disposition']).toContain(`placement-applicants-${f.driveId}.csv`);
+      const applicant=await pool!.query(`SELECT student_number FROM student WHERE student_id=$1`,[studentId]);
+      expect(csv.text).toContain('Student number,First name,Last name,Program,Status,Applied at');
+      expect(csv.text).toContain(`"${applicant.rows[0].student_number}"`);
+      expect(csv.text).toContain('"Applied"');
+      expect((await student.get(`/admin/placement/drives/${f.driveId}/applicants.csv`)).status).toBe(403);
+    }finally{await dispose(f);}
+  });
+
+  it('notifies an eligible student when an admin publishes a drive and deduplicates delivery',async()=>{
+    const f=await fixture({status:'Draft'});
+    try{
+      const page=await admin.get(`/admin/placement/drives/${f.driveId}`);
+      const published=await admin.post(`/admin/placement/drives/${f.driveId}/status`).type('form').send({_csrf:csrfFrom(page.text),status:'Open'});
+      expect(published.status).toBe(302);
+      const link=`/student/placement/drives/${f.driveId}`;
+      const count=async()=>{
+        const result=await pool!.query(`SELECT count(*)::int AS total FROM notification n JOIN app_user u USING(user_id)
+          WHERE u.login_id='STU202600004' AND n.kind='placement' AND n.link=$1`,[link]);
+        return result.rows[0].total as number;
+      };
+      expect(await count()).toBe(1);
+      const board=await student.get('/student/notices?category=Placement');
+      expect(board.status).toBe(200);
+      const title=await pool!.query(`SELECT title FROM placement_drive WHERE drive_id=$1`,[f.driveId]);
+      expect(board.text).toContain(title.rows[0].title);
+      await pool!.query('CALL notify_eligible_placement_drive($1)',[f.driveId]);
+      expect(await count()).toBe(1);
+    }finally{
+      await pool!.query(`DELETE FROM notification WHERE user_id=(SELECT user_id FROM app_user WHERE login_id='STU202600004') AND link=$1`,[`/student/placement/drives/${f.driveId}`]);
+      await dispose(f);
+    }
+  });
+
   it('allows a student to decline their own offer and records the response',async()=>{
     const f=await fixture({status:'Open'});
     try{
@@ -261,6 +326,7 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const company=await pool!.query(`SELECT company_name FROM company WHERE company_id=$1`,[f.companyId]);
       const statistics=await admin.get('/admin/placement/statistics');
       expect(statistics.text).toContain(company.rows[0].company_name);
+      expect(statistics.text).toMatch(new RegExp(`<td>${company.rows[0].company_name}</td>\\s*<td>1</td>\\s*<td>0</td>\\s*<td>0</td>`));
     }finally{await dispose(f);}
   });
 
