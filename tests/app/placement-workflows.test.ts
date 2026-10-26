@@ -82,7 +82,59 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       expect(selected.status).toBe(302);
       const expiredOffer=await admin.post(`/admin/placement/applications/${applicationId}/offers`).type('form').send({_csrf:csrf,package_lpa:'10',stipend_monthly:'',response_deadline:new Date(Date.now()-60_000).toISOString(),joining_date:''}).set('Accept','application/json');
       expect(expiredOffer.status).toBe(400);
+
+      const roundAdded=await admin.post(`/admin/placement/drives/${f.driveId}/rounds`).type('form').send({_csrf:csrf,sequence_no:'1',round_name:'Results round',description:'',scheduled_at:''});
+      expect(roundAdded.status).toBe(302);
+      const round=await pool!.query(`SELECT round_id FROM drive_round WHERE drive_id=$1`,[f.driveId]);
+      const result=await admin.post(`/admin/placement/applications/${applicationId}/results`).type('form').send({_csrf:csrf,round_id:String(round.rows[0].round_id),result:'Passed',private_remarks:''});
+      expect(result.status).toBe(302);
+
+      const offered=await admin.post(`/admin/placement/applications/${applicationId}/offers`).type('form').send({_csrf:csrf,package_lpa:'10',stipend_monthly:'',response_deadline:new Date(Date.now()+86400000).toISOString(),joining_date:''});
+      expect(offered.status).toBe(302);
+      const pending=await student.get('/student/placement/applications');
+      expect(pending.text).toContain('Results round');
+      expect(pending.text).toContain('Pending');
+      const offer=await pool!.query(`SELECT offer_id FROM placement_offer WHERE application_id=$1`,[applicationId]);
+      const response=await student.post(`/student/placement/offers/${offer.rows[0].offer_id}/respond`).type('form').send({_csrf:csrfFrom(pending.text),response:'accept'});
+      expect(response.status).toBe(302);
+      const accepted=await pool!.query(`SELECT status FROM placement_offer WHERE offer_id=$1`,[offer.rows[0].offer_id]);
+      expect(accepted.rows[0].status).toBe('Accepted');
       expect(history.text).toContain(`workflow-`);
+    }finally{await dispose(f);}
+  });
+
+  it('saves a student placement profile and restores the prior profile after the test',async()=>{
+    const before=await pool!.query(`SELECT skills,resume_url,linkedin_url,github_url,portfolio_url,updated_at FROM student_placement_profile WHERE student_id=$1`,[studentId]);
+    const marker=`tnp-profile-${randomUUID()}`;
+    try{
+      const page=await student.get('/student/placement/profile');
+      const saved=await student.post('/student/placement/profile').type('form').send({_csrf:csrfFrom(page.text),skills:marker,resume_url:'https://example.test/resume',linkedin_url:'',github_url:'',portfolio_url:''});
+      expect(saved.status).toBe(302);
+      const refreshed=await student.get('/student/placement/profile');
+      expect(refreshed.status).toBe(200);
+      expect(refreshed.text).toContain(marker);
+      const row=await pool!.query(`SELECT skills,resume_url FROM student_placement_profile WHERE student_id=$1`,[studentId]);
+      expect(row.rows[0]).toMatchObject({skills:marker,resume_url:'https://example.test/resume'});
+    }finally{
+      if(before.rows[0]){
+        await pool!.query(`UPDATE student_placement_profile SET skills=$2,resume_url=$3,linkedin_url=$4,github_url=$5,portfolio_url=$6,updated_at=$7 WHERE student_id=$1`,[studentId,before.rows[0].skills,before.rows[0].resume_url,before.rows[0].linkedin_url,before.rows[0].portfolio_url,before.rows[0].updated_at]);
+      }else await pool!.query(`DELETE FROM student_placement_profile WHERE student_id=$1`,[studentId]);
+    }
+  });
+
+  it('allows a student to withdraw their own application before the deadline',async()=>{
+    const f=await fixture({status:'Open'});
+    try{
+      const submitted=await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
+      expect(submitted.status).toBe(302);
+      const application=await pool!.query(`SELECT application_id FROM placement_application WHERE student_id=$1 AND drive_id=$2`,[studentId,f.driveId]);
+      const history=await student.get('/student/placement/applications');
+      const withdrawn=await student.post(`/student/placement/applications/${application.rows[0].application_id}/withdraw`).type('form').send({_csrf:csrfFrom(history.text),reason:'Local TNP workflow verification'});
+      expect(withdrawn.status).toBe(302);
+      const saved=await pool!.query(`SELECT status,withdrawn_at FROM placement_application WHERE application_id=$1`,[application.rows[0].application_id]);
+      expect(saved.rows[0].status).toBe('Withdrawn');
+      expect(saved.rows[0].withdrawn_at).not.toBeNull();
+      expect((await student.get('/student/placement/applications')).text).toContain('Withdrawn');
     }finally{await dispose(f);}
   });
 
@@ -113,14 +165,17 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const csrf=csrfFrom(editPage.text);
       const invalid=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Invalid deadline',role_title:'Engineer',drive_type:'FullTime',description:'',job_location:'',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()+3600000).toISOString(),deadline:new Date(Date.now()+1800000).toISOString(),drive_date:'',program_ids:programId}).set('Accept','application/json');
       expect(invalid.status).toBe(400);
-      const saved=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Edited placement role',role_title:'Engineer',drive_type:'FullTime',description:'Updated description',job_location:'Pune',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()-3600000).toISOString(),deadline:new Date(Date.now()+86400000).toISOString(),drive_date:'',program_ids:programId});
+      const opensAt=new Date(Date.now()-3600000).toISOString();
+      const saved=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Edited placement role',role_title:'Engineer',drive_type:'FullTime',description:'Updated description',job_location:'Pune',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'9.5',max_active_backlogs:'',min_attendance_pct:'',opens_at:opensAt,deadline:new Date(Date.now()+86400000).toISOString(),drive_date:'',program_ids:programId});
       expect(saved.status).toBe(302);
       const data=await pool!.query(`SELECT title,package_lpa FROM placement_drive WHERE drive_id=$1`,[f.driveId]);
       expect(data.rows[0]).toMatchObject({title:'Edited placement role',package_lpa:12});
 
       const detail=await admin.get(`/admin/placement/drives/${f.driveId}`);
-      await admin.post(`/admin/placement/drives/${f.driveId}/status`).type('form').send({_csrf:csrfFrom(detail.text),status:'Open'});
+      const published=await admin.post(`/admin/placement/drives/${f.driveId}/status`).type('form').send({_csrf:csrfFrom(detail.text),status:'Open'});
+      expect(published.status).toBe(302);
       expect((await admin.get(`/admin/placement/drives/${f.driveId}/edit`)).status).toBe(409);
+      await pool!.query(`UPDATE placement_drive SET min_cgpa=NULL WHERE drive_id=$1`,[f.driveId]);
       await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
       const locked=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Changed again',role_title:'Engineer',drive_type:'FullTime',description:'',job_location:'',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()-3600000).toISOString(),deadline:new Date(Date.now()+86400000).toISOString(),drive_date:'',program_ids:programId}).set('Accept','application/json');
       expect(locked.status).toBe(409);
