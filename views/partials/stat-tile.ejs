@@ -1,0 +1,5 @@
+<article class="card ui-stat">
+  <div class="hd"><span class="ui-label"><%= label %></span><% if (typeof trend !== 'undefined' && trend) { %><span class="ui-trend"><%= trend %></span><% } %></div>
+  <div class="kpi"><%= value %></div>
+  <% if (typeof hint !== 'undefined' && hint) { %><div class="note ui-stat-hint"><%= hint %></div><% } %>
+</article>

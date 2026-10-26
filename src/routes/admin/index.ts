@@ -11,6 +11,7 @@ import { placementAdminRouter } from '../placement-routes.js';
 import { attendanceUnlockAdminRouter } from './attendance-unlock-routes.js';
 
 export const adminRouter = Router();
+adminRouter.get('/ui', (_req, res) => res.render('admin/ui', { title: 'Shared UI kit', nav: 'ui' }));
 adminRouter.use(dashboardRouter);
 adminRouter.use(academicRouter);
 adminRouter.use(peopleRouter);

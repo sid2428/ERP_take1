@@ -1,0 +1,6 @@
+<% const vals = (Array.isArray(values) ? values : []).map(Number).filter(Number.isFinite);
+   const lo = vals.length ? Math.min(...vals) : 0;
+   const hi = vals.length ? Math.max(...vals) : 1;
+   const span = hi - lo || 1;
+   const points = vals.map((v, i) => `${vals.length < 2 ? 60 : 4 + i * (112 / (vals.length - 1))},${30 - ((v - lo) / span) * 24}`).join(' ');
+%><svg class="ui-sparkline" viewBox="0 0 120 36" role="img" aria-label="<%= label %>"><title><%= label %></title><% if (vals.length > 1) { %><polyline points="<%= points %>"/><% } else { %><text x="60" y="22" text-anchor="middle">No trend data</text><% } %></svg>

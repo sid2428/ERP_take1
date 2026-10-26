@@ -107,6 +107,8 @@ describe.skipIf(!hasAdminEnv)('PICT ERP portal', () => {
       expect(dash.text).toContain('STU202600004');
       expect(dash.text).toContain('Semester V of 8');
       expect((await agent.get('/admin')).status).toBe(403);
+      expect((await agent.get('/admin/ui')).status).toBe(403);
+      expect((await agent.get('/api/admin/hr/leave/requests')).status).toBe(403);
       expect((await agent.get('/faculty')).status).toBe(403);
     });
 
@@ -128,12 +130,23 @@ describe.skipIf(!hasAdminEnv)('PICT ERP portal', () => {
   });
 
   describe('admin console', () => {
+    it('shows the shared UI kit only to admins', async () => {
+      const { agent: admin } = await signIn(app, 'admin', ADMIN);
+      const page = await admin.get('/admin/ui');
+      expect(page.status).toBe(200);
+      expect(page.text).toContain('Shared UI kit');
+      expect(page.text).toContain('ui-ring');
+
+      const { agent: student } = await signIn(app, 'STU202600004', DEMO);
+      expect((await student.get('/admin/ui')).status).toBe(403);
+    });
+
     it('renders every admin page', async () => {
       const { agent } = await signIn(app, 'admin', ADMIN);
       for (const path of ['/admin', '/admin/departments', '/admin/departments/CSE', '/admin/programs', '/admin/programs/BTECH-IT',
         '/admin/courses', '/admin/courses?dept=IT&type=LAB', '/admin/courses/new', '/admin/courses/4', '/admin/sessions',
         '/admin/sections', '/admin/sections/divisions/1', '/admin/students?q=STU2026000', '/admin/students/4',
-        '/admin/faculty', '/admin/faculty/1', '/admin/audit', '/admin/attendance-unlocks']) {
+        '/admin/faculty', '/admin/faculty/1', '/admin/audit', '/admin/attendance-unlocks', '/admin/ui']) {
         const res = await agent.get(path);
         expect(res.status, path).toBe(200);
       }

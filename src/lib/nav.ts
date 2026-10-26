@@ -103,6 +103,9 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },
       ],
     },
-    { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },
+    { label: 'SYSTEM', items: [
+      { key: 'ui', label: 'UI kit', href: '/admin/ui', icon: 'grid' },
+      { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' },
+    ] },
   ],
 };

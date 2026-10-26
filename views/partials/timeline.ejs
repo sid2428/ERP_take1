@@ -1,0 +1,4 @@
+<ol class="ui-timeline" aria-label="<%= label %>"><% (Array.isArray(items) ? items : []).forEach((item) => { %>
+  <li><span class="ui-timeline-dot" aria-hidden="true"></span><div><div class="hd"><strong><%= item.title %></strong><% if (item.when) { %><time><%= item.when %></time><% } %></div>
+    <% if (item.detail) { %><p><%= item.detail %></p><% } %></div></li>
+<% }) %></ol>
