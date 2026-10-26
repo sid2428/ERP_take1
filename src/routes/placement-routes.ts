@@ -94,10 +94,16 @@ placementStudentRouter.post('/applications/:id/withdraw',async(req,res)=>{
 placementStudentRouter.post('/offers/:id/respond',async(req,res)=>{
   const id=Number(req.params.id);const accept=req.body.response==='accept';
   if(!Number.isInteger(id)||!['accept','decline'].includes(req.body.response))throw new HttpError(400,'Choose accept or decline.');
-  await transaction(async db=>{
-    await db.query('SELECT respond_placement_offer($1,$2,$3)',[id,req.user!.studentId!,accept]);
-    await audit(req,{action:accept?'PLACEMENT_OFFER_ACCEPT':'PLACEMENT_OFFER_DECLINE',entity:'placement_offer',entityId:id},db);
-  });
+  try {
+    await transaction(async db=>{
+      await db.query('SELECT respond_placement_offer($1,$2,$3)',[id,req.user!.studentId!,accept]);
+      await audit(req,{action:accept?'PLACEMENT_OFFER_ACCEPT':'PLACEMENT_OFFER_DECLINE',entity:'placement_offer',entityId:id},db);
+    });
+  } catch (err) {
+    const message=friendlyDbError(err);
+    if(message)throw new HttpError(400,message);
+    throw err;
+  }
   flash(req,'success',accept?'Offer accepted.':'Offer declined.');res.redirect('/student/placement/applications');
 });
 

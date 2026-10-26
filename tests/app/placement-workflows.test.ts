@@ -252,6 +252,8 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const history=await student.get('/student/placement/applications');
       const declined=await student.post(`/student/placement/offers/${offer.rows[0].offer_id}/respond`).type('form').send({_csrf:csrfFrom(history.text),response:'decline'});
       expect(declined.status).toBe(302);
+      const duplicateResponse=await student.post(`/student/placement/offers/${offer.rows[0].offer_id}/respond`).type('form').send({_csrf:csrfFrom(history.text),response:'accept'}).set('Accept','application/json');
+      expect(duplicateResponse.status).toBe(400);
       const saved=await pool!.query(`SELECT status,responded_at FROM placement_offer WHERE offer_id=$1`,[offer.rows[0].offer_id]);
       expect(saved.rows[0].status).toBe('Declined');
       expect(saved.rows[0].responded_at).not.toBeNull();
@@ -259,6 +261,29 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const company=await pool!.query(`SELECT company_name FROM company WHERE company_id=$1`,[f.companyId]);
       const statistics=await admin.get('/admin/placement/statistics');
       expect(statistics.text).toContain(company.rows[0].company_name);
+    }finally{await dispose(f);}
+  });
+
+  it('rejects an offer response after its deadline without changing the pending offer',async()=>{
+    const f=await fixture({status:'Open'});
+    try{
+      const applied=await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
+      expect(applied.status).toBe(302);
+      const application=await pool!.query(`SELECT application_id FROM placement_application WHERE student_id=$1 AND drive_id=$2`,[studentId,f.driveId]);
+      const applicationId=application.rows[0].application_id as number;
+      const page=await admin.get(`/admin/placement/drives/${f.driveId}`);
+      const csrf=csrfFrom(page.text);
+      await admin.post(`/admin/placement/applications/${applicationId}/status`).type('form').send({_csrf:csrf,status:'Shortlisted'});
+      await admin.post(`/admin/placement/applications/${applicationId}/status`).type('form').send({_csrf:csrf,status:'Selected'});
+      const created=await admin.post(`/admin/placement/applications/${applicationId}/offers`).type('form').send({_csrf:csrf,package_lpa:'10',stipend_monthly:'',response_deadline:new Date(Date.now()+86400000).toISOString(),joining_date:''});
+      expect(created.status).toBe(302);
+      const offer=await pool!.query(`SELECT offer_id FROM placement_offer WHERE application_id=$1`,[applicationId]);
+      await pool!.query(`UPDATE placement_offer SET response_deadline=now()-interval '1 second' WHERE offer_id=$1`,[offer.rows[0].offer_id]);
+      const history=await student.get('/student/placement/applications');
+      const response=await student.post(`/student/placement/offers/${offer.rows[0].offer_id}/respond`).type('form').send({_csrf:csrfFrom(history.text),response:'accept'}).set('Accept','application/json');
+      expect(response.status).toBe(400);
+      const saved=await pool!.query(`SELECT status,responded_at FROM placement_offer WHERE offer_id=$1`,[offer.rows[0].offer_id]);
+      expect(saved.rows[0]).toEqual({status:'Pending',responded_at:null});
     }finally{await dispose(f);}
   });
 
