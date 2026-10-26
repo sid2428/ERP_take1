@@ -4,22 +4,27 @@ The placement module provides student placement profiles, drive eligibility, app
 
 ## Setup and routes
 
-Apply the forward-only migrations against a verified local database with `npm run db:migrate`. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Do not use production credentials for local setup.
+Apply the forward-only migrations against a verified local database with `npm run db:migrate`. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Migration `090` enforces drive and recruitment-round state transitions and prevents newly scheduled or rescheduled rounds from being placed in the past. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Do not use production credentials for local setup.
 
 | User | Route | Capabilities |
 | --- | --- | --- |
 | Student | `/student/placement` | Summary and placement status |
 | Student | `/student/placement/profile` | Edit skills and resume/profile links |
-| Student | `/student/placement/drives` | Search, filter, and inspect eligibility |
+| Student | `/student/placement/drives` | Search, filter, inspect eligibility, and browse paginated results |
 | Student | `/student/placement/applications` | Review rounds, withdraw, and respond to offers |
 | Admin | `/admin/placement` | Placement summary |
 | Admin | `/admin/placement/companies` | Create, edit, activate, and deactivate companies |
 | Admin | `/admin/placement/drives/new` | Create drives |
-| Admin | `/admin/placement/drives/:id` | Manage status, rounds, applicants, results, and offers |
+| Admin | `/admin/placement/drives/:id` | Manage status, round schedules and states, applicants, results, and offers |
+| Admin | `/admin/placement/drives/:id/edit` | Edit Draft drives before publication |
 | Admin | `/admin/placement/statistics` | Aggregate statistics by department |
 | Department HOD | `/faculty/placement` | Read-only report for their department |
 
 All mutating endpoints use POST, the shared CSRF middleware, a transaction, and the existing audit log. No file uploads are supported; profile documents are links only. CSV exports quote cells and escape formula-leading content.
+
+Drive details can be edited only while a drive is Draft and has no applications. Published (Open), Closed, and Cancelled drives cannot be edited or moved back to Draft; this preserves advertised criteria and prevents editing from bypassing publication history. Drive transitions are `Draft → Open → Closed`, with cancellation allowed from Draft or Open; Closed and Cancelled are terminal. Recruitment rounds can be rescheduled while Planned or In Progress; a changed schedule must be in the future. Round transitions are `Planned → InProgress → Completed`, with cancellation allowed from Planned or InProgress. Completed and Cancelled rounds are terminal.
+
+Student drive searches are counted and paginated in PostgreSQL. The page size defaults to 20 and is capped at 50; search, drive type, and eligibility filters are retained when moving between pages. A requested page beyond the result range is clamped to the last available page, and empty results display an explicit empty state.
 
 ## Data model and lifecycle
 

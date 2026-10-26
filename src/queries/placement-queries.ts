@@ -1,22 +1,39 @@
-import { query, queryOne } from '../db.js';
+import { query, queryOne, type Db } from '../db.js';
 
 export async function getPlacementProfile(studentId: number) {
   return queryOne(`SELECT * FROM student_placement_profile WHERE student_id=$1`, [studentId]);
 }
 
-export async function getStudentDrives(studentId: number, filters: { q?: string; type?: string; eligible?: string } = {}) {
-  return query(`
+export async function getStudentDrives(
+  studentId: number,
+  filters: { q?: string; type?: string; eligible?: string } = {},
+  pagination: { page: number; pageSize: number } = { page: 1, pageSize: 20 },
+  db?: Db,
+) {
+  const params = [studentId, filters.q ?? '', filters.type ?? '', filters.eligible ?? ''];
+  const where = `d.status IN ('Open','Closed') AND ($2='' OR d.title ILIKE '%'||$2||'%' OR c.company_name ILIKE '%'||$2||'%')
+       AND ($3='' OR d.drive_type::text=$3)
+       AND ($4='' OR e.eligible=($4='yes'))`;
+  const totals = await query<{ total: number }>(`
+    SELECT count(*)::int AS total
+      FROM placement_drive d JOIN company c USING(company_id)
+      CROSS JOIN LATERAL is_eligible($1,d.drive_id) e
+     WHERE ${where}`,
+  params, db);
+  const total = totals[0]?.total ?? 0;
+  const totalPages = Math.ceil(total / pagination.pageSize);
+  const page = totalPages === 0 ? 1 : Math.min(Math.max(1, pagination.page), totalPages);
+  const drives = await query(`
     SELECT d.drive_id,d.title,d.role_title,d.drive_type,d.description,d.job_location,d.package_lpa,d.stipend_monthly,
            d.min_year,d.min_cgpa,d.max_active_backlogs,d.min_attendance_pct,d.opens_at,d.deadline,d.drive_date,
            c.company_name,e.eligible,e.reasons,e.assessment_pending,
            EXISTS(SELECT 1 FROM placement_application a WHERE a.drive_id=d.drive_id AND a.student_id=$1) AS applied
       FROM placement_drive d JOIN company c USING(company_id)
       CROSS JOIN LATERAL is_eligible($1,d.drive_id) e
-     WHERE d.status IN ('Open','Closed') AND ($2='' OR d.title ILIKE '%'||$2||'%' OR c.company_name ILIKE '%'||$2||'%')
-       AND ($3='' OR d.drive_type::text=$3)
-       AND ($4='' OR e.eligible=($4='yes'))
-     ORDER BY (d.status='Open') DESC,d.deadline,d.drive_id DESC LIMIT 100`,
-  [studentId, filters.q ?? '', filters.type ?? '', filters.eligible ?? '']);
+     WHERE ${where}
+     ORDER BY (d.status='Open') DESC,d.deadline,d.drive_id DESC LIMIT $5 OFFSET $6`,
+  [...params, pagination.pageSize, (page - 1) * pagination.pageSize], db);
+  return { drives, page, pageSize: pagination.pageSize, total, totalPages };
 }
 
 export async function getStudentApplications(studentId: number) {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { hasDatabase, inRollback, one } from './helpers.js';
+import { getStudentDrives } from '../../src/queries/placement-queries.js';
+import type { Db } from '../../src/db.js';
 
-async function fixture(db: import('pg').Client, options: { minYear?: number; packageLpa?: number; programMismatch?: boolean } = {}) {
+async function fixture(db: import('pg').Client, options: { minYear?: number; packageLpa?: number; programMismatch?: boolean; title?: string; type?: 'FullTime'|'Internship' } = {}) {
   const student = await one<{ student_id: number; program_id: string; year_of_study: number }>(db, `
     SELECT s.student_id,s.program_id,d.year_of_study FROM student s
     JOIN student_section ss USING(student_id) JOIN division d USING(division_id)
@@ -11,9 +13,9 @@ async function fixture(db: import('pg').Client, options: { minYear?: number; pac
   const company = await one<{ company_id: number }>(db,
     `INSERT INTO company(company_name) VALUES('placement-test-'||to_char(clock_timestamp(),'YYYYMMDDHH24MISSUS')) RETURNING company_id`);
   const drive = await one<{ drive_id: number }>(db, `INSERT INTO placement_drive
-    (company_id,title,role_title,drive_type,package_lpa,min_year,opens_at,deadline,status)
-    VALUES($1,'test drive','Developer','FullTime',$2,$3,now()-interval '1 hour',now()+interval '1 day','Open') RETURNING drive_id`,
-  [company.company_id, options.packageLpa ?? 10, options.minYear ?? student.year_of_study]);
+    (company_id,title,role_title,drive_type,package_lpa,stipend_monthly,min_year,opens_at,deadline,status)
+    VALUES($1,$4,'Developer',$5::placement_drive_type,CASE WHEN $5='FullTime' THEN $2::numeric ELSE NULL END,CASE WHEN $5='Internship' THEN 20000::numeric ELSE NULL END,$3,now()-interval '1 hour',now()+interval '1 day','Open') RETURNING drive_id`,
+  [company.company_id, options.packageLpa ?? 10, options.minYear ?? student.year_of_study, options.title ?? 'test drive', options.type ?? 'FullTime']);
   const programId=options.programMismatch
     ? (await one<{program_id:string}>(db,'SELECT program_id FROM program WHERE program_id<>$1 ORDER BY program_id LIMIT 1',[student.program_id])).program_id
     : student.program_id;
@@ -31,6 +33,33 @@ async function fails(db: import('pg').Client, sql: string, params: unknown[] = [
 }
 
 describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
+  it('paginates drives after applying search, type, eligibility, and clamps out-of-range pages', async () => inRollback(async db => {
+    const marker=`placement-page-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const first=await fixture(db,{title:`${marker}-one`});
+    await fixture(db,{title:`${marker}-two`});
+    await fixture(db,{title:`${marker}-three`,type:'Internship'});
+
+    const queryDb=db as unknown as Db;
+    const pageOne=await getStudentDrives(first.student_id,{q:marker,type:'FullTime',eligible:'yes'},{page:1,pageSize:1},queryDb);
+    expect(pageOne.total).toBe(2);
+    expect(pageOne.totalPages).toBe(2);
+    expect(pageOne.page).toBe(1);
+    expect(pageOne.drives).toHaveLength(1);
+    expect(pageOne.drives[0]!.title).toContain(marker);
+
+    const pageTwo=await getStudentDrives(first.student_id,{q:marker,type:'FullTime',eligible:'yes'},{page:2,pageSize:1},queryDb);
+    expect(pageTwo.page).toBe(2);
+    expect(pageTwo.drives).toHaveLength(1);
+    expect(pageTwo.drives[0]!.drive_id).not.toBe(pageOne.drives[0]!.drive_id);
+
+    const beyondLast=await getStudentDrives(first.student_id,{q:marker,type:'FullTime',eligible:'yes'},{page:999,pageSize:1},queryDb);
+    expect(beyondLast.page).toBe(2);
+    expect(beyondLast.drives).toHaveLength(1);
+
+    const noResults=await getStudentDrives(first.student_id,{q:marker,type:'FullTime',eligible:'no'},{page:7,pageSize:1},queryDb);
+    expect(noResults).toMatchObject({total:0,totalPages:0,page:1,drives:[]});
+  }));
+
   it('reports current-drive eligibility and rejects duplicate applications', async () => inRollback(async db => {
     const f = await fixture(db);
     const eligibility = await one<{ eligible: boolean; reasons: string[] }>(db,
@@ -38,6 +67,16 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     expect(eligibility).toMatchObject({ eligible: true, reasons: [] });
     await db.query('INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)', [f.student_id,f.driveId]);
     expect(await fails(db,'INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)',[f.student_id,f.driveId])).toMatch(/unique/i);
+  }));
+
+  it('enforces the application recruitment-stage order', async () => inRollback(async db => {
+    const f=await fixture(db);
+    const app=await one<{application_id:number}>(db,`INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`,[f.student_id,f.driveId]);
+    expect(await fails(db,`UPDATE placement_application SET status='Selected' WHERE application_id=$1`,[app.application_id])).toMatch(/status transition/i);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`,[app.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`,[app.application_id]);
+    expect(await fails(db,`UPDATE placement_application SET status='Applied' WHERE application_id=$1`,[app.application_id])).toMatch(/status transition/i);
   }));
 
   it('fails closed when the program or year does not qualify', async () => inRollback(async db => {
@@ -96,5 +135,25 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const view=await one<{applications:number;offers:number;is_placed:boolean}>(db,
       `SELECT applications,offers,is_placed FROM v_student_placement_status WHERE student_id=$1`,[f.student_id]);
     expect(view).toMatchObject({applications:0,offers:0,is_placed:false});
+  }));
+
+  it('enforces round status transitions and rejects past schedules', async () => inRollback(async db => {
+    const f=await fixture(db);
+    const round=await one<{round_id:number}>(db,`INSERT INTO drive_round(drive_id,sequence_no,round_name,scheduled_at)
+      VALUES($1,1,'Technical',now()+interval '1 day') RETURNING round_id`,[f.driveId]);
+    expect(await fails(db,`UPDATE drive_round SET status='Completed' WHERE round_id=$1`,[round.round_id])).toMatch(/status transition/i);
+    expect(await fails(db,`UPDATE drive_round SET status='InProgress' WHERE round_id=$1`,[round.round_id])).toMatch(/before its scheduled time/i);
+    expect(await fails(db,`UPDATE drive_round SET scheduled_at=now()-interval '1 hour' WHERE round_id=$1`,[round.round_id])).toMatch(/schedule must be in the future/i);
+    await db.query(`UPDATE drive_round SET scheduled_at=NULL WHERE round_id=$1`,[round.round_id]);
+    await db.query(`UPDATE drive_round SET status='InProgress' WHERE round_id=$1`,[round.round_id]);
+    await db.query(`UPDATE drive_round SET status='Completed' WHERE round_id=$1`,[round.round_id]);
+    expect(await fails(db,`UPDATE drive_round SET status='Cancelled' WHERE round_id=$1`,[round.round_id])).toMatch(/status transition/i);
+  }));
+
+  it('prevents reopening a published or closed drive', async () => inRollback(async db => {
+    const f=await fixture(db);
+    await db.query(`UPDATE placement_drive SET status='Closed' WHERE drive_id=$1`,[f.driveId]);
+    expect(await fails(db,`UPDATE placement_drive SET status='Draft' WHERE drive_id=$1`,[f.driveId])).toMatch(/status transition/i);
+    expect(await fails(db,`UPDATE placement_drive SET status='Open' WHERE drive_id=$1`,[f.driveId])).toMatch(/status transition/i);
   }));
 });
