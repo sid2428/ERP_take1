@@ -105,8 +105,24 @@ export const placementAdminRouter=Router();
 const companySchema=z.object({company_name:z.string().trim().min(2).max(140),industry:z.string().trim().max(80),description:z.string().trim().max(3000),website_url:emptyToNull,contact_name:z.string().trim().max(100),contact_email:z.union([z.literal(''),z.email().max(120)]),contact_phone:z.string().trim().max(30),headquarters:z.string().trim().max(100)});
 const nullableNumber = (min:number,max:number,integer=false) => z.preprocess(v=>v===''||v==null?null:Number(v),
   (integer?z.number().int():z.number()).min(min).max(max).nullable());
-const driveSchema=z.object({company_id:z.coerce.number().int().positive(),title:z.string().trim().min(3).max(160),role_title:z.string().trim().min(2).max(120),drive_type:z.enum(['FullTime','Internship']),description:z.string().trim().max(5000),job_location:z.string().trim().max(120),package_lpa:z.preprocess(v=>v===''?undefined:v,z.coerce.number().nonnegative().max(999999).optional()),stipend_monthly:z.preprocess(v=>v===''?undefined:v,z.coerce.number().nonnegative().max(99999999).optional()),min_year:z.coerce.number().int().min(1).max(6),min_cgpa:nullableNumber(0,10),max_active_backlogs:nullableNumber(0,100,true),min_attendance_pct:nullableNumber(0,100),opens_at:dateTimeInput,deadline:dateTimeInput,drive_date:z.union([z.literal(''),z.iso.date()]),status:z.enum(['Draft','Open']),program_ids:z.string().max(500)}).refine(v=>v.drive_type==='FullTime'?v.package_lpa!==undefined&&v.stipend_monthly===undefined:v.stipend_monthly!==undefined&&v.package_lpa===undefined,{message:'Enter a package for full-time or monthly stipend for internship.'}).refine(v=>new Date(v.deadline).getTime()>new Date(v.opens_at).getTime(),{path:['deadline'],message:'The application deadline must be later than the opening time.'});
-const driveEditSchema=driveSchema.omit({status:true});
+const driveBaseSchema=z.object({
+  company_id:z.coerce.number().int().positive(),title:z.string().trim().min(3).max(160),role_title:z.string().trim().min(2).max(120),
+  drive_type:z.enum(['FullTime','Internship']),description:z.string().trim().max(5000),job_location:z.string().trim().max(120),
+  package_lpa:z.preprocess(v=>v===''?undefined:v,z.coerce.number().nonnegative().max(999999).optional()),
+  stipend_monthly:z.preprocess(v=>v===''?undefined:v,z.coerce.number().nonnegative().max(99999999).optional()),
+  min_year:z.coerce.number().int().min(1).max(6),min_cgpa:nullableNumber(0,10),max_active_backlogs:nullableNumber(0,100,true),
+  min_attendance_pct:nullableNumber(0,100),opens_at:dateTimeInput,deadline:dateTimeInput,drive_date:z.union([z.literal(''),z.iso.date()]),
+  status:z.enum(['Draft','Open']),program_ids:z.string().max(500),
+});
+const validDriveCompensation=(v:{drive_type:'FullTime'|'Internship';package_lpa?:number;stipend_monthly?:number})=>
+  v.drive_type==='FullTime'?v.package_lpa!==undefined&&v.stipend_monthly===undefined:v.stipend_monthly!==undefined&&v.package_lpa===undefined;
+const validDriveDeadline=(v:{opens_at:string;deadline:string})=>new Date(v.deadline).getTime()>new Date(v.opens_at).getTime();
+const driveSchema=driveBaseSchema
+  .refine(validDriveCompensation,{message:'Enter a package for full-time or monthly stipend for internship.'})
+  .refine(validDriveDeadline,{path:['deadline'],message:'The application deadline must be later than the opening time.'});
+const driveEditSchema=driveBaseSchema.omit({status:true})
+  .refine(validDriveCompensation,{message:'Enter a package for full-time or monthly stipend for internship.'})
+  .refine(validDriveDeadline,{path:['deadline'],message:'The application deadline must be later than the opening time.'});
 const roundScheduleSchema=z.object({round_name:z.string().trim().min(2).max(100),description:z.string().trim().max(1000),scheduled_at:z.preprocess(v=>v===''||v==null?null:v,dateTimeInput.nullable())});
 const roundTransitions:Record<string,string[]>={Planned:['InProgress','Cancelled'],InProgress:['Completed','Cancelled'],Completed:[],Cancelled:[]};
 const driveTransitions:Record<string,string[]>={Draft:['Open','Cancelled'],Open:['Closed','Cancelled'],Closed:[],Cancelled:[]};

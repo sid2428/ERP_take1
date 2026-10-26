@@ -111,6 +111,8 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const editPage=await admin.get(`/admin/placement/drives/${f.driveId}/edit`);
       expect(editPage.status).toBe(200);
       const csrf=csrfFrom(editPage.text);
+      const invalid=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Invalid deadline',role_title:'Engineer',drive_type:'FullTime',description:'',job_location:'',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()+3600000).toISOString(),deadline:new Date(Date.now()+1800000).toISOString(),drive_date:'',program_ids:programId}).set('Accept','application/json');
+      expect(invalid.status).toBe(400);
       const saved=await admin.post(`/admin/placement/drives/${f.driveId}/edit`).type('form').send({_csrf:csrf,company_id:String(f.companyId),title:'Edited placement role',role_title:'Engineer',drive_type:'FullTime',description:'Updated description',job_location:'Pune',package_lpa:'12',stipend_monthly:'',min_year:String(year),min_cgpa:'',max_active_backlogs:'',min_attendance_pct:'',opens_at:new Date(Date.now()-3600000).toISOString(),deadline:new Date(Date.now()+86400000).toISOString(),drive_date:'',program_ids:programId});
       expect(saved.status).toBe(302);
       const data=await pool!.query(`SELECT title,package_lpa FROM placement_drive WHERE drive_id=$1`,[f.driveId]);
