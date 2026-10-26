@@ -148,6 +148,26 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
     }finally{await dispose(f);}
   });
 
+  it('shows missing GPA and backlog assessments and rejects direct application',async()=>{
+    const f=await fixture({status:'Open'});
+    try{
+      await pool!.query(`UPDATE placement_drive SET min_cgpa=8.00,max_active_backlogs=0 WHERE drive_id=$1`,[f.driveId]);
+      const page=await student.get(`/student/placement/drives/${f.driveId}`);
+      expect(page.status).toBe(200);
+      expect(page.text).toContain('CGPA assessment is unavailable');
+      expect(page.text).toContain('Backlog assessment is unavailable');
+      expect(page.text).not.toMatch(new RegExp(`action="/student/placement/drives/${f.driveId}/apply"`));
+
+      const assessment=await pool!.query(`SELECT eligible,reasons,assessment_pending FROM is_eligible($1,$2)`,[studentId,f.driveId]);
+      expect(assessment.rows[0]).toMatchObject({eligible:false,assessment_pending:true});
+      expect(assessment.rows[0].reasons).toEqual(expect.arrayContaining([
+        'CGPA assessment is unavailable','Backlog assessment is unavailable',
+      ]));
+      const direct=await submit(student,`/student/placement/drives/${f.driveId}`,`/student/placement/drives/${f.driveId}/apply`,{});
+      expect(direct.status).toBe(400);
+    }finally{await dispose(f);}
+  });
+
   it('hides draft and cancelled drive details from students',async()=>{
     const f=await fixture();
     try{
