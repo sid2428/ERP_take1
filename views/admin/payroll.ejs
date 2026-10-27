@@ -1,0 +1,145 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <div>
+    <h1>Faculty Payroll Administration</h1>
+    <span class="sub">Generate monthly compensation rolls, compute leave-based deductions, and approve disbursement records.</span>
+  </div>
+</div>
+
+<div class="grid2" style="margin-bottom:20px">
+  <div class="card">
+    <div class="hd">
+      <h2>Generate Monthly Payroll</h2>
+      <span class="pill">Database Stored Procedure</span>
+    </div>
+    <div class="note">Computes basic salary, allowances, and automatic loss-of-pay deductions for all active faculty.</div>
+    
+    <form method="post" action="/admin/payroll/generate" style="margin-top:14px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="margin:0;flex:1 1 120px">
+          <label for="genMonth">Month</label>
+          <select name="month" id="genMonth" required>
+            <% const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']; %>
+            <% monthNames.forEach((m, idx) => { %>
+              <option value="<%= idx + 1 %>" <%= (filterMonth === idx + 1) ? 'selected' : '' %>><%= m %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="field" style="margin:0;flex:1 1 100px">
+          <label for="genYear">Year</label>
+          <input type="number" name="year" id="genYear" value="<%= filterYear %>" min="2020" max="2030" required>
+        </div>
+        <button type="submit" class="btn primary" style="height:38px">Run Payroll Rollout</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="hd">
+      <h2>Payroll Filter</h2>
+    </div>
+    <div class="note">Filter payroll records by period and disbursement status</div>
+    <form method="get" action="/admin/payroll" style="margin-top:14px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="margin:0;flex:1 1 100px">
+          <label for="filMonth">Month</label>
+          <select name="month" id="filMonth">
+            <option value="">All months</option>
+            <% monthNames.forEach((m, idx) => { %>
+              <option value="<%= idx + 1 %>" <%= (filterMonth === idx + 1) ? 'selected' : '' %>><%= m %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="field" style="margin:0;flex:1 1 90px">
+          <label for="filYear">Year</label>
+          <input type="number" name="year" id="filYear" value="<%= filterYear %>">
+        </div>
+        <div class="field" style="margin:0;flex:1 1 100px">
+          <label for="filStatus">Status</label>
+          <select name="status" id="filStatus">
+            <option value="ALL" <%= filterStatus === 'ALL' ? 'selected' : '' %>>All</option>
+            <option value="DRAFT" <%= filterStatus === 'DRAFT' ? 'selected' : '' %>>Draft</option>
+            <option value="APPROVED" <%= filterStatus === 'APPROVED' ? 'selected' : '' %>>Approved</option>
+            <option value="PAID" <%= filterStatus === 'PAID' ? 'selected' : '' %>>Paid</option>
+          </select>
+        </div>
+        <button type="submit" class="btn" style="height:38px">Filter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<section class="card t">
+  <div class="hd">
+    <h2>Payroll Records (<%= payrolls.length %>)</h2>
+  </div>
+  <div class="sc">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Faculty Member</th>
+          <th>Department</th>
+          <th>Period</th>
+          <th class="num">Basic</th>
+          <th class="num">Allowances</th>
+          <th class="num">Deductions</th>
+          <th class="num">Net Pay</th>
+          <th>Status</th>
+          <th style="min-width:160px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!payrolls.length) { %>
+          <tr><td colspan="10" class="empty">No payroll records found for the selected filter. Click "Run Payroll Rollout" above to generate.</td></tr>
+        <% } %>
+        <% for (const p of payrolls) { %>
+          <tr>
+            <td><strong>#<%= p.payroll_id %></strong></td>
+            <td>
+              <div><strong><%= p.faculty_name %></strong></div>
+              <small class="muted"><%= p.faculty_code %></small>
+            </td>
+            <td><%= p.dept_name || '—' %></td>
+            <td class="nw"><strong><%= p.period_text %></strong></td>
+            <td class="num">₹<%= Number(p.basic_salary).toLocaleString('en-IN') %></td>
+            <td class="num">₹<%= Number(p.allowances).toLocaleString('en-IN') %></td>
+            <td class="num" style="color:var(--red)">-₹<%= Number(Number(p.deductions) + Number(p.leave_deductions)).toLocaleString('en-IN') %></td>
+            <td class="num"><strong style="color:var(--green)">₹<%= Number(p.net_salary).toLocaleString('en-IN') %></strong></td>
+            <td>
+              <% if (p.status === 'PAID') { %>
+                <span class="pill g">Paid</span>
+              <% } else if (p.status === 'APPROVED') { %>
+                <span class="pill">Approved</span>
+              <% } else { %>
+                <span class="pill o">Draft</span>
+              <% } %>
+            </td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <a href="/admin/payroll/<%= p.payroll_id %>" class="btn small" style="padding:4px 8px;font-size:12px">Statement</a>
+                <% if (p.status === 'DRAFT') { %>
+                  <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="status" value="APPROVED">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px">Approve</button>
+                  </form>
+                <% } else if (p.status === 'APPROVED') { %>
+                  <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="status" value="PAID">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)">Mark Paid</button>
+                  </form>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>

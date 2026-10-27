@@ -18,7 +18,7 @@ export default function FeeStatement({ student, statement, lastPayment, busy, on
           <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-dashed border-[#B9C2D3] text-[11px] text-label">LOGO</div>
           <div>
             <div className="text-base font-semibold">Pune Institute of Computer Technology</div>
-            <div className="text-xs text-muted">Fee statement · Academic year {statement.academicYear}</div>
+            <div className="text-xs text-muted">Fee statement{statement.academicYear && ` · Academic year ${statement.academicYear}`}</div>
           </div>
         </div>
 
@@ -31,10 +31,18 @@ export default function FeeStatement({ student, statement, lastPayment, busy, on
           <Field label="Student category" value={student.category} />
         </div>
 
-        <div className="mt-[18px] flex justify-between px-1 pb-2 text-xs font-semibold text-muted"><span>Fee component</span><span>Amount</span></div>
-        {statement.components.map((c) => (
-          <div key={c.id} className="flex justify-between border-t border-rule px-1 py-[11px]"><span>{c.name}</span><span>{inr(c.amount)}</span></div>
-        ))}
+        {!statement.hasRecord ? (
+          <div className="mt-[18px] rounded-lg bg-active px-4 py-3.5 text-navy">
+            No fee statement has been issued for this account yet. Please contact the accounts office if this is unexpected.
+          </div>
+        ) : (
+          <>
+            <div className="mt-[18px] flex justify-between px-1 pb-2 text-xs font-semibold text-muted"><span>Fee component</span><span>Amount</span></div>
+            {statement.components.map((c) => (
+              <div key={c.id} className="flex justify-between border-t border-rule px-1 py-[11px]"><span>{c.name}</span><span>{inr(c.amount)}</span></div>
+            ))}
+          </>
+        )}
         <div className="flex items-baseline justify-between border-t-2 border-ink px-1 pb-1 pt-3.5 font-semibold">
           <span className="text-[15px]">Total Academic Fee</span><span className="text-xl">{inr(t.total)}</span>
         </div>
@@ -45,7 +53,7 @@ export default function FeeStatement({ student, statement, lastPayment, busy, on
           <div><div className="text-xs text-muted">Payment status</div><div className="mt-[3px]"><StatusBadge status={statement.status} /></div></div>
         </div>
 
-        {statement.status === 'PENDING' && (
+        {statement.hasRecord && statement.status === 'PENDING' && (
           <div className="mt-[18px] flex flex-wrap items-center gap-3">
             <Button onClick={onPay} disabled={busy}>{busy ? 'Opening payment…' : `Pay Fee · ${inr(t.outstanding)}`}</Button>
             <span className="text-xs text-muted">You will pay securely on Razorpay Checkout.</span>

@@ -1,22 +1,39 @@
-import { query, queryOne } from '../db.js';
+import { query, queryOne, type Db } from '../db.js';
 
 export async function getPlacementProfile(studentId: number) {
   return queryOne(`SELECT * FROM student_placement_profile WHERE student_id=$1`, [studentId]);
 }
 
-export async function getStudentDrives(studentId: number, filters: { q?: string; type?: string; eligible?: string } = {}) {
-  return query(`
+export async function getStudentDrives(
+  studentId: number,
+  filters: { q?: string; type?: string; eligible?: string } = {},
+  pagination: { page: number; pageSize: number } = { page: 1, pageSize: 20 },
+  db?: Db,
+) {
+  const params = [studentId, filters.q ?? '', filters.type ?? '', filters.eligible ?? ''];
+  const where = `d.status IN ('Open','Closed') AND ($2='' OR d.title ILIKE '%'||$2||'%' OR c.company_name ILIKE '%'||$2||'%')
+       AND ($3='' OR d.drive_type::text=$3)
+       AND ($4='' OR e.eligible=($4='yes'))`;
+  const totals = await query<{ total: number }>(`
+    SELECT count(*)::int AS total
+      FROM placement_drive d JOIN company c USING(company_id)
+      CROSS JOIN LATERAL is_eligible($1,d.drive_id) e
+     WHERE ${where}`,
+  params, db);
+  const total = totals[0]?.total ?? 0;
+  const totalPages = Math.ceil(total / pagination.pageSize);
+  const page = totalPages === 0 ? 1 : Math.min(Math.max(1, pagination.page), totalPages);
+  const drives = await query(`
     SELECT d.drive_id,d.title,d.role_title,d.drive_type,d.description,d.job_location,d.package_lpa,d.stipend_monthly,
            d.min_year,d.min_cgpa,d.max_active_backlogs,d.min_attendance_pct,d.opens_at,d.deadline,d.drive_date,
            c.company_name,e.eligible,e.reasons,e.assessment_pending,
            EXISTS(SELECT 1 FROM placement_application a WHERE a.drive_id=d.drive_id AND a.student_id=$1) AS applied
       FROM placement_drive d JOIN company c USING(company_id)
       CROSS JOIN LATERAL is_eligible($1,d.drive_id) e
-     WHERE d.status IN ('Open','Closed') AND ($2='' OR d.title ILIKE '%'||$2||'%' OR c.company_name ILIKE '%'||$2||'%')
-       AND ($3='' OR d.drive_type::text=$3)
-       AND ($4='' OR e.eligible=($4='yes'))
-     ORDER BY (d.status='Open') DESC,d.deadline,d.drive_id DESC LIMIT 100`,
-  [studentId, filters.q ?? '', filters.type ?? '', filters.eligible ?? '']);
+     WHERE ${where}
+     ORDER BY (d.status='Open') DESC,d.deadline,d.drive_id DESC LIMIT $5 OFFSET $6`,
+  [...params, pagination.pageSize, (page - 1) * pagination.pageSize], db);
+  return { drives, page, pageSize: pagination.pageSize, total, totalPages };
 }
 
 export async function getStudentApplications(studentId: number) {
@@ -42,16 +59,41 @@ export async function getPlacementDashboard(studentId: number) {
         WHERE d.status='Open' AND e.eligible) AS eligible_drives`, [studentId]);
 }
 
-export async function getAdminPlacementOverview() {
+export async function getAdminPlacementOverview(db?: Db) {
   return queryOne(`SELECT count(DISTINCT a.student_id) FILTER (WHERE d.drive_type='FullTime' AND o.status='Accepted' AND s.status='Active')::int AS placed_students,
       (SELECT count(*)::int FROM student WHERE status='Active') AS active_students,
+      count(DISTINCT o.offer_id)::int AS total_offers,
       count(DISTINCT o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime')::int AS accepted_fulltime_offers,
       count(DISTINCT o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='Internship')::int AS accepted_internships,
       max(o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS highest_package_lpa,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS median_package_lpa,
       avg(o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS average_package_lpa
     FROM placement_offer o JOIN placement_application a USING(application_id)
-    JOIN placement_drive d USING(drive_id) JOIN student s USING(student_id)`);
+    JOIN placement_drive d USING(drive_id) JOIN student s USING(student_id)`, [], db);
+}
+
+/** Accepted full-time packages in fixed LPA bands; empty bands remain present with count zero. */
+export async function getAcceptedFullTimePackageDistribution(db?: Db) {
+  return query<{ label: string; offer_count: number }>(`WITH bands(sort_order,label,minimum_lpa,maximum_lpa) AS (VALUES
+      (1,'< 5 LPA',0::numeric,5::numeric),(2,'5–<10 LPA',5::numeric,10::numeric),
+      (3,'10–<15 LPA',10::numeric,15::numeric),(4,'15–<20 LPA',15::numeric,20::numeric),
+      (5,'20+ LPA',20::numeric,NULL::numeric)
+    )
+    SELECT b.label,count(o.offer_id)::int AS offer_count FROM bands b LEFT JOIN placement_offer o
+      ON o.status='Accepted' AND o.package_lpa IS NOT NULL AND o.package_lpa>=b.minimum_lpa
+      AND (b.maximum_lpa IS NULL OR o.package_lpa<b.maximum_lpa)
+      AND EXISTS(SELECT 1 FROM placement_application a JOIN placement_drive d USING(drive_id)
+        WHERE a.application_id=o.application_id AND d.drive_type='FullTime')
+    GROUP BY b.sort_order,b.label ORDER BY b.sort_order`, [], db);
+}
+
+export async function getCompanyPlacementOffers() {
+  return query(`SELECT c.company_id,c.company_name,count(o.offer_id)::int AS total_offers,
+      count(o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime')::int AS accepted_fulltime,
+      count(o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='Internship')::int AS accepted_internships
+    FROM company c JOIN placement_drive d USING(company_id)
+    JOIN placement_application a USING(drive_id) JOIN placement_offer o USING(application_id)
+    GROUP BY c.company_id,c.company_name ORDER BY total_offers DESC,lower(c.company_name)`);
 }
 
 export async function getDepartmentPlacementReport(deptId: string) {

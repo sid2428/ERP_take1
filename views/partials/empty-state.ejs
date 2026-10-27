@@ -1,0 +1,4 @@
+<div class="ui-empty" role="status"><div class="ui-empty-mark" aria-hidden="true">—</div><h2><%= title %></h2>
+  <% if (description) { %><p><%= description %></p><% } %>
+  <% if (typeof href !== 'undefined' && href && typeof action !== 'undefined' && action) { %><a class="btn secondary" href="<%= href %>"><%= action %></a><% } %>
+</div>

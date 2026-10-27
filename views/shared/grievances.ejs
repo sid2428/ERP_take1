@@ -1,10 +1,11 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Grievances</h1><span class="sub">Raise a problem with the academic office and follow it until it is resolved</span></div>
+<div class="page-head"><h1>Grievances</h1><span class="sub">Raise a problem with your course teacher or the academic office and follow it until it is resolved</span></div>
 
 <% const row = (g, showRaiser) => { %>
 <tr>
   <td class="nw"><a href="<%= base %>/<%= g.grievance_id %>"><b>#<%= g.grievance_id %></b></a></td>
-  <td><a href="<%= base %>/<%= g.grievance_id %>"><%= g.subject %></a><% if (showRaiser) { %><div class="muted" style="font-size:12.5px"><%= g.raised_by_name %> · <%= g.raised_by_login %></div><% } %></td>
+  <td><a href="<%= base %>/<%= g.grievance_id %>"><%= g.subject %></a>
+    <div class="muted" style="font-size:12.5px"><% if (showRaiser) { %><%= g.raised_by_name %> · <%= g.raised_by_login %><%= g.course_code ? ' · ' + g.course_code : '' %><% } else { %><%= g.course_code ? g.course_code + ' · ' : '' %>to <%= g.course_id ? g.assigned_name : 'the academic office' %><% } %></div></td>
   <td><%= g.category %></td>
   <td class="nw"><%= fmt.date(g.created_at) %></td>
   <td class="num"><%= g.comment_count %></td>
@@ -14,7 +15,7 @@
 
 <% if (isFaculty) { %>
 <section class="card t" style="margin-bottom:16px">
-  <div class="hd"><h2>Assigned to me</h2><span class="muted">The academic office asked you to help with these</span></div>
+  <div class="hd"><h2>Assigned to me</h2><span class="muted">Students' grievances about your courses, and ones the academic office asked you to help with</span></div>
   <div class="sc"><table>
     <thead><tr><th>No.</th><th>Subject</th><th>Category</th><th>Raised</th><th class="num">Replies</th><th>Status</th></tr></thead>
     <tbody>

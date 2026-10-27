@@ -20,6 +20,7 @@ export interface FeeStatement {
   components: FeeComponent[];
   amountPaid: number; // sum of VERIFIED payments, computed by the server
   status: FeeStatus;
+  hasRecord: boolean;
 }
 
 export type PaymentStatus = 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'PENDING';

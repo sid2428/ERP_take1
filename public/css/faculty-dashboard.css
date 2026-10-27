@@ -1,8 +1,10 @@
 /* Shell & Layout */
 .app { display: flex; min-height: 100vh; }
 .side {
-  flex: 0 0 236px !important;
-  width: 236px !important;
+  flex: 0 0 240px !important;
+  width: 240px !important;
+  min-width: 240px !important;
+  max-width: 240px !important;
   background: #fff;
   border-right: 1px solid #DDE2EA;
   padding: 0 12px 24px;
@@ -12,7 +14,7 @@
   overflow-y: auto;
   display: flex !important;
   flex-direction: column !important;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
 }
 .brand {
   display: flex;
@@ -42,7 +44,7 @@
   font-weight: 700;
   flex-shrink: 0;
 }
-.grp {
+.side .grp {
   padding: 16px 10px 6px;
   font-size: 11px;
   font-weight: 600;
@@ -50,38 +52,52 @@
   color: #7A8497;
   text-transform: uppercase;
   flex-shrink: 0;
+  display: block !important;
+  width: 100% !important;
+  clear: both !important;
 }
-.nav {
+.side .nav, .side .nav-link {
   display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
-  gap: 10px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 6px;
+  gap: 10px !important;
+  min-height: 38px !important;
+  padding: 0 10px !important;
+  border-radius: 6px !important;
   color: #3B4458 !important;
-  cursor: pointer;
-  user-select: none;
-  font-size: 13.5px;
+  cursor: pointer !important;
+  user-select: none !important;
+  font-size: 13.5px !important;
   text-decoration: none !important;
   width: 100% !important;
   box-sizing: border-box !important;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
+  float: none !important;
+  clear: both !important;
+  margin-bottom: 2px !important;
 }
-.nav:hover { background: #F3F5F8; text-decoration: none !important; }
-.nav.on { background: #E9EEF8; color: #1F3A6E !important; font-weight: 600; }
-.nav svg {
-  flex: none;
+.side .nav:hover, .side .nav-link:hover {
+  background: #F3F5F8 !important;
+  text-decoration: none !important;
+}
+.side .nav.on, .side .nav-link.on {
+  background: #E9EEF8 !important;
+  color: #1F3A6E !important;
+  font-weight: 600 !important;
+}
+.side .nav svg, .side .nav-link svg {
+  flex: none !important;
   stroke: #5B6578 !important;
   fill: none !important;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
 }
-.nav.on svg {
+.side .nav.on svg, .side .nav-link.on svg {
   stroke: #1F3A6E !important;
   fill: none !important;
 }
-.nav .n {
+.side .nav .n, .side .nav-link .n {
   margin-left: auto;
   background: #FBEFDD;
   color: #8A4A06;
@@ -91,7 +107,7 @@
   padding: 0 7px;
   line-height: 18px;
 }
-.nav .n.bad { background: #FBE7E5; color: #8E1B14; }
+.side .nav .n.bad, .side .nav-link .n.bad { background: #FBE7E5; color: #8E1B14; }
 
 /* SVG global resets */
 .side svg, .side svg path, .side svg circle, .side svg rect,

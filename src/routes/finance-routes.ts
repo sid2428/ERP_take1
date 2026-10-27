@@ -125,7 +125,10 @@ financeApiRouter.get('/fees/statement', route(async (_req, res, studentId) => {
     `SELECT academic_year, tuition_paise, development_paise, examination_paise, other_paise,
             late_fee_paise, paid_paise, fee_status::text AS fee_status
        FROM fee_record WHERE student_id = $1 ORDER BY academic_year DESC LIMIT 1`, [studentId]);
-  if (!f) throw new ApiFail(404, 'No fee record was found for your account.');
+  if (!f) {
+    res.json({ academicYear: '', components: [], amountPaid: 0, status: 'PENDING', hasRecord: false });
+    return;
+  }
 
   const components = [
     { id: 'tuition', name: 'Tuition Fee', amount: rupees(f.tuition_paise) },
@@ -140,6 +143,7 @@ financeApiRouter.get('/fees/statement', route(async (_req, res, studentId) => {
     components,
     amountPaid: rupees(f.paid_paise),
     status: f.fee_status === 'PAID' ? 'PAID' : 'PENDING',
+    hasRecord: true,
   });
 }));
 

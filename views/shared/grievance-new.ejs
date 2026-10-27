@@ -1,9 +1,35 @@
 <%- include('../partials/layout-start') %>
 <div class="page-head"><h1>Raise a grievance</h1><span class="sub"><a href="<%= base %>">← My grievances</a></span></div>
+<% const courses = [...new Map(teachers.map((t) => [t.course_id, t])).values()]; %>
 <div class="grid2">
 <section class="card">
-  <form method="post" action="<%= base %>" class="stack">
+  <form method="post" action="<%= base %>" class="stack" id="grievance-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <% if (isStudent) { %>
+    <fieldset class="field">
+      <legend>What is it about?</legend>
+      <label class="check"><input type="radio" name="about" value="course"<%= courses.length ? ' checked' : ' disabled' %>> One of my courses <span class="muted">goes to the teacher of that course</span></label>
+      <label class="check"><input type="radio" name="about" value="general"<%= courses.length ? '' : ' checked' %>> Something else <span class="muted">fees, facilities and the like; goes to the academic office</span></label>
+      <% if (!courses.length) { %><span class="hint">You have no courses with a teacher this term, so this goes to the academic office.</span><% } %>
+    </fieldset>
+    <% if (courses.length) { %>
+    <div class="field" data-about="course">
+      <label for="gcourse">Course</label>
+      <select id="gcourse" name="course_id">
+        <option value="">Choose a course</option>
+        <% for (const c of courses) { %><option value="<%= c.course_id %>"><%= c.course_code %> · <%= c.course_name %></option><% } %>
+      </select>
+    </div>
+    <div class="field" data-about="course">
+      <label for="gteacher">Teacher</label>
+      <select id="gteacher" name="faculty_id">
+        <option value="">Selected automatically</option>
+        <% for (const t of teachers) { %><option value="<%= t.faculty_id %>" data-course="<%= t.course_id %>"><%= t.faculty_name %> · <%= t.session_type === 'Lecture' ? 'theory' : t.session_type.toLowerCase() %></option><% } %>
+      </select>
+      <span class="hint">Filled in from your timetable. Change it only if your question is for another teacher of this course.</span>
+    </div>
+    <% } %>
+    <% } %>
     <div class="field">
       <label for="gc">Category</label>
       <select id="gc" name="category" required>
@@ -25,9 +51,16 @@
 </section>
 <section class="card">
   <div class="hd"><h2>What happens next</h2></div>
+  <% if (isStudent) { %>
+  <div class="item"><div class="t"><div><span class="pill o">Open</span></div><div class="s">A course grievance goes straight to your teacher for that course. Anything else goes to the academic office.</div></div></div>
+  <div class="item"><div class="t"><div><span class="pill">In progress</span></div><div class="s">Whoever handles it looks into it. You can talk to them in the replies.</div></div></div>
+  <div class="item"><div class="t"><div><span class="pill g">Resolved</span> or <span class="pill r">Rejected</span></div><div class="s">They close it with a note explaining the outcome, and it is locked. If you disagree, the academic office can unlock it.</div></div></div>
+  <% } else { %>
   <div class="item"><div class="t"><div><span class="pill o">Open</span></div><div class="s">The academic office receives it straight away.</div></div></div>
   <div class="item"><div class="t"><div><span class="pill">In progress</span></div><div class="s">It may be assigned to a faculty member who can help. You can talk to them in the replies.</div></div></div>
   <div class="item"><div class="t"><div><span class="pill g">Resolved</span> or <span class="pill r">Rejected</span></div><div class="s">The office closes it with a note explaining the outcome.</div></div></div>
+  <% } %>
 </section>
 </div>
+<script src="/static/js/grievance-new.js?v=2" defer></script>
 <%- include('../partials/layout-end') %>
