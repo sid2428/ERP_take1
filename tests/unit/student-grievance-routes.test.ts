@@ -71,7 +71,12 @@ function appAs(user?: CurrentUser, session: { flash?: { type: string; text: stri
   app.use(express.json());
   app.use((req, _res, next) => {
     if (user) req.user = user;
-    (req as Request & { session: typeof session }).session = session;
+    Object.defineProperty(req, 'session', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: session,
+    });
     next();
   });
   app.use('/student/grievances', grievanceRouter);
