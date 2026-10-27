@@ -59,16 +59,32 @@ export async function getPlacementDashboard(studentId: number) {
         WHERE d.status='Open' AND e.eligible) AS eligible_drives`, [studentId]);
 }
 
-export async function getAdminPlacementOverview() {
+export async function getAdminPlacementOverview(db?: Db) {
   return queryOne(`SELECT count(DISTINCT a.student_id) FILTER (WHERE d.drive_type='FullTime' AND o.status='Accepted' AND s.status='Active')::int AS placed_students,
       (SELECT count(*)::int FROM student WHERE status='Active') AS active_students,
+      count(DISTINCT o.offer_id)::int AS total_offers,
       count(DISTINCT o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime')::int AS accepted_fulltime_offers,
       count(DISTINCT o.offer_id) FILTER (WHERE o.status='Accepted' AND d.drive_type='Internship')::int AS accepted_internships,
       max(o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS highest_package_lpa,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS median_package_lpa,
       avg(o.package_lpa) FILTER (WHERE o.status='Accepted' AND d.drive_type='FullTime') AS average_package_lpa
     FROM placement_offer o JOIN placement_application a USING(application_id)
-    JOIN placement_drive d USING(drive_id) JOIN student s USING(student_id)`);
+    JOIN placement_drive d USING(drive_id) JOIN student s USING(student_id)`, [], db);
+}
+
+/** Accepted full-time packages in fixed LPA bands; empty bands remain present with count zero. */
+export async function getAcceptedFullTimePackageDistribution(db?: Db) {
+  return query<{ label: string; offer_count: number }>(`WITH bands(sort_order,label,minimum_lpa,maximum_lpa) AS (VALUES
+      (1,'< 5 LPA',0::numeric,5::numeric),(2,'5–<10 LPA',5::numeric,10::numeric),
+      (3,'10–<15 LPA',10::numeric,15::numeric),(4,'15–<20 LPA',15::numeric,20::numeric),
+      (5,'20+ LPA',20::numeric,NULL::numeric)
+    )
+    SELECT b.label,count(o.offer_id)::int AS offer_count FROM bands b LEFT JOIN placement_offer o
+      ON o.status='Accepted' AND o.package_lpa IS NOT NULL AND o.package_lpa>=b.minimum_lpa
+      AND (b.maximum_lpa IS NULL OR o.package_lpa<b.maximum_lpa)
+      AND EXISTS(SELECT 1 FROM placement_application a JOIN placement_drive d USING(drive_id)
+        WHERE a.application_id=o.application_id AND d.drive_type='FullTime')
+    GROUP BY b.sort_order,b.label ORDER BY b.sort_order`, [], db);
 }
 
 export async function getCompanyPlacementOffers() {

@@ -57,3 +57,5 @@ The examination module defines `student_cgpa` from final course results, but the
 
 Database tests are in `tests/db/placement.test.ts`. Run `npm run typecheck` and `npm test` after the migration is applied to a local development database.
 
+The admin statistics page defines overall and department placement percentage as active students with an accepted full-time offer divided by active students; a zero denominator displays 0%. Total offers includes every response status and counts each offer once. Package averages and distribution use accepted full-time offers with a nonmissing package; chart bands are `<5`, `5–<10`, `10–<15`, `15–<20`, and `20+` LPA. Year-wise trends are not shown because the current placement schema has no reliable academic-year/cohort attribution for historical offers.
+

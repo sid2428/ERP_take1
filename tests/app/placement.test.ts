@@ -20,6 +20,8 @@ describe.skipIf(!hasAppEnv)('T7 placement pages and permissions',()=>{
   });
   it('keeps management routes admin-only and denies students',async()=>{
     expect((await student.get('/admin/placement')).status).toBe(403);
+    expect((await student.get('/admin/placement/statistics')).status).toBe(403);
+    expect((await student.get('/faculty/placement')).status).toBe(403);
     expect((await admin.get('/admin/placement')).status).toBe(200);
     expect((await admin.get('/admin/placement/companies')).status).toBe(200);
   });
