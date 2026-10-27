@@ -10,6 +10,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' },
         { key: 'notices', label: 'Notices', href: '/student/notices', icon: 'bell' },
+        { key: 'meetings', label: 'Department meetings', href: '/student/meetings', icon: 'calendar' },
         { key: 'placement', label: 'Placement', href: '/student/placement', icon: 'briefcase' },
       ],
     },
@@ -46,6 +47,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/faculty', icon: 'home' },
         { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
+        { key: 'meetings', label: 'Department meetings', href: '/faculty/meetings', icon: 'calendar' },
       ],
     },
     { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
