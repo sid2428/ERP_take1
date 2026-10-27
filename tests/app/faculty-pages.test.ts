@@ -96,4 +96,24 @@ describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
     expect(res.text).toContain('Net Take-Home Pay');
     expect(res.text).toContain('FAC-CSE-074');
   });
+
+  it('7. GET /admin/leave renders faculty leave management console for admin', async () => {
+    const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
+    const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
+    const res = await adminAgent.get('/admin/leave');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Faculty Leave Management');
+    expect(res.text).toContain('Pending requests');
+    expect(res.text).toContain('Leave Applications');
+  });
+
+  it('8. GET /admin/payroll renders faculty payroll console for admin', async () => {
+    const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
+    const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
+    const res = await adminAgent.get('/admin/payroll');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Faculty Payroll Administration');
+    expect(res.text).toContain('Generate Monthly Payroll');
+    expect(res.text).toContain('Payroll Records');
+  });
 });

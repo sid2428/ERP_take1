@@ -18,7 +18,8 @@ dashboardRouter.get('/', async (req, res) => {
              (SELECT count(*) FROM program_curriculum)                 AS placements,
              (SELECT count(*) FROM course_prerequisite)                AS prerequisites,
              (SELECT count(*) FROM division WHERE academic_session_id = current_session_id()) AS divisions,
-             (SELECT count(*) FROM course_offering WHERE academic_session_id = current_session_id()) AS offerings`),
+             (SELECT count(*) FROM course_offering WHERE academic_session_id = current_session_id()) AS offerings,
+             (SELECT count(*) FROM faculty_leave_request WHERE status = 'PENDING')::int AS pending_leaves`),
     query<{ dept_id: string; dept_name: string; students: number; y1: number; y2: number; y3: number; y4: number;
             avg_pct: number | null; shortage_students: number }>(`
       WITH sec AS (

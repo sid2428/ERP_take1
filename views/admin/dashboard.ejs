@@ -12,6 +12,9 @@
         <span class="tag ok"><%= fmt.num(t.active_students) %> active students</span>
         <span class="tag"><%= fmt.num(t.faculty) %> faculty</span>
         <span class="tag"><%= t.departments %> departments</span>
+        <% if (t.pending_leaves > 0) { %>
+          <a class="tag warn" href="/admin/leave" style="color:#fff;text-decoration:none">⚠ <%= t.pending_leaves %> leave request<%= t.pending_leaves === 1 ? '' : 's' %> pending</a>
+        <% } %>
       </div>
     </div>
     <div class="termbox">
@@ -63,6 +66,15 @@
         <div class="t"><div><%= r.action.replaceAll('_', ' ').toLowerCase() %></div><div class="s"><%= r.login_id || 'unknown user' %> · <%= r.entity %><%= r.entity_id ? ' #' + r.entity_id : '' %></div></div>
         <div class="w"><%= fmt.dateTime(r.occurred_at) %></div></div>
     <% } %>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Faculty HR &amp; Leaves</h2><a href="/admin/leave">Manage →</a></div>
+    <div class="note">Faculty leave requests &amp; institutional payroll</div>
+    <div class="kpi"><%= t.pending_leaves %> <small>pending approval</small></div>
+    <div class="sm" style="margin-top:14px">
+      <a class="btn small" href="/admin/leave" style="margin-right:6px">Review Leaves</a>
+      <a class="btn small" href="/admin/payroll">Payroll</a>
+    </div>
   </div>
   <%- include('../partials/notices-card') %>
 </section>

@@ -1,0 +1,108 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <div>
+    <h1>Faculty Leave Management</h1>
+    <span class="sub">Review institutional leave applications, check quotas, and record administrative approval or rejection.</span>
+  </div>
+</div>
+
+<div class="cards" style="margin-bottom:20px">
+  <div class="card">
+    <div class="hd"><h2>Pending requests</h2><span class="pill <%= pendingCount > 0 ? 'o' : 'g' %>"><%= pendingCount > 0 ? 'Action required' : 'Up to date' %></span></div>
+    <div class="kpi"><%= pendingCount %></div>
+    <div class="sm">Faculty leave applications awaiting administrative decision</div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Total requests displayed</h2></div>
+    <div class="kpi"><%= requests.length %></div>
+    <div class="sm">Filtered by status: <strong><%= currentFilter %></strong></div>
+  </div>
+</div>
+
+<div class="filters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <a href="/admin/leave?status=PENDING" class="btn small <%= currentFilter === 'PENDING' ? 'primary' : '' %>">Pending (<%= pendingCount %>)</a>
+  <a href="/admin/leave?status=APPROVED" class="btn small <%= currentFilter === 'APPROVED' ? 'primary' : '' %>">Approved</a>
+  <a href="/admin/leave?status=REJECTED" class="btn small <%= currentFilter === 'REJECTED' ? 'primary' : '' %>">Rejected</a>
+  <a href="/admin/leave?status=CANCELLED" class="btn small <%= currentFilter === 'CANCELLED' ? 'primary' : '' %>">Cancelled</a>
+  <a href="/admin/leave?status=ALL" class="btn small <%= currentFilter === 'ALL' ? 'primary' : '' %>">All Requests</a>
+</div>
+
+<section class="card t">
+  <div class="hd">
+    <h2>Leave Applications (<%= requests.length %>)</h2>
+  </div>
+  <div class="sc">
+    <table>
+      <thead>
+        <tr>
+          <th>Req #</th>
+          <th>Faculty Member</th>
+          <th>Leave Type</th>
+          <th>Period</th>
+          <th class="num">Days</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th style="min-width:180px">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!requests.length) { %>
+          <tr><td colspan="8" class="empty">No leave requests found matching status '<%= currentFilter %>'.</td></tr>
+        <% } %>
+        <% for (const r of requests) { %>
+          <tr>
+            <td><strong>#<%= r.leave_request_id %></strong></td>
+            <td>
+              <div><strong><%= r.faculty_name %></strong></div>
+              <small class="muted"><%= r.faculty_code %></small>
+            </td>
+            <td><span class="pill"><%= r.leave_name %></span></td>
+            <td class="nw">
+              <%= fmt.date(r.from_date) %> → <%= fmt.date(r.to_date) %>
+            </td>
+            <td class="num"><strong><%= r.days_requested %></strong> d</td>
+            <td style="max-width:240px;white-space:normal;font-size:12.5px">
+              <%= r.reason %>
+              <% if (r.decision_remarks) { %>
+                <div style="margin-top:4px;color:var(--muted)"><em>Note: <%= r.decision_remarks %></em></div>
+              <% } %>
+            </td>
+            <td>
+              <% if (r.status === 'PENDING') { %>
+                <span class="pill o">Pending</span>
+              <% } else if (r.status === 'APPROVED') { %>
+                <span class="pill g">Approved</span>
+              <% } else if (r.status === 'REJECTED') { %>
+                <span class="pill r">Rejected</span>
+              <% } else { %>
+                <span class="pill">Cancelled</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (r.status === 'PENDING') { %>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <form method="post" action="/admin/leave/<%= r.leave_request_id %>/approve" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px">Approve</button>
+                  </form>
+                  <form method="post" action="/admin/leave/<%= r.leave_request_id %>/reject" style="margin:0;display:flex;gap:4px">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn small danger" style="padding:4px 8px;font-size:12px">Reject</button>
+                  </form>
+                </div>
+              <% } else { %>
+                <div style="font-size:11.5px;color:var(--muted)">
+                  <% if (r.approver_name) { %>By <%= r.approver_name %><br><% } %>
+                  <%= r.approved_at ? fmt.date(r.approved_at) : '—' %>
+                </div>
+              <% } %>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>
