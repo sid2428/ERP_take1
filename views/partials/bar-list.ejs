@@ -1,0 +1,8 @@
+<% const rows = Array.isArray(items) ? items : [];
+   const barMax = Math.max(1, ...rows.map((item) => Number(item.value) || 0));
+%><ul class="ui-bars"><% rows.forEach((item) => {
+  const n = Number(item.value) || 0;
+  const width = Math.max(0, Math.min(100, n / barMax * 100));
+%><li><div class="ui-bar-head"><span><%= item.label %></span><strong><%= typeof item.display !== 'undefined' ? item.display : n %></strong></div>
+  <div class="bar" role="img" aria-label="<%= item.label %>: <%= typeof item.display !== 'undefined' ? item.display : n %>"><i style="width:<%= width %>%"></i></div>
+</li><% }) %></ul>

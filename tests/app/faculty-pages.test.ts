@@ -5,6 +5,8 @@ const DEMO = process.env.DEMO_PASSWORD ?? '';
 const FACULTY = 'FAC-CSE-074';
 
 const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
+const { loadUser } = hasAppEnv ? await import('../../src/middleware/auth.js') : { loadUser: null };
+const { queryOne } = hasAppEnv ? await import('../../src/db.js') : { queryOne: null };
 
 describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
   const app = hasAppEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
@@ -97,7 +99,25 @@ describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
     expect(res.text).toContain('FAC-CSE-074');
   });
 
-  it('7. GET /admin/leave renders faculty leave management console for admin', async () => {
+  it('7. shows the HOD-only placement report link only to a faculty member who can open it', async () => {
+    const dashboard = await agent.get('/faculty');
+    const report = await agent.get('/faculty/placement');
+    const linked = dashboard.text.includes('href="/faculty/placement"');
+    expect(report.status).toBe(linked ? 200 : 403);
+  });
+
+  it('8. marks a department head as HOD on the signed-in user', async () => {
+    const hod = await queryOne!<{ user_id: number }>(`SELECT u.user_id FROM department d
+      JOIN app_user u ON u.faculty_id = d.hod_faculty_id JOIN faculty f ON f.faculty_id = d.hod_faculty_id
+      WHERE u.is_active AND f.dept_id = d.dept_id ORDER BY u.user_id LIMIT 1`);
+    if (hod) expect((await loadUser!(hod.user_id))?.isHod).toBe(true);
+    const plain = await queryOne!<{ user_id: number }>(`SELECT u.user_id FROM app_user u
+      WHERE u.role = 'faculty' AND u.is_active AND NOT EXISTS (SELECT 1 FROM department d WHERE d.hod_faculty_id = u.faculty_id)
+      ORDER BY u.user_id LIMIT 1`);
+    expect((await loadUser!(plain!.user_id))?.isHod).toBe(false);
+  });
+
+  it('9. GET /admin/leave renders faculty leave management console for admin', async () => {
     const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
     const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
     const res = await adminAgent.get('/admin/leave');
@@ -107,7 +127,7 @@ describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
     expect(res.text).toContain('Leave Applications');
   });
 
-  it('8. GET /admin/payroll renders faculty payroll console for admin', async () => {
+  it('10. GET /admin/payroll renders faculty payroll console for admin', async () => {
     const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
     const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
     const res = await adminAgent.get('/admin/payroll');

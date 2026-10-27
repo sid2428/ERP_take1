@@ -11,6 +11,7 @@ async function studentWithReceiptJoins(db: pg.Client): Promise<number> {
     `SELECT s.student_id FROM student s
        JOIN program p ON p.program_id = s.program_id
        JOIN department d ON d.dept_id = p.dept_id
+       JOIN app_user u ON u.student_id = s.student_id AND u.role = 'student' AND u.is_active
       ORDER BY s.student_id LIMIT 1`);
   return row.student_id;
 }
@@ -85,6 +86,32 @@ describe.skipIf(!hasDatabase)('fee payments and D-Wallet database behavior', () 
       expect(receipts.rows).toEqual([{ method: 'Card' }]);
       const ledger = await db.query('SELECT txn_id FROM wallet_txn WHERE payment_id = $1', [attempt.paymentId]);
       expect(ledger.rows).toEqual([]);
+    });
+  });
+
+  it('sends one event-keyed fee notification in the payment transaction', async () => {
+    await inRollback(async (db) => {
+      const studentId = await studentWithReceiptJoins(db);
+      const recipient = await one<{ user_id: number }>(db,
+        `SELECT user_id FROM app_user WHERE student_id = $1 AND role = 'student' AND is_active`, [studentId]);
+      const attempt = await createPayment(db, studentId, 'FEE', 600, 1000);
+      const orderId = await createOrderReference(db, attempt.paymentId);
+      const paymentRef = `pay_test_${randomBytes(10).toString('hex')}`;
+
+      await applyPayment(db, orderId, paymentRef, 'Card');
+      await applyPayment(db, orderId, paymentRef, 'UPI');
+
+      const events = await db.query<{ user_id: number; kind: string; title: string; category: string; link: string; event_key: string }>(
+        `SELECT user_id, kind, title, category::text AS category, link, event_key
+           FROM notification WHERE event_key = $1`, [`fee-payment:${attempt.paymentId}:succeeded`]);
+      expect(events.rows).toEqual([{
+        user_id: recipient.user_id,
+        kind: 'fees',
+        title: 'Fee payment received',
+        category: 'Fees',
+        link: '/student/fee',
+        event_key: `fee-payment:${attempt.paymentId}:succeeded`,
+      }]);
     });
   });
 

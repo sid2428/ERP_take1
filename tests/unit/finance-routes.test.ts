@@ -49,6 +49,7 @@ const student: CurrentUser = {
   facultyId: null,
   displayName: 'Student Example',
   deptId: null,
+  isHod: false,
   mustChangePassword: false,
 };
 
@@ -96,6 +97,16 @@ afterEach(() => {
 });
 
 describe('fee payment routes', () => {
+  it('returns an empty statement when the student has no fee record', async () => {
+    const response = await request(appAs(student)).get('/fees/statement');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      academicYear: '', components: [], amountPaid: 0, status: 'PENDING', hasRecord: false,
+    });
+    expect(mocks.queryOne.mock.calls[0]?.[1]).toEqual([student.studentId]);
+  });
+
   it('does not enable simulated payments in production without Razorpay keys', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('PAYMENTS_MODE', 'simulated');

@@ -1,16 +1,17 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>#<%= g.grievance_id %> · <%= g.subject %></h1><span class="sub"><a href="/admin/grievances">← Grievance queue</a></span></div>
 <% const closed = g.status === 'Resolved' || g.status === 'Rejected'; %>
+<div class="page-head"><h1>#<%= g.grievance_id %> · <%= g.subject %></h1><span class="sub"><a href="<%= back %>">← <%= g.course_id ? 'Grievances of ' + g.assigned_name : 'General queue' %></a></span></div>
 <div class="grid2">
 <div class="stack" style="gap:0">
   <section class="card" style="margin-bottom:16px">
     <div class="hd"><h2>Details</h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
     <dl class="dl" style="margin-bottom:14px">
       <div><dt>Category</dt><dd><%= g.category %></dd></div>
+      <% if (g.course_id) { %><div><dt>Course</dt><dd><%= g.course_code %> · <%= g.course_name %></dd></div><% } %>
       <div><dt>Raised by</dt><dd><%= g.raised_by_name %>
         <div class="muted" style="font-size:12.5px"><%= g.raised_by_login %> · <%= g.raised_by_role %><%= g.raised_by_dept ? ' · ' + g.raised_by_dept : '' %></div></dd></div>
       <div><dt>Raised on</dt><dd><%= fmt.dateTime(g.created_at) %></dd></div>
-      <div><dt>Assigned to</dt><dd><%= g.assigned_name ? g.assigned_name + ' (' + g.assigned_code + ')' : '–' %></dd></div>
+      <div><dt><%= g.course_id ? 'Teacher' : 'Assigned to' %></dt><dd><%= g.assigned_name ? g.assigned_name + ' (' + g.assigned_code + ')' : '–' %></dd></div>
     </dl>
     <div class="thread"><div class="body"><%= g.description %></div></div>
   </section>
@@ -20,8 +21,39 @@
 <div class="stack">
 <% if (closed) { %>
   <section class="card">
-    <div class="hd"><h2><%= g.status %></h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
-    <p class="muted">Closed on <%= fmt.dateTime(g.resolved_at) %>, <%= g.age_days %> days after it was raised. Closed grievances cannot be changed.</p>
+    <div class="hd"><h2>Locked</h2><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
+    <p class="muted">Closed on <%= fmt.dateTime(g.resolved_at) %>, <%= g.age_days %> days after it was raised<%= g.course_id ? ', by the teacher' : '' %>.
+      Unlocking sends it back to In progress<%= g.assigned_name ? ' with ' + g.assigned_name : '' %> so the conversation can continue.</p>
+    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/unlock" class="stack" style="gap:10px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="ur">Reason for unlocking</label>
+        <textarea id="ur" name="reason" rows="3" minlength="5" maxlength="2000" required placeholder="e.g. The student says the marks are still not corrected"></textarea>
+        <span class="hint">The student<%= g.assigned_name ? ' and the teacher' : '' %> will see this reason.</span>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Unlock grievance</button></div>
+    </form>
+  </section>
+<% } else if (g.course_id) { %>
+  <section class="card">
+    <div class="hd"><h2>With the teacher</h2></div>
+    <p class="muted"><%= g.assigned_name %> teaches <%= g.raised_by_name %> this course and handles this grievance. They resolve or reject it, which locks it; you can unlock it afterwards.</p>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Reassign</h2></div>
+    <p class="note">Only if <%= g.assigned_name %> cannot handle it, for example while on leave. The new teacher can see it and reply.</p>
+    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/assign" class="stack" style="gap:10px">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="fa">Faculty code</label>
+        <input id="fa" type="text" name="faculty_code" list="fac-list" maxlength="15" required value="<%= g.assigned_code || '' %>" autocomplete="off">
+        <datalist id="fac-list">
+          <% for (const f of faculty) { %><option value="<%= f.faculty_code %>"><%= f.name %> · <%= f.is_hod ? 'HOD' : f.designation %></option><% } %>
+        </datalist>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Reassign</button></div>
+    </form>
   </section>
 <% } else { %>
   <section class="card">
@@ -36,7 +68,7 @@
         <button class="btn primary" type="submit" name="outcome" value="Resolved">Resolve</button>
         <button class="btn danger" type="submit" name="outcome" value="Rejected">Reject</button>
       </div>
-      <p class="note" style="margin:0">Either choice closes the grievance for good.</p>
+      <p class="note" style="margin:0">Either choice closes and locks the grievance; you can unlock it later if needed.</p>
     </form>
   </section>
 

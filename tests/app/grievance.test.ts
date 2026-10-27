@@ -21,12 +21,15 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
   let student: Agent;
   let faculty: Agent;
 
-  // test grievances and the personal notices their triggers posted
+  // test grievances and the personal notices and notifications their triggers posted
   const cleanup = async () => {
     await db.query(`DELETE FROM notice WHERE source = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
                       (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
+    await db.query(`DELETE FROM notification WHERE kind = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
+                      (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
     await db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
   };
+  const unread = async (agent: Agent) => ((await agent.get('/api/notifications/state')).body as { unread: number }).unread;
   const row = async (id: number) =>
     (await db.query<{ status: string; assigned_code: string | null; resolution_note: string | null }>(
       'SELECT status, assigned_code, resolution_note FROM v_grievance_overview WHERE grievance_id = $1', [id])).rows[0]!;
@@ -80,7 +83,7 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
 
     // the student sees it; the admin queue shows it straight away
     expect((await student.get('/student/grievances')).text).toContain('[test] Projector broken');
-    const queue = await admin.get(`/admin/grievances?q=${id}`);
+    const queue = await admin.get(`/admin/grievances?view=general&q=${id}`);
     expect(queue.status).toBe(200);
     expect(queue.text).toContain(`/admin/grievances/${id}`);
 
@@ -127,6 +130,22 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
     expect((await row(id)).status).toBe('Rejected');
   });
 
+  it('tells the admin in the app when a faculty member raises a grievance', async () => {
+    const before = await unread(admin);
+    const id = await raise(faculty, '/faculty/grievances', 'Staff room AC broken');
+    expect(await unread(admin)).toBe(before + 1);
+    const inbox = await admin.get('/admin/inbox');
+    // the inbox item opens the grievance (and marks the notification read)
+    const go = new RegExp(`href="([^"]+/go)">New grievance #${id}:`).exec(inbox.text)?.[1];
+    expect(go).toBeTruthy();
+    expect((await admin.get(go!)).headers.location).toBe(`/admin/grievances/${id}`);
+    expect(await unread(admin)).toBe(before);
+    // the default "by teacher" view points the admin to the general queue, where it is listed
+    const byTeacher = await admin.get('/admin/grievances');
+    expect(byTeacher.text).toMatch(/raised by faculty/);
+    expect((await admin.get('/admin/grievances?view=general')).text).toContain(`/admin/grievances/${id}`);
+  });
+
   it('faculty can raise grievances; others cannot read them; no self-assignment', async () => {
     const id = await raise(faculty, '/faculty/grievances', 'Lab chairs broken');
     expect((await student.get(`/student/grievances/${id}`)).status).toBe(404);
@@ -136,6 +155,51 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
     const res = await postForm(admin, `/admin/grievances/${id}`, `/admin/grievances/${id}/assign`, { faculty_code: FACULTY });
     expect(res.headers.location).toBe(`/admin/grievances/${id}`);
     expect(await row(id)).toMatchObject({ status: 'Open', assigned_code: null });
+  });
+
+  it('sends a course grievance to the course teacher, who closes it; only the admin can unlock it', async () => {
+    const { rows: [course] } = await db.query<{ course_id: number }>(`
+      SELECT ta.course_id FROM app_user u
+      JOIN v_assignment_roster r ON r.student_id = u.student_id
+      JOIN teaching_assignment ta USING (assignment_id)
+      JOIN faculty f ON f.faculty_id = ta.faculty_id
+      WHERE u.login_id = 'STU202600004' AND f.faculty_code = $1 AND ta.academic_session_id = current_session_id()
+      LIMIT 1`, [FACULTY]);
+    expect(course).toBeDefined();
+    expect((await student.get('/student/grievances/new')).text).toContain(`<option value="${course!.course_id}"`);
+
+    // no teacher chosen: the one teaching the course is filled in
+    const res = await postForm(student, '/student/grievances/new', '/student/grievances', {
+      about: 'course', course_id: String(course!.course_id), faculty_id: '', category: 'Exam',
+      subject: '[test] Internal marks missing', description: 'My internal marks for the first test are missing.',
+    });
+    const id = idFrom(res.headers.location);
+    expect(await row(id)).toMatchObject({ status: 'Open', assigned_code: FACULTY });
+
+    // the admin finds it under the teacher, not in the general queue
+    expect((await admin.get(`/admin/grievances?view=general&q=${id}`)).text).not.toContain(`/admin/grievances/${id}"`);
+    expect((await admin.get(`/admin/grievances?faculty=${FACULTY}`)).text).toContain(`/admin/grievances/${id}"`);
+
+    // the teacher sees it and closes it with a note, which locks it
+    expect((await faculty.get('/faculty/grievances')).text).toContain(`/faculty/grievances/${id}`);
+    await postForm(faculty, `/faculty/grievances/${id}`, `/faculty/grievances/${id}/resolve`, { outcome: 'Rejected', note: '' });
+    expect((await row(id)).status).toBe('Open');
+    await postForm(faculty, `/faculty/grievances/${id}`, `/faculty/grievances/${id}/resolve`,
+      { outcome: 'Rejected', note: 'Marks were entered on 20 Oct.' });
+    expect(await row(id)).toMatchObject({ status: 'Rejected', resolution_note: 'Marks were entered on 20 Oct.' });
+    expect((await student.get(`/student/grievances/${id}`)).text).toContain('Marks were entered on 20 Oct.');
+
+    // the student cannot use the teacher's actions
+    const own = await postForm(student, `/student/grievances/${id}`, `/student/grievances/${id}/resolve`,
+      { outcome: 'Resolved', note: 'Fixed it myself' });
+    expect(own.status).toBe(404);
+
+    // the admin unlocks it, with a reason
+    await postForm(admin, `/admin/grievances/${id}`, `/admin/grievances/${id}/unlock`, { reason: '' });
+    expect((await row(id)).status).toBe('Rejected');
+    await postForm(admin, `/admin/grievances/${id}`, `/admin/grievances/${id}/unlock`, { reason: 'Student shows the marks are still missing.' });
+    expect(await row(id)).toMatchObject({ status: 'In progress', resolution_note: null, assigned_code: FACULTY });
+    expect((await student.get(`/student/grievances/${id}`)).text).toContain('Student shows the marks are still missing.');
   });
 
   it('returns 404 for grievances that do not exist', async () => {

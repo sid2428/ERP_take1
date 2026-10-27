@@ -1,0 +1,14 @@
+<%- include('../partials/layout-start') %>
+<div class="hd"><h1>Shared UI kit</h1><span class="muted">T0-1 · reusable portal components</span></div>
+<p class="note">Examples use the portal's shared typography, colors, spacing, and responsive layout.</p>
+
+<section class="ui-kit-grid" aria-label="Stat tiles and charts">
+  <%- include('../partials/stat-tile', { label: 'Active students', value: '50,000', hint: 'Current academic session', trend: '+2.4%' }) %>
+  <%- include('../partials/stat-tile', { label: 'Open grievances', value: '24', hint: 'Across all categories' }) %>
+  <article class="card"><div class="hd"><h2>Enrollment trend</h2></div><p class="note">Example sparkline</p><%- include('../partials/sparkline', { label: 'Enrollment trend, sample values', values: [12, 18, 16, 25, 22, 31, 36] }) %></article>
+  <article class="card"><div class="hd"><h2>Resolution rate</h2></div><p class="note">Example donut / ring</p><%- include('../partials/donut-ring', { label: 'Resolved', value: 76, maximum: 100, displayValue: '76%' }) %></article>
+  <article class="card"><div class="hd"><h2>Students by department</h2></div><p class="note">Example bar list</p><%- include('../partials/bar-list', { items: [{ label: 'Computer Engineering', value: 82 }, { label: 'Information Technology', value: 56 }, { label: 'Electronics', value: 39 }] }) %></article>
+  <article class="card"><div class="hd"><h2>Recent activity</h2></div><p class="note">Example timeline</p><%- include('../partials/timeline', { label: 'Recent activity', items: [{ title: 'Grievance assigned', when: '10:42', detail: 'Assigned to the course teacher.' }, { title: 'Notice published', when: 'Yesterday', detail: 'Visible to the selected division.' }] }) %></article>
+  <article class="card"><div class="hd"><h2>Empty state</h2></div><p class="note">Example when a list has no results</p><%- include('../partials/empty-state', { title: 'No notices yet', description: 'New notices for this audience will appear here.' }) %></article>
+</section>
+<%- include('../partials/layout-end') %>

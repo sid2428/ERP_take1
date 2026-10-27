@@ -13,6 +13,58 @@ import { describe, expect, it } from 'vitest';
 import { hasDatabase, inRollback, one } from './helpers.js';
 
 describe.skipIf(!hasDatabase)('T2 Faculty & HR (database rules)', () => {
+  it('notifies the faculty member about leave decisions once and rolls notices back with the decision', () =>
+    inRollback(async (db) => {
+      const admin = await one<{ user_id: number }>(db,
+        `SELECT user_id FROM app_user WHERE role = 'admin' AND is_active ORDER BY user_id LIMIT 1`);
+      const faculty = await one<{ faculty_id: number; user_id: number }>(db,
+        `SELECT f.faculty_id, u.user_id FROM faculty f JOIN app_user u USING (faculty_id)
+          WHERE f.status = 'Active' AND u.role = 'faculty' AND u.is_active ORDER BY f.faculty_id LIMIT 1`);
+      const lop = await one<{ leave_type_id: number }>(db,
+        `SELECT leave_type_id FROM faculty_leave_type WHERE leave_name = 'Loss of Pay'`);
+
+      const approved = await one<{ leave_request_id: number }>(db,
+        `INSERT INTO faculty_leave_request (faculty_id, leave_type_id, from_date, to_date, days_requested, reason)
+         VALUES ($1, $2, '2098-05-01', '2098-05-01', 1, 'Conference') RETURNING leave_request_id`,
+        [faculty.faculty_id, lop.leave_type_id]);
+      await db.query('SAVEPOINT before_leave_decision');
+      await db.query('CALL approve_faculty_leave($1, $2)', [approved.leave_request_id, admin.user_id]);
+
+      const key = `faculty-leave:${approved.leave_request_id}:approved`;
+      const notice = await one<{ user_id: number; kind: string; category: string; link: string; title: string; text: string }>(db,
+        `SELECT user_id, kind, category::text AS category, link, title, text FROM notification WHERE event_key = $1`, [key]);
+      expect(notice).toMatchObject({
+        user_id: faculty.user_id, kind: 'academic', category: 'Academic', link: '/faculty/leave',
+        title: `Leave request #${approved.leave_request_id} approved`,
+      });
+      expect(notice.text).toContain('Loss of Pay from 2098-05-01 to 2098-05-01');
+      expect(notice.text).toContain('was approved.');
+
+      // The decision, balance ledger entry, and notification are in the same transaction.
+      await db.query('ROLLBACK TO SAVEPOINT before_leave_decision');
+      expect((await one<{ status: string }>(db,
+        'SELECT status::text AS status FROM faculty_leave_request WHERE leave_request_id = $1', [approved.leave_request_id])).status).toBe('PENDING');
+      expect((await db.query('SELECT 1 FROM notification WHERE event_key = $1', [key])).rows).toEqual([]);
+      expect((await db.query('SELECT 1 FROM faculty_leave_transaction WHERE leave_request_id = $1', [approved.leave_request_id])).rows).toEqual([]);
+
+      await db.query('CALL approve_faculty_leave($1, $2)', [approved.leave_request_id, admin.user_id]);
+      const committedText = await one<{ text: string }>(db, 'SELECT text FROM notification WHERE event_key = $1', [key]);
+      await db.query("CALL notify($1, 'academic', $2, '/faculty/leave', 'Academic', $3)", [faculty.user_id, committedText.text, key]);
+      expect((await db.query('SELECT 1 FROM notification WHERE event_key = $1', [key])).rows).toHaveLength(1);
+
+      const rejected = await one<{ leave_request_id: number }>(db,
+        `INSERT INTO faculty_leave_request (faculty_id, leave_type_id, from_date, to_date, days_requested, reason)
+         VALUES ($1, $2, '2098-06-01', '2098-06-01', 1, 'Personal commitment') RETURNING leave_request_id`,
+        [faculty.faculty_id, lop.leave_type_id]);
+      await db.query("CALL reject_faculty_leave($1, $2, 'Coverage unavailable')", [rejected.leave_request_id, admin.user_id]);
+      const rejection = await one<{ user_id: number; title: string; text: string }>(db,
+        `SELECT user_id, title, text FROM notification WHERE event_key = $1`,
+        [`faculty-leave:${rejected.leave_request_id}:rejected`]);
+      expect(rejection.user_id).toBe(faculty.user_id);
+      expect(rejection.title).toBe(`Leave request #${rejected.leave_request_id} rejected`);
+      expect(rejection.text).toContain('Admin note: Coverage unavailable');
+    }));
+
   it('enforces leave quotas and balance calculation through triggers and functions', () =>
     inRollback(async (db) => {
       // 1. Initial balance check on a clean faculty member

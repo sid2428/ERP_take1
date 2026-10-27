@@ -7,7 +7,7 @@
   <a class="brand" href="/"><div class="logo">P</div><div>PICT <%= { student: 'Student Portal', faculty: 'Faculty Portal', admin: 'Academic Console' }[currentUser.role] %></div></a>
   <% for (const group of NAV[currentUser.role]) { %>
     <div class="grp"><%= group.label %></div>
-    <% for (const item of group.items) { %>
+    <% for (const item of group.items) { if (item.hodOnly && !currentUser.isHod) continue; %>
       <a class="nav-link<%= nav === item.key ? ' on' : '' %>" href="<%= item.href %>"<%- nav === item.key ? ' aria-current="page"' : '' %>><%- include('icon', { name: item.icon }) %><%= item.label %></a>
     <% } %>
   <% } %>

@@ -3,7 +3,9 @@ import type {
 } from '../types';
 import { sampleStatement, samplePayments, sampleStudent, sampleWallet } from './sampleData';
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+// The finance router is mounted inside the authenticated student router.
+// Keep the production bundle deterministic and aligned with that mount.
+const BASE = '/student/fee/api';
 export const SAMPLE_MODE = import.meta.env.VITE_USE_SAMPLE_DATA === 'true';
 
 export class ApiError extends Error {
