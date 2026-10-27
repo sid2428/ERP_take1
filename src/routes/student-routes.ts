@@ -2,7 +2,7 @@ import { getStudentSyllabusCoverage } from '../queries/syllabus-queries.js';
 import { Router } from 'express';
 import { financeApiRouter } from './finance-routes.js';
 import { z } from 'zod';
-import { friendlyDbError, query, queryOne, pool } from '../db.js';
+import { friendlyDbError, query, queryOne, pool, transaction } from '../db.js';
 import { audit } from '../lib/audit.js';
 import { isoWeekday, termProgress, todayIso } from '../lib/format.js';
 import { notFound } from '../lib/http-error.js';
@@ -35,6 +35,156 @@ studentRouter.get('/exams', (_req, res) => {
 
 studentRouter.get('/hall-ticket', (_req, res) => {
   res.render('student/hall-ticket', { title: 'Hall Ticket', nav: 'hall-ticket' });
+});
+
+studentRouter.post('/hall-ticket/:cycleId/generate', async (req, res) => {
+  const studentId = req.user!.studentId!;
+  const cycleId = Number(req.params.cycleId);
+  if (!Number.isInteger(cycleId) || cycleId <= 0) throw notFound('Examination cycle');
+
+  const requestedCourseId = req.body.course_id === undefined || req.body.course_id === ''
+    ? undefined
+    : Number(req.body.course_id);
+  if (requestedCourseId !== undefined && (!Number.isInteger(requestedCourseId) || requestedCourseId <= 0)) {
+    flash(req, 'error', 'The selected exam could not be verified. Reload the page and try again.');
+    res.redirect('/student/hall-ticket');
+    return;
+  }
+
+  const result = await transaction(async (client) => {
+    await client.query('SELECT student_id FROM student WHERE student_id = $1 FOR UPDATE', [studentId]);
+    const exams = await client.query<{
+      course_id: number;
+      registration_status: string;
+      attendance_pct: number | null;
+    }>(`
+      SELECT reg.course_id, reg.registration_status, a.attendance_pct
+      FROM exam_registration reg
+      JOIN exam_cycle cy USING (exam_cycle_id)
+      JOIN exam_schedule sch ON sch.exam_cycle_id = cy.exam_cycle_id AND sch.course_id = reg.course_id
+      LEFT JOIN attendance_summary a
+        ON a.student_id = reg.student_id AND a.course_id = reg.course_id
+       AND a.academic_session_id = cy.academic_session_id
+      WHERE reg.student_id = $1 AND cy.exam_cycle_id = $2
+      FOR UPDATE OF reg`, [studentId, cycleId]);
+    if (!exams.rowCount) throw notFound('Examination cycle');
+
+    const eligible = exams.rows.filter((exam) =>
+      exam.registration_status === 'Registered' && exam.attendance_pct !== null && exam.attendance_pct >= 75);
+    if (requestedCourseId !== undefined && !eligible.some((exam) => exam.course_id === requestedCourseId)) {
+      return { error: 'This exam is not eligible for a hall ticket. Eligibility requires Registered status and at least 75% attendance.' };
+    }
+    if (!eligible.length) {
+      return { error: 'No exams in this cycle are eligible for a hall ticket. Registration and at least 75% attendance are required.' };
+    }
+
+    const existing = await client.query<{ hall_ticket_id: number; status: string }>(`
+      SELECT hall_ticket_id, status FROM hall_ticket
+      WHERE student_id = $1 AND exam_cycle_id = $2 FOR UPDATE`, [studentId, cycleId]);
+    if (existing.rows[0]?.status === 'Withheld') {
+      return { error: 'This hall ticket has been withheld. Contact the academic office for assistance.' };
+    }
+    if (existing.rows[0]?.status === 'Issued') return { issued: true };
+
+    let ticketId = existing.rows[0]?.hall_ticket_id;
+    if (ticketId) {
+      await client.query(`
+        UPDATE hall_ticket
+        SET courses_registered = $3, courses_blocked = $4, status = 'Issued', issued_on = CURRENT_DATE,
+            hall_ticket_no = COALESCE(hall_ticket_no, 'HT' || LPAD(hall_ticket_id::text, 8, '0'))
+        WHERE hall_ticket_id = $1 AND student_id = $2`, [
+        ticketId, studentId, eligible.length, exams.rows.length - eligible.length,
+      ]);
+    } else {
+      const inserted = await client.query<{ hall_ticket_id: number }>(`
+        INSERT INTO hall_ticket
+          (student_id, exam_cycle_id, courses_registered, courses_blocked, status, issued_on)
+        VALUES ($1, $2, $3, $4, 'Issued', CURRENT_DATE)
+        RETURNING hall_ticket_id`, [
+        studentId, cycleId, eligible.length, exams.rows.length - eligible.length,
+      ]);
+      ticketId = inserted.rows[0]!.hall_ticket_id;
+      await client.query(`
+        UPDATE hall_ticket SET hall_ticket_no = 'HT' || LPAD(hall_ticket_id::text, 8, '0')
+        WHERE hall_ticket_id = $1`, [ticketId]);
+    }
+    return { issued: true };
+  });
+
+  if ('error' in result && result.error) {
+    flash(req, 'error', result.error);
+    res.redirect('/student/hall-ticket');
+    return;
+  }
+  flash(req, 'success', result.issued ? 'Your hall ticket is issued and ready to view.' : 'Your hall ticket was generated.');
+  res.redirect(`/student/hall-ticket/${cycleId}`);
+});
+
+studentRouter.get('/hall-ticket/:cycleId', async (req, res) => {
+  const studentId = req.user!.studentId!;
+  const cycleId = Number(req.params.cycleId);
+  if (!Number.isInteger(cycleId) || cycleId <= 0) throw notFound('Hall ticket');
+
+  const ticket = await queryOne<{
+    hall_ticket_no: string;
+    issued_on: string;
+    student_number: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
+    program_name: string;
+    division_code: string | null;
+    roll_no: number | null;
+    exam_cycle_id: number;
+    academic_session_id: string;
+    exam_type: string;
+  }>(`
+    SELECT ht.hall_ticket_no, ht.issued_on, s.student_number, s.first_name, s.middle_name, s.last_name,
+           p.program_name, dv.division_code, ss.roll_no,
+           cy.exam_cycle_id, cy.academic_session_id, cy.exam_type
+    FROM hall_ticket ht
+    JOIN student s USING (student_id)
+    JOIN program p USING (program_id)
+    JOIN exam_cycle cy USING (exam_cycle_id)
+    LEFT JOIN student_section ss ON ss.student_id = s.student_id
+      AND ss.academic_session_id = cy.academic_session_id
+    LEFT JOIN division dv ON dv.division_id = ss.division_id
+    WHERE ht.student_id = $1 AND ht.exam_cycle_id = $2 AND ht.status = 'Issued'`,
+  [studentId, cycleId]);
+  if (!ticket) throw notFound('Hall ticket');
+
+  const exams = await query<{
+    course_code: string;
+    course_name: string;
+    exam_date: string;
+    session: string;
+    start_time: string;
+    end_time: string;
+  }>(`
+    SELECT c.course_code, c.course_name, sch.exam_date, sch.session, sch.start_time, sch.end_time
+    FROM exam_registration reg
+    JOIN exam_cycle cy USING (exam_cycle_id)
+    JOIN exam_schedule sch ON sch.exam_cycle_id = cy.exam_cycle_id AND sch.course_id = reg.course_id
+    JOIN course c ON c.course_id = reg.course_id
+    JOIN attendance_summary a
+      ON a.student_id = reg.student_id AND a.course_id = reg.course_id
+     AND a.academic_session_id = cy.academic_session_id
+    WHERE reg.student_id = $1 AND cy.exam_cycle_id = $2
+      AND reg.registration_status = 'Registered' AND a.attendance_pct >= 75
+    ORDER BY sch.exam_date, sch.start_time, c.course_code`,
+  [studentId, cycleId]);
+  if (!exams.length) throw notFound('Eligible hall ticket exams');
+
+  res.render('student/hall-ticket-print', {
+    title: 'Hall Ticket',
+    nav: 'hall-ticket',
+    ticket,
+    student: {
+      ...ticket,
+      full_name: [ticket.first_name, ticket.middle_name, ticket.last_name].filter(Boolean).join(' '),
+    },
+    exams,
+  });
 });
 
 studentRouter.get('/results', (_req, res) => {

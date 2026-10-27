@@ -1,6 +1,10 @@
 (function () {
   'use strict';
 
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-print-ticket]')) window.print();
+  });
+
   var view = document.querySelector('[data-student-view]');
   if (!view) return;
 
@@ -112,6 +116,23 @@
     return value >= 75
       ? node('span', 'Eligible', 'pill g')
       : node('span', 'Below 75%', 'pill r');
+  }
+
+  function examEligibility(exam) {
+    var registered = exam.registration_status === 'Registered';
+    var attendance = Number(exam.attendance_pct);
+    if (exam.attendance_pct === null || exam.attendance_pct === undefined || !Number.isFinite(attendance)) attendance = null;
+    var eligible = registered && attendance !== null && attendance >= 75;
+    var reasons = [];
+    if (!registered) reasons.push('Not registered');
+    if (attendance === null || attendance < 75) reasons.push(attendance === null
+      ? 'Attendance unavailable'
+      : 'Below 75% (' + pct(attendance) + ')');
+    return {
+      eligible: eligible,
+      label: eligible ? 'Eligible · ' + pct(attendance) : reasons.join(' · '),
+      message: eligible ? '' : reasons.join(' and ') + (attendance === null ? '; 75% attendance is required.' : '.'),
+    };
   }
 
   function renderAttendanceSummary(data) {
@@ -226,49 +247,110 @@
   function renderExamSchedule(data) {
     clearView();
     if (!data.exams.length) {
-      view.appendChild(empty('No exam schedule is available for your registrations.'));
+      view.appendChild(empty('No exam cycle or scheduled exams are available right now.'));
       return;
     }
     view.appendChild(table(
-      ['Exam', 'Course', 'Date', 'Session', 'Time', 'Attendance eligibility'],
+      ['Course', 'Date', 'Session / time', 'Exam type', 'Attendance eligibility'],
       data.exams.map(function (exam) {
-        var mode = exam.exam_mode + ' · ' + exam.exam_type;
         var course = node('span', exam.course_code + ' · ' + exam.course_name);
+        var eligibility = examEligibility(exam);
         return [
-          mode,
           course,
           date(exam.exam_date),
-          exam.session,
-          time(exam.start_time) + ' – ' + time(exam.end_time),
-          node('span', exam.attendance_eligible ? 'Eligible · ' + pct(exam.attendance_pct) : 'Below 75% · ' + pct(exam.attendance_pct),
-            exam.attendance_eligible ? 'pill g' : 'pill r'),
+          (exam.session || '—') + ' · ' + time(exam.start_time) + ' – ' + time(exam.end_time),
+          exam.exam_type + (exam.exam_mode ? ' · ' + exam.exam_mode : ''),
+          node('span', eligibility.label, eligibility.eligible ? 'pill g' : 'pill r'),
         ];
       }),
     ));
   }
 
   function renderHallTickets(data) {
+    var csrfInput = view.querySelector('[data-hall-ticket-csrf]');
+    var csrfToken = csrfInput ? csrfInput.value : '';
     clearView();
     if (!data.exams.length) {
-      view.appendChild(empty('No hall-ticket information is available for your exams.'));
+      view.appendChild(empty('No exam cycle or scheduled exams are available right now.'));
       return;
     }
-    view.appendChild(table(
-      ['Exam', 'Course', 'Attendance', 'Eligibility', 'Hall ticket'],
-      data.exams.map(function (exam) {
-        var eligible = exam.hall_ticket_eligible;
-        var ticket = exam.hall_ticket_no
-          ? exam.hall_ticket_no + (exam.hall_ticket_status ? ' · ' + exam.hall_ticket_status : '')
-          : eligible ? 'Eligible; ticket not issued' : 'Not issued';
-        return [
-          exam.exam_type + ' · ' + exam.academic_session_id,
-          exam.course_code + ' · ' + exam.course_name,
-          attendanceBar(exam.attendance_pct),
-          node('span', eligible ? 'Eligible' : 'Not eligible', eligible ? 'pill g' : 'pill r'),
-          ticket,
-        ];
-      }),
-    ));
+    var cycles = [];
+    data.exams.forEach(function (exam) {
+      var group = cycles.find(function (cycle) { return cycle.exam_cycle_id === exam.exam_cycle_id; });
+      if (!group) {
+        group = { exam_cycle_id: exam.exam_cycle_id, exams: [] };
+        cycles.push(group);
+      }
+      group.exams.push(exam);
+    });
+
+    cycles.forEach(function (cycle) {
+      var first = cycle.exams[0];
+      var eligibleExams = cycle.exams.filter(function (exam) { return examEligibility(exam).eligible; });
+      var card = node('section', null, 'card student-record-card hall-ticket-cycle');
+      var header = node('div', null, 'hd');
+      var heading = node('div');
+      heading.appendChild(node('h2', first.exam_type + ' · ' + first.academic_session_id));
+      heading.appendChild(node('span', cycle.exams.length + ' scheduled exam' + (cycle.exams.length === 1 ? '' : 's'), 'muted'));
+      header.appendChild(heading);
+
+      var issued = cycle.exams.find(function (exam) { return exam.hall_ticket_status === 'Issued'; });
+      var statusText = issued
+        ? 'Issued · ' + (issued.hall_ticket_no || 'Ticket') + ' · ' + date(issued.hall_ticket_issued_on)
+        : cycle.exams.some(function (exam) { return exam.hall_ticket_status === 'Pending Issue'; })
+          ? 'Pending Issue'
+          : '';
+      if (statusText) header.appendChild(node('span', statusText, issued ? 'pill g' : 'pill o'));
+      card.appendChild(header);
+
+      if (eligibleExams.length && issued) {
+        var viewLink = node('a', 'View / Print hall ticket', 'btn primary');
+        viewLink.href = '/student/hall-ticket/' + encodeURIComponent(cycle.exam_cycle_id);
+        var issuedActions = node('div', null, 'actions hall-ticket-cycle-actions');
+        issuedActions.appendChild(viewLink);
+        card.appendChild(issuedActions);
+      } else if (eligibleExams.length) {
+        var form = node('form', null, 'actions hall-ticket-cycle-actions');
+        form.method = 'post';
+        form.action = '/student/hall-ticket/' + encodeURIComponent(cycle.exam_cycle_id) + '/generate';
+        var token = node('input');
+        token.type = 'hidden';
+        token.name = '_csrf';
+        token.value = csrfToken;
+        form.appendChild(token);
+        var generate = node('button', 'Generate hall ticket', 'btn primary');
+        generate.type = 'submit';
+        form.appendChild(generate);
+        card.appendChild(form);
+      } else {
+        card.appendChild(empty('No exams in this cycle are eligible for a hall ticket.'));
+      }
+
+      card.appendChild(table(
+        ['Course', 'Date', 'Session / time', 'Attendance', 'Eligibility'],
+        cycle.exams.map(function (exam) {
+          var attendance = exam.attendance_pct === null || exam.attendance_pct === undefined
+            ? 'No attendance recorded'
+            : pct(exam.attendance_pct);
+          var eligible = examEligibility(exam).eligible;
+          var reasons = [];
+          if (exam.registration_status !== 'Registered') reasons.push('Not registered');
+          if (exam.attendance_pct === null || exam.attendance_pct === undefined) reasons.push('No attendance recorded');
+          else if (Number(exam.attendance_pct) < 75) reasons.push('Attendance below 75%');
+          var eligibilityCell = node('div', null, 'hall-ticket-eligibility');
+          eligibilityCell.appendChild(node('span', eligible ? 'Eligible' : 'Not eligible', eligible ? 'pill g' : 'pill r'));
+          if (!eligible) eligibilityCell.appendChild(node('span', reasons.join(' · '), 'hall-ticket-reason'));
+          return [
+            exam.course_code + ' · ' + exam.course_name,
+            date(exam.exam_date),
+            (exam.session || '—') + ' · ' + time(exam.start_time) + ' – ' + time(exam.end_time),
+            attendance,
+            eligibilityCell,
+          ];
+        }),
+      ));
+      view.appendChild(card);
+    });
   }
 
   function resultsSection(title, headers, rows, emptyMessage) {
