@@ -21,7 +21,6 @@ import { studentRouter } from './routes/student-routes.js';
 import { razorpayWebhookRouter } from './routes/finance-routes.js';
 import { apiRouter } from './routes/api-routes.js';
 import { placementFacultyRouter } from './routes/placement-routes.js';
-import { razorpayWebhookRouter } from './routes/finance-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
