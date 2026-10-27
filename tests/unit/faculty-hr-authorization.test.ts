@@ -20,11 +20,11 @@ function appFor(user?: CurrentUser) {
 
 const admin: CurrentUser = {
   userId: 3, loginId: 'admin', role: 'admin', studentId: null, facultyId: null,
-  displayName: 'Admin', deptId: null, mustChangePassword: false,
+  displayName: 'Admin', deptId: null, isHod: false, mustChangePassword: false,
 };
 const student: CurrentUser = {
   userId: 5, loginId: 'STU1', role: 'student', studentId: 1, facultyId: null,
-  displayName: 'Student', deptId: 'CSE', mustChangePassword: false,
+  displayName: 'Student', deptId: 'CSE', isHod: false, mustChangePassword: false,
 };
 
 describe('faculty HR API authorization', () => {

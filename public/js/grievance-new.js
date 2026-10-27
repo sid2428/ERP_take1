@@ -1,11 +1,31 @@
-// Raise-a-grievance form (views/shared/grievance-new.ejs): show the course fields only for a
-// course grievance, and pick the teacher automatically from the chosen course (theory first).
+// Raise-a-grievance form (views/shared/grievance-new.ejs): show "Submitting…" and block a double
+// submit; for a course grievance, show the course fields and pick the teacher from the chosen course
+// automatically (theory first).
 (function () {
   'use strict';
   var form = document.getElementById('grievance-form');
   var course = document.getElementById('gcourse');
   var teacher = document.getElementById('gteacher');
-  if (!form || !course || !teacher) return;
+  if (!form) return;
+
+  // one click is enough: show progress and stop a second submit while the first is on its way
+  var submit = form.querySelector('button[type="submit"]');
+  var label = submit ? submit.textContent : '';
+  form.addEventListener('submit', function () {
+    if (!submit) return;
+    submit.disabled = true;
+    submit.setAttribute('aria-busy', 'true');
+    submit.textContent = 'Submitting…';
+  });
+  // a page restored with the Back button must not keep a disabled button
+  window.addEventListener('pageshow', function () {
+    if (!submit) return;
+    submit.disabled = false;
+    submit.removeAttribute('aria-busy');
+    submit.textContent = label;
+  });
+
+  if (!course || !teacher) return;
 
   function about() {
     var checked = form.querySelector('input[name="about"]:checked');

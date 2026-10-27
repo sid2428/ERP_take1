@@ -314,3 +314,81 @@ describe.skipIf(!hasDatabase)('094 course grievances', () => {
     });
   });
 });
+
+describe.skipIf(!hasDatabase)('grievance notifications', () => {
+  /** A grievance raised by a faculty member, plus an extra active admin and an inactive one. */
+  async function facultyFixture(db: pg.Client) {
+    const f = await fixture(db);
+    const hash = (await one<{ password_hash: string }>(db, `SELECT password_hash FROM app_user WHERE user_id = $1`, [f.admin])).password_hash;
+    const extra = await one<{ user_id: number }>(db, `INSERT INTO app_user (login_id, role, password_hash, must_change_password)
+      VALUES ('TEST-ADMIN-2', 'admin', $1, false) RETURNING user_id`, [hash]);
+    const retired = await one<{ user_id: number }>(db, `INSERT INTO app_user (login_id, role, password_hash, must_change_password, is_active)
+      VALUES ('TEST-ADMIN-OFF', 'admin', $1, false, false) RETURNING user_id`, [hash]);
+    const g = await one<{ grievance_id: number }>(db,
+      `INSERT INTO grievance (raised_by, raised_by_role, category, subject, description)
+       VALUES ($1, 'faculty', 'Facilities', 'Staff room AC not working', 'The AC in the staff room has been off for a week.')
+       RETURNING grievance_id`, [f.fac1.user_id]);
+    const admins = (await db.query<{ user_id: number }>(
+      `SELECT user_id FROM app_user WHERE role = 'admin' AND is_active ORDER BY user_id`)).rows.map((r) => r.user_id);
+    return { ...f, extra: extra.user_id, retired: retired.user_id, admins, fid: g.grievance_id };
+  }
+  const links = (db: pg.Client, id: number) => db.query<{ user_id: number; link: string; text: string }>(
+    `SELECT user_id, link, text FROM notification WHERE kind = 'grievance' AND link LIKE '%/grievances/' || $1
+     ORDER BY notification_id`, [id]);
+
+  it('a faculty-raised grievance reaches every active admin, and only them', async () => {
+    await inRollback(async (db) => {
+      const f = await facultyFixture(db);
+      const sent = (await links(db, f.fid)).rows;
+      expect(sent.map((n) => n.user_id).sort((a, b) => a - b)).toEqual(f.admins);
+      expect(sent.map((n) => n.user_id)).toContain(f.extra);
+      expect(sent.map((n) => n.user_id)).not.toContain(f.retired);
+      expect(sent.map((n) => n.user_id)).not.toContain(f.fac1.user_id);
+      expect(new Set(sent.map((n) => n.link))).toEqual(new Set([`/admin/grievances/${f.fid}`]));
+      expect(sent[0]!.text).toMatch(/raised a facilities grievance/);
+    });
+  });
+
+  it('the faculty raiser hears about assignment, replies and the decision on their own pages', async () => {
+    await inRollback(async (db) => {
+      const f = await facultyFixture(db);
+      await db.query('CALL assign_grievance($1, $2, $3)', [f.fid, f.fac2.faculty_id, f.admin]);
+      await comment(db, f.fid, f.fac2.user_id, 'Technician booked for Thursday.');
+      await db.query(`CALL resolve_grievance($1, $2, 'Resolved', 'AC repaired on Thursday.')`, [f.fid, f.admin]);
+      const sent = (await links(db, f.fid)).rows;
+      const toRaiser = sent.filter((n) => n.user_id === f.fac1.user_id);
+      expect(toRaiser.map((n) => n.text.split('\n')[0])).toEqual([
+        `Your grievance #${f.fid} is being handled`, `New reply on grievance #${f.fid}`, `Your grievance #${f.fid} was resolved`,
+      ]);
+      expect(new Set(toRaiser.map((n) => n.link))).toEqual(new Set([`/faculty/grievances/${f.fid}`]));
+      // the assignee is told about the assignment and the close, not about their own reply
+      expect(sent.filter((n) => n.user_id === f.fac2.user_id).map((n) => n.text.split('\n')[0]))
+        .toEqual([`Grievance #${f.fid} assigned to you`, `Grievance #${f.fid} was resolved`]);
+      // a faculty reply on a general grievance also reaches the admins
+      expect(sent.filter((n) => n.user_id === f.extra).map((n) => n.text.split('\n')[0]))
+        .toEqual([`New grievance #${f.fid}: Staff room AC not working`, `New reply on grievance #${f.fid}`]);
+    });
+  });
+
+  it('notifies each recipient once per event, even if the trigger runs again', async () => {
+    await inRollback(async (db) => {
+      const f = await facultyFixture(db);
+      await db.query(`CALL notify($1, 'grievance', 'duplicate', $2, 'General', $3)`,
+        [f.admin, `/admin/grievances/${f.fid}`, `grievance:${f.fid}:created`]);
+      const created = (await links(db, f.fid)).rows.filter((n) => n.user_id === f.admin);
+      expect(created).toHaveLength(1);
+    });
+  });
+
+  it('a course grievance cannot go to a teacher who cannot sign in', async () => {
+    await inRollback(async (db) => {
+      const f = await courseFixture(db);
+      await db.query('UPDATE app_user SET is_active = false WHERE user_id = $1', [f.teacher]);
+      expect(await fails(db,
+        `INSERT INTO grievance (raised_by, raised_by_role, category, subject, description, course_id, assigned_to)
+         VALUES ($1, 'student', 'Exam', 'Teacher has left', 'Who will read this grievance?', $2, $3)`,
+        [f.student, f.course_id, f.faculty_id])).toMatch(/cannot receive grievances/);
+    });
+  });
+});
+

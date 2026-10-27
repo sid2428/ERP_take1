@@ -102,6 +102,7 @@ export function getCourseTeachers(studentId: number): Promise<CourseTeacher[]> {
     JOIN teaching_assignment ta USING (assignment_id)
     JOIN course c ON c.course_id = ta.course_id
     JOIN faculty f ON f.faculty_id = ta.faculty_id AND f.status = 'Active'
+    JOIN app_user fu ON fu.faculty_id = f.faculty_id AND fu.is_active      -- the teacher must be able to sign in (098)
     WHERE r.student_id = $1 AND ta.academic_session_id = current_session_id()
     ORDER BY c.course_id, f.faculty_id, ta.session_type`, [studentId])
     // lectures first within a course, so the first teacher listed is the default
