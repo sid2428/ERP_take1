@@ -21,12 +21,15 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
   let student: Agent;
   let faculty: Agent;
 
-  // test grievances and the personal notices their triggers posted
+  // test grievances and the personal notices and notifications their triggers posted
   const cleanup = async () => {
     await db.query(`DELETE FROM notice WHERE source = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
                       (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
+    await db.query(`DELETE FROM notification WHERE kind = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
+                      (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
     await db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
   };
+  const unread = async (agent: Agent) => ((await agent.get('/api/notifications/state')).body as { unread: number }).unread;
   const row = async (id: number) =>
     (await db.query<{ status: string; assigned_code: string | null; resolution_note: string | null }>(
       'SELECT status, assigned_code, resolution_note FROM v_grievance_overview WHERE grievance_id = $1', [id])).rows[0]!;
@@ -125,6 +128,22 @@ describe.skipIf(!hasAdminEnv)('T8-2 grievances (pages and permissions)', () => {
     expect((await row(id)).status).toBe('In progress');
     await postForm(admin, `/admin/grievances/${id}`, `/admin/grievances/${id}/resolve`, { outcome: 'Rejected', note: 'Please raise this with the exam cell.' });
     expect((await row(id)).status).toBe('Rejected');
+  });
+
+  it('tells the admin in the app when a faculty member raises a grievance', async () => {
+    const before = await unread(admin);
+    const id = await raise(faculty, '/faculty/grievances', 'Staff room AC broken');
+    expect(await unread(admin)).toBe(before + 1);
+    const inbox = await admin.get('/admin/inbox');
+    // the inbox item opens the grievance (and marks the notification read)
+    const go = new RegExp(`href="([^"]+/go)">New grievance #${id}:`).exec(inbox.text)?.[1];
+    expect(go).toBeTruthy();
+    expect((await admin.get(go!)).headers.location).toBe(`/admin/grievances/${id}`);
+    expect(await unread(admin)).toBe(before);
+    // the default "by teacher" view points the admin to the general queue, where it is listed
+    const byTeacher = await admin.get('/admin/grievances');
+    expect(byTeacher.text).toMatch(/raised by faculty/);
+    expect((await admin.get('/admin/grievances?view=general')).text).toContain(`/admin/grievances/${id}`);
   });
 
   it('faculty can raise grievances; others cannot read them; no self-assignment', async () => {
