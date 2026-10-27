@@ -14,7 +14,7 @@ import { notFound } from '../lib/http-error.js';
 import { flash } from '../middleware/auth.js';
 import {
   GRIEVANCE_CATEGORIES, actAs, getCourseTeachers, getGrievanceFor, getThread, insertComment, isClosed,
-  listAssignedTo, listRaisedBy, statusPill, type GrievanceRow,
+  listAssignedTo, listRaisedBy, statusPill, type CourseTeacher, type GrievanceRow,
 } from '../queries/grievance-queries.js';
 import { idParam } from './admin/helpers.js';
 
@@ -41,7 +41,16 @@ grievanceRouter.get('/', async (req, res) => {
 
 grievanceRouter.get('/new', async (req, res) => {
   const user = req.user!;
-  const teachers = user.role === 'student' && user.studentId ? await getCourseTeachers(user.studentId) : [];
+  let teachers: CourseTeacher[] = [];
+  if (user.role === 'student' && user.studentId) {
+    try {
+      teachers = await getCourseTeachers(user.studentId);
+    } catch (err) {
+      const errCode = (err && typeof err === 'object' && 'code' in err) ? String((err as { code?: unknown }).code) : 'UNKNOWN';
+      console.error(`[GET ${req.originalUrl}] [TEACHER_LOOKUP_ERROR] student_id=${user.studentId} code=${errCode}:`, err);
+      teachers = [];
+    }
+  }
   res.render('shared/grievance-new', {
     title: 'Raise a grievance', nav: 'grievances', base: base(req), categories: GRIEVANCE_CATEGORIES,
     isStudent: user.role === 'student', teachers,
@@ -78,7 +87,17 @@ grievanceRouter.post('/', async (req, res) => {
       res.redirect(`${base(req)}/new`);
       return;
     }
-    const options = (await getCourseTeachers(user.studentId)).filter((t) => t.course_id === v.course_id);
+    let teachers: CourseTeacher[] = [];
+    try {
+      teachers = await getCourseTeachers(user.studentId);
+    } catch (err) {
+      const errCode = (err && typeof err === 'object' && 'code' in err) ? String((err as { code?: unknown }).code) : 'UNKNOWN';
+      console.error(`[POST ${req.originalUrl}] [TEACHER_LOOKUP_ERROR] student_id=${user.studentId} code=${errCode}:`, err);
+      flash(req, 'error', 'Could not load your course teachers. Please try again.');
+      res.redirect(`${base(req)}/new`);
+      return;
+    }
+    const options = teachers.filter((t) => t.course_id === v.course_id);
     const pick = options.find((t) => t.faculty_id === v.faculty_id) ?? options[0];
     if (!pick) {
       flash(req, 'error', 'Choose one of your courses for this term.');
@@ -92,10 +111,15 @@ grievanceRouter.post('/', async (req, res) => {
   try {
     const id = await transaction(async (db) => {
       await actAs(db, user.userId);
-      const { rows } = await db.query<{ grievance_id: number }>(
-        `INSERT INTO grievance (raised_by, raised_by_role, category, subject, description, course_id, assigned_to)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING grievance_id`,
-        [user.userId, user.role, v.category, v.subject, v.description, courseId, teacher?.id ?? null]);
+      const { rows } = courseId
+        ? await db.query<{ grievance_id: number }>(
+            `INSERT INTO grievance (raised_by, raised_by_role, category, subject, description, course_id, assigned_to)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING grievance_id`,
+            [user.userId, user.role, v.category, v.subject, v.description, courseId, teacher!.id])
+        : await db.query<{ grievance_id: number }>(
+            `INSERT INTO grievance (raised_by, raised_by_role, category, subject, description)
+             VALUES ($1, $2, $3, $4, $5) RETURNING grievance_id`,
+            [user.userId, user.role, v.category, v.subject, v.description]);
       const grievanceId = rows[0]!.grievance_id;
       await audit(req, { action: 'GRIEVANCE_CREATE', entity: 'grievance', entityId: grievanceId,
         details: { category: v.category, subject: v.subject, ...(courseId ? { courseId, facultyId: teacher!.id } : {}) } }, db);
@@ -107,8 +131,11 @@ grievanceRouter.post('/', async (req, res) => {
     res.redirect(`${base(req)}/${id}`);
   } catch (err) {
     const message = friendlyDbError(err);
-    if (!message) throw err;
-    flash(req, 'error', message);
+    if (!message) {
+      const errCode = (err && typeof err === 'object' && 'code' in err) ? String((err as { code?: unknown }).code) : 'UNKNOWN';
+      console.error(`[POST ${req.originalUrl}] [GRIEVANCE_INSERT_ERROR] user_id=${user.userId} code=${errCode}:`, err);
+    }
+    flash(req, 'error', message ?? 'Could not submit your grievance. Please try again.');
     res.redirect(`${base(req)}/new`);
   }
 });
@@ -146,8 +173,11 @@ grievanceRouter.post('/:id/comments', async (req, res) => {
       flash(req, 'success', 'Reply added.');
     } catch (err) {
       const message = friendlyDbError(err);
-      if (!message) throw err;
-      flash(req, 'error', message);
+      if (!message) {
+        const errCode = (err && typeof err === 'object' && 'code' in err) ? String((err as { code?: unknown }).code) : 'UNKNOWN';
+        console.error(`[POST ${req.originalUrl}] [GRIEVANCE_COMMENT_ERROR] id=${id} code=${errCode}:`, err);
+      }
+      flash(req, 'error', message ?? 'Could not add reply. Please try again.');
     }
   }
   res.redirect(`${base(req)}/${id}`);
@@ -167,8 +197,11 @@ async function handlerAction(req: Request, res: Response, run: (g: GrievanceRow)
     flash(req, 'success', await run(g));
   } catch (err) {
     const message = err instanceof ActionError ? err.message : friendlyDbError(err);
-    if (!message) throw err;
-    flash(req, 'error', message);
+    if (!message) {
+      const errCode = (err && typeof err === 'object' && 'code' in err) ? String((err as { code?: unknown }).code) : 'UNKNOWN';
+      console.error(`[POST ${req.originalUrl}] [HANDLER_ACTION_ERROR] id=${id} code=${errCode}:`, err);
+    }
+    flash(req, 'error', message ?? 'Could not complete this action. Please try again.');
   }
   res.redirect(`${base(req)}/${id}`);
 }

@@ -105,9 +105,9 @@ export function getCourseTeachers(studentId: number): Promise<CourseTeacher[]> {
     WHERE r.student_id = $1 AND ta.academic_session_id = current_session_id()
     ORDER BY c.course_id, f.faculty_id, ta.session_type`, [studentId])
     // lectures first within a course, so the first teacher listed is the default
-    .then((rows) => rows.sort((a, b) => a.course_code.localeCompare(b.course_code)
+    .then((rows) => rows.sort((a, b) => (a.course_code ?? '').localeCompare(b.course_code ?? '')
       || Number(a.session_type !== 'Lecture') - Number(b.session_type !== 'Lecture')
-      || a.faculty_name.localeCompare(b.faculty_name)));
+      || (a.faculty_name ?? '').localeCompare(b.faculty_name ?? '')));
 }
 
 export const isClosed = (status: GrievanceStatus): boolean => status === 'Resolved' || status === 'Rejected';
