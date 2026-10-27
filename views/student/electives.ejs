@@ -7,12 +7,13 @@
 
 <% for (const w of windows) { %>
 <% const when = (d) => new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); %>
+<% const slots = Math.min(w.max_choices, w.offerings.length); /* never show more choices than there are electives to pick from */ %>
 <section class="card" style="margin-bottom:16px">
   <div class="hd">
     <h2><%= w.elective_group === 'O1' ? 'Open elective' : 'Honors' %> · Semester <%= w.semester_no %> · <%= w.academic_session_id %></h2>
     <span class="pill <%= w.is_open || w.status === 'Allocated' ? 'g' : '' %>"><%= w.is_open ? 'Open' : w.status %></span>
   </div>
-  <p class="muted">Choices accepted from <%= when(w.opens_at) %> to <%= when(w.closes_at) %> · rank up to <%= w.max_choices %></p>
+  <p class="muted">Choices accepted from <%= when(w.opens_at) %> to <%= when(w.closes_at) %> · rank up to <%= w.offerings.length ? slots : w.max_choices %></p>
 
   <% if (w.result) { %>
     <% if (w.result.outcome === 'Allocated') { %>
@@ -26,10 +27,13 @@
   <% if (!w.offerings.length) { %>
     <p class="muted">No electives have been listed for you in this window yet.</p>
   <% } else if (w.is_open) { %>
+    <% if (slots < w.max_choices) { %>
+    <p class="muted">Only <%= w.offerings.length %> elective<%= w.offerings.length === 1 ? ' is' : 's are' %> listed for you in this window, so you can rank <%= w.offerings.length === 1 ? 'one choice' : 'up to ' + slots + ' choices' %> (the window allows up to <%= w.max_choices %>).</p>
+    <% } %>
     <form method="post" action="/student/electives/<%= w.window_id %>" class="stack" style="margin-top:8px">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="form-grid">
-        <% for (let rank = 1; rank <= w.max_choices; rank++) { %>
+        <% for (let rank = 1; rank <= slots; rank++) { %>
         <% const chosen = w.offerings.find((o) => o.preference_rank === rank); %>
         <div class="field">
           <label for="c<%= w.window_id %>-<%= rank %>">Choice <%= rank %></label>
