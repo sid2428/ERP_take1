@@ -20,8 +20,16 @@ describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
   });
   it('keeps management routes admin-only and denies students',async()=>{
     expect((await student.get('/admin/placement')).status).toBe(403);
+    expect((await student.get('/admin/placement/statistics')).status).toBe(403);
+    expect((await student.get('/faculty/placement')).status).toBe(403);
     expect((await admin.get('/admin/placement')).status).toBe(200);
     expect((await admin.get('/admin/placement/companies')).status).toBe(200);
+  });
+  it('renders placement statistics including package and company offer summaries',async()=>{
+    const response=await admin.get('/admin/placement/statistics');
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('Highest package');
+    expect(response.text).toContain('Company-wise offers');
   });
   it('requires a session for student placement pages',async()=>{
     const {default:request}=await import('supertest');
