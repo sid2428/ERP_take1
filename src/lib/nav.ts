@@ -48,7 +48,19 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
       ],
     },
+    { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
+    { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
     { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase' }] },
+    {
+      label: 'LEAVE & HR', items: [
+        { key: 'leave', label: 'Leave management', href: '/faculty/leave', icon: 'calendar' },
+      ],
+    },
+    {
+      label: 'FINANCE', items: [
+        { key: 'payroll', label: 'Payslips & Salary', href: '/faculty/payroll', icon: 'wallet' },
+      ],
+    },
     {
       label: 'RECORDS', items: [
         { key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' },
@@ -91,6 +103,9 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },
       ],
     },
-    { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },
+    { label: 'SYSTEM', items: [
+      { key: 'ui', label: 'UI kit', href: '/admin/ui', icon: 'grid' },
+      { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' },
+    ] },
   ],
 };

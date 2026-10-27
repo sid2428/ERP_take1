@@ -96,17 +96,22 @@
     var label = node('b', pct(value));
     var bar = node('div', null, 'bar');
     var fill = node('i');
-    var safePct = value === null || value === undefined ? 0 : Math.max(0, Math.min(100, Number(value)));
+    var numericValue = value === null || value === undefined ? null : Number(value);
+    var safePct = numericValue === null ? 0 : Math.max(0, Math.min(100, numericValue));
     if (value !== null && value !== undefined) {
-      fill.className = Number(value) < 75 ? 'bad' : '';
+      fill.className = numericValue < 75 ? 'bad' : numericValue < 80 ? 'warn' : '';
       fill.style.width = safePct + '%';
     }
     bar.append(fill);
-    var tick = node('u');
-    tick.style.left = '75%';
-    bar.appendChild(tick);
     box.append(label, bar);
     return box;
+  }
+
+  function attendanceEligibility(value) {
+    if (value === null || value === undefined) return node('span', 'Not available', 'pill n');
+    return value >= 75
+      ? node('span', 'Eligible', 'pill g')
+      : node('span', 'Below 75%', 'pill r');
   }
 
   function renderAttendanceSummary(data) {
@@ -132,16 +137,17 @@
         var rows = group.rows.map(function (course) {
           var detail = node('a', 'View dates');
           detail.href = '/student/attendance/detail?course_id=' + encodeURIComponent(course.course_id);
-          var counts = course.attended + ' / ' + course.total_sessions;
-          var dataCell = node('span', counts);
           return [
             node('span', course.course_code + ' · ' + course.course_name),
-            dataCell,
+            courseType(course.course_type),
+            course.total_sessions,
+            course.attended,
             attendanceBar(course.attendance_pct),
+            attendanceEligibility(course.attendance_pct),
             detail,
           ];
         });
-        card.appendChild(table(['Course', 'Attended / total', 'Attendance', ''], rows));
+        card.appendChild(table(['Course', 'Type', 'Total lectures / labs', 'Attended', 'Attendance', 'Eligibility', ''], rows));
       }
       view.appendChild(card);
     });
@@ -182,9 +188,19 @@
           .then(function (data) {
             detail.replaceChildren();
             if (!data.records.length) detail.appendChild(empty('No conducted sessions are recorded for this course.'));
-            else detail.appendChild(table(['Date', 'Session', 'Status'], data.records.map(function (record) {
-              return [date(record.session_date), record.academic_session_id, record.status === 'P' ? 'Present' : 'Absent'];
-            })));
+            else {
+              var selectedCourse = courses.find(function (course) {
+                return String(course.course_id) === select.value;
+              });
+              detail.appendChild(table(['Date', 'Lecture / lab', 'Attendance'], data.records.map(function (record) {
+                var present = record.status === 'P';
+                return [
+                  date(record.session_date),
+                  selectedCourse ? courseType(selectedCourse.course_type) : 'Class',
+                  node('span', present ? 'Present' : 'Absent', present ? 'pill g' : 'pill r'),
+                ];
+              })));
+            }
             var nav = node('div', null, 'pager');
             nav.appendChild(node('span', data.pagination.total + ' session' + (data.pagination.total === 1 ? '' : 's')));
             var controls = node('div', null, 'actions');

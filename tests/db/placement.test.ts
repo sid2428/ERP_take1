@@ -156,6 +156,40 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     expect((await one<{ eligible: boolean }>(db, 'SELECT eligible FROM is_eligible($1,$2)', [internStudent.student_id, lowFulltime.driveId])).eligible).toBe(true);
   }));
 
+  it('notifies the eligible active audience once when a drive is opened', async () => inRollback(async db => {
+    const f = await fixture(db, { minYear: 1 });
+    const ineligible = await one<{ user_id: number; student_id: number }>(db, `
+      SELECT u.user_id, s.student_id
+      FROM app_user u
+      JOIN student s USING (student_id)
+      JOIN student_section ss USING (student_id)
+      WHERE u.role = 'student' AND u.is_active AND s.status = 'Active'
+        AND ss.academic_session_id = current_session_id() AND s.program_id <> $1
+      ORDER BY u.user_id LIMIT 1`, [f.program_id]);
+    const driveLink = `/student/placement/drives/${f.driveId}`;
+
+    const expected = (await db.query<{ user_id: number }>(`
+      SELECT u.user_id
+      FROM app_user u
+      JOIN student s USING (student_id)
+      CROSS JOIN LATERAL is_eligible(s.student_id, $1) e
+      WHERE u.role = 'student' AND u.is_active AND e.eligible
+      ORDER BY u.user_id`, [f.driveId])).rows.map((row) => row.user_id);
+    expect(expected.length).toBeGreaterThan(0);
+
+    await db.query('CALL notify_eligible_placement_drive($1)', [f.driveId]);
+    const first = (await db.query<{ user_id: number }>(`
+      SELECT user_id FROM notification WHERE kind = 'placement' AND link = $1 ORDER BY user_id`, [driveLink])).rows
+      .map((row) => row.user_id);
+    expect(first).toEqual(expected);
+    expect(first).not.toContain(ineligible.user_id);
+
+    await db.query('CALL notify_eligible_placement_drive($1)', [f.driveId]);
+    const total = await one<{ n: number }>(db,
+      `SELECT count(*)::int AS n FROM notification WHERE kind = 'placement' AND link = $1`, [driveLink]);
+    expect(total.n).toBe(expected.length);
+  }));
+
   it('counts accepted full-time offers without multiplying them by rounds', async () => inRollback(async db => {
     const f = await fixture(db);
     const view = await one<{ applications: number; offers: number; is_placed: boolean }>(db,

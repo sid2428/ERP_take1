@@ -1,12 +1,17 @@
 # Grievances (T8-2)
 
-Students and faculty raise grievances with the academic office and follow them to a decision.
+Migration 094 (`migrations/094-grievance-course-routing.sql`) adds course-specific teacher routing.
+
+Students and faculty raise grievances and follow them to a decision. A student may route a grievance
+about a current course directly to one of that course's current teachers; general and faculty-raised
+grievances continue through the academic office.
 
 Personal event notifications are stored by `migrations/083-notifications.sql` in `notification`
 through the assignment contract `notify(user_id, kind, text, link)`. The grievance triggers
 preserve the recipient sets below; the event and grievance change commit together.
-The admin sees every grievance in one queue, can hand one to a faculty member, replies in a shared
-comment trail, and closes it as **Resolved** (approved) or **Rejected**, always with a note.
+The admin sees every grievance in one queue, can assign general grievances, replies in a shared
+comment trail, and can unlock a closed grievance with a reason. The assigned course teacher may close
+a course grievance as **Resolved** or **Rejected**, always with a note.
 
 Migration: `migrations/080-grievances.sql` · Seed: `scripts/db/seed-grievances.ts` ·
 Routes: `src/routes/grievance-routes.ts` (student + faculty), `src/routes/admin/grievance-routes.ts` ·
@@ -23,14 +28,15 @@ Queries: `src/queries/grievance-queries.ts` · Tests: `tests/db/grievance.test.t
 
 - Categories: Academic, Attendance, Fees, Exam, Facilities, Other.
 - Who can read and reply: the person who raised it, the faculty member it is assigned to, and the admin.
-- Only the admin assigns, moves it to In progress, and closes it.
+- Only the admin assigns general grievances and unlocks closed grievances. Course grievances are
+  assigned to an eligible teacher at creation; that assigned teacher or an admin may close them.
 - What the raiser wrote cannot be edited. A closed grievance cannot change and takes no more replies.
 
 ## Tables
 
 | Table | Key | Purpose |
 |---|---|---|
-| `grievance` | `grievance_id` | One grievance: raiser (`raised_by` + `raised_by_role`), category, subject, description, status, assignee, resolution note, the admin who closed it, timestamps |
+| `grievance` | `grievance_id` | One grievance: raiser (`raised_by` + `raised_by_role`), optional `course_id`, category, subject, description, status, assignee, resolution note, closer, timestamps |
 | `grievance_comment` | `comment_id` | The comment trail (FK `grievance`, `author_id` → `app_user`) |
 | `grievance_status_log` | `log_id` | Every status change: from, to, who, when (written only by a trigger) |
 
@@ -48,7 +54,10 @@ stored role is the account's real role.
 | Allowed transitions only (no going back, nothing after closing) | trigger `workflow` |
 | Raiser, subject and description are immutable | trigger `workflow` |
 | Assigning stamps `assigned_at` and moves Open → In progress; only active faculty; never the raiser | trigger `workflow` |
-| Closing stamps `resolved_at`/`resolved_by`; only an admin can close | trigger `workflow` + `CHECK (closed ⇔ resolved_at)` |
+| A course grievance belongs to a current course taught to its raiser; its active teacher is assigned at creation | `teaches_student()` and insert trigger (`094`) |
+| Only students may select a course; course assignment cannot be cleared | `CHECK` and workflow trigger (`094`) |
+| Closing stamps `resolved_at`/`resolved_by`; admin closes any grievance, assigned teacher closes course grievances | trigger `workflow` + `resolve_grievance()` (`094`) |
+| Admin unlock requires a 5–2,000 character reason, returns to In progress and keeps prior decision/reason in status log | `unlock_grievance()` and status-log trigger (`094`) |
 | A closed grievance has a note of ≥ 5 characters | `CHECK` |
 | `resolved_at ≥ created_at`; `assigned_to` and `assigned_at` set together | `CHECK`s |
 | Every status change is logged with who did it | trigger `log_status` (actor from `set_config('erp.user_id', …)`) |
@@ -79,10 +88,13 @@ SELECT erp.grievance_participant(42, 7);
 CALL erp.assign_grievance(7, 1074, 1);
 ```
 
-**`CALL resolve_grievance(grievance_id, admin_user_id, 'Resolved' | 'Rejected', note)`**: close it with a note.
+**`CALL resolve_grievance(grievance_id, user_id, 'Resolved' | 'Rejected', note)`**: close a general grievance as admin, or a course grievance as its assigned teacher or admin.
 ```sql
 CALL erp.resolve_grievance(7, 1, 'Resolved', 'Projector replaced on 21 Oct.');
 ```
+
+**`CALL unlock_grievance(grievance_id, admin_user_id, reason)`**: reopen a closed grievance as an
+admin. Its assigned teacher is retained and its previous resolution note remains in the status log.
 
 **`acting_user_id()`**: the user the app set for this transaction with `set_config('erp.user_id', …, true)`.
 

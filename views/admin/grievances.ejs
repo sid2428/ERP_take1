@@ -1,6 +1,100 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Grievances</h1><span class="sub">Everything students and faculty raise arrives here. Assign, reply, then resolve or reject.</span></div>
+<div class="page-head"><h1>Grievances</h1><span class="sub">Course grievances go to the teacher of the course. Pick a teacher to review theirs and unlock any they closed; general grievances come to you.</span></div>
 
+<nav class="chips" style="margin-bottom:16px" aria-label="Grievance views">
+  <a class="chip-link<%= view === 'teacher' ? ' on' : '' %>" href="/admin/grievances">By teacher</a>
+  <a class="chip-link<%= view === 'general' ? ' on' : '' %>" href="/admin/grievances?view=general">General queue</a>
+</nav>
+
+<% const row = (g, showCourse) => { %>
+<tr>
+  <td class="nw"><a href="/admin/grievances/<%= g.grievance_id %>"><b>#<%= g.grievance_id %></b></a></td>
+  <td><a href="/admin/grievances/<%= g.grievance_id %>"><%= g.subject %></a><% if (g.comment_count) { %> <span class="muted" style="font-size:12.5px">· <%= g.comment_count %> <%= g.comment_count === 1 ? 'reply' : 'replies' %></span><% } %></td>
+  <td class="nw"><%= g.raised_by_name %><div class="muted" style="font-size:12.5px"><%= g.raised_by_login %> · <%= g.raised_by_role %></div></td>
+  <% if (showCourse) { %><td class="nw"><%= g.course_code || 'General' %></td><% } else { %><td><%= g.category %></td><td class="nw"><%= g.assigned_name || '–' %></td><% } %>
+  <td class="num nw"><%= g.age_days %> d</td>
+  <td class="nw"><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span><% if (g.status === 'Resolved' || g.status === 'Rejected') { %> <span class="muted" style="font-size:12.5px">locked</span><% } %></td>
+</tr>
+<% } %>
+
+<% if (view === 'teacher') { %>
+<form class="filters" method="get" action="/admin/grievances" style="margin-bottom:16px">
+  <label class="sr-only" for="fd">Department</label>
+  <select id="fd" name="dept" data-autosubmit>
+    <option value="">Choose a department</option>
+    <% for (const d of departments) { %><option value="<%= d.dept_id %>"<%= filters.dept === d.dept_id ? ' selected' : '' %>><%= d.dept_name %><%= d.locked ? ' · ' + d.locked + ' locked' : '' %></option><% } %>
+  </select>
+  <% if (dept) { %>
+  <label class="sr-only" for="ft">Teacher</label>
+  <select id="ft" name="faculty" data-autosubmit>
+    <option value="">Choose a teacher</option>
+    <% for (const t of teachers) { %><option value="<%= t.faculty_code %>"<%= teacher && teacher.faculty_code === t.faculty_code ? ' selected' : '' %>><%= t.name %> (<%= t.faculty_code %>)<%= t.total ? ' · ' + t.total : '' %></option><% } %>
+  </select>
+  <% } %>
+  <% if (teacher) { %>
+  <label class="sr-only" for="fs">Status</label>
+  <select id="fs" name="status" data-autosubmit>
+    <option value=""<%= filters.status === '' ? ' selected' : '' %>>All statuses</option>
+    <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Open + In progress</option>
+    <option value="locked"<%= filters.status === 'locked' ? ' selected' : '' %>>Locked (Resolved + Rejected)</option>
+  </select>
+  <% } %>
+  <button class="btn" type="submit">Show</button>
+  <% if (filters.dept || filters.faculty) { %><a class="btn link" href="/admin/grievances">Clear</a><% } %>
+</form>
+
+<% if (teacher) { %>
+<section class="card t">
+  <div class="hd"><h2><%= teacher.name %> <span class="muted" style="font-weight:400">· <%= teacher.faculty_code %> · <%= teacher.designation %></span></h2>
+    <a class="btn link" href="/admin/grievances?dept=<%= encodeURIComponent(teacher.dept_id) %>">← All teachers</a></div>
+  <div class="sc"><table>
+    <thead><tr><th>No.</th><th>Subject</th><th>Raised by</th><th>Course</th><th class="num">Age</th><th>Status</th></tr></thead>
+    <tbody>
+      <% if (!rows.length) { %><tr><td colspan="6" class="empty">No grievances for this teacher<%= filters.status ? ' with this status' : '' %>.</td></tr><% } %>
+      <% for (const g of rows) row(g, true); %>
+    </tbody>
+  </table></div>
+  <p class="note">Locked grievances are listed first. Open one to read the conversation and unlock it if needed.</p>
+</section>
+<% } else if (dept) { %>
+<section class="card t">
+  <div class="hd"><h2><%= dept.dept_name %></h2><span class="muted"><%= dept.total %> grievances · <%= dept.locked %> locked</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Teacher</th><th>Designation</th><th class="num">Active</th><th class="num">Locked</th><th class="num">Total</th></tr></thead>
+    <tbody>
+      <% if (!teachers.length) { %><tr><td colspan="5" class="empty">No faculty in this department.</td></tr><% } %>
+      <% for (const t of teachers) { %>
+      <tr>
+        <td><a href="/admin/grievances?faculty=<%= encodeURIComponent(t.faculty_code) %>"><%= t.name %></a> <span class="muted" style="font-size:12.5px"><%= t.faculty_code %></span></td>
+        <td><%= t.designation %></td>
+        <td class="num"><%= t.active %></td>
+        <td class="num"><%= t.locked %></td>
+        <td class="num"><%= t.total %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<% } else { %>
+<section class="card t">
+  <div class="hd"><h2>Choose a department</h2><span class="muted">Grievances handled by its teachers</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Department</th><th class="num">Active</th><th class="num">Locked</th><th class="num">Total</th></tr></thead>
+    <tbody>
+      <% for (const d of departments) { %>
+      <tr>
+        <td><a href="/admin/grievances?dept=<%= encodeURIComponent(d.dept_id) %>"><%= d.dept_name %></a></td>
+        <td class="num"><%= d.active %></td>
+        <td class="num"><%= d.locked %></td>
+        <td class="num"><%= d.total %></td>
+      </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<% } %>
+
+<% } else { %>
 <div class="cards" style="margin-bottom:16px">
   <section class="card"><div class="hd"><h2>Open</h2><span class="pill o">new</span></div><div class="kpi"><%= fmt.num(totals.open) %></div><p class="note">Waiting for the office to pick up</p></section>
   <section class="card"><div class="hd"><h2>In progress</h2></div><div class="kpi"><%= fmt.num(totals.in_progress) %></div><p class="note">Being worked on or assigned</p></section>
@@ -8,6 +102,7 @@
 </div>
 
 <form class="filters" method="get" action="/admin/grievances">
+  <input type="hidden" name="view" value="general">
   <label class="sr-only" for="fs">Status</label>
   <select id="fs" name="status" data-autosubmit>
     <option value="active"<%= filters.status === 'active' ? ' selected' : '' %>>Open + In progress</option>
@@ -24,48 +119,18 @@
   <label class="sr-only" for="fq">Search</label>
   <input id="fq" type="search" name="q" value="<%= filters.q %>" placeholder="No., subject, name or login">
   <button class="btn" type="submit">Filter</button>
-  <% if (filters.status !== 'active' || filters.category || filters.role || filters.q) { %><a class="btn link" href="/admin/grievances">Clear</a><% } %>
+  <% if (filters.status !== 'active' || filters.category || filters.role || filters.q) { %><a class="btn link" href="/admin/grievances?view=general">Clear</a><% } %>
 </form>
 
-<section class="card t" style="margin-bottom:16px">
+<section class="card t">
   <div class="sc"><table>
     <thead><tr><th>No.</th><th>Subject</th><th>Raised by</th><th>Category</th><th>Assigned to</th><th class="num">Age</th><th>Status</th></tr></thead>
     <tbody>
       <% if (!rows.length) { %><tr><td colspan="7" class="empty">No grievances match.</td></tr><% } %>
-      <% for (const g of rows) { %>
-      <tr>
-        <td class="nw"><a href="/admin/grievances/<%= g.grievance_id %>"><b>#<%= g.grievance_id %></b></a></td>
-        <td><a href="/admin/grievances/<%= g.grievance_id %>"><%= g.subject %></a><% if (g.comment_count) { %> <span class="muted" style="font-size:12.5px">· <%= g.comment_count %> <%= g.comment_count === 1 ? 'reply' : 'replies' %></span><% } %></td>
-        <td class="nw"><%= g.raised_by_name %><div class="muted" style="font-size:12.5px"><%= g.raised_by_login %> · <%= g.raised_by_role %></div></td>
-        <td><%= g.category %></td>
-        <td class="nw"><%= g.assigned_name || '–' %></td>
-        <td class="num nw"><%= g.age_days %> d</td>
-        <td><span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></td>
-      </tr>
-      <% } %>
+      <% for (const g of rows) row(g, false); %>
     </tbody>
   </table></div>
   <%- include('../partials/pager') %>
 </section>
-
-<section class="card t">
-  <div class="hd"><h2>By category</h2></div>
-  <p class="note">Average resolution time counts resolved grievances only (from v_grievance_resolution_stats)</p>
-  <div class="sc"><table>
-    <thead><tr><th>Category</th><th class="num">Open</th><th class="num">In progress</th><th class="num">Resolved</th><th class="num">Rejected</th><th class="num">Avg days to resolve</th><th class="num">Oldest open (days)</th></tr></thead>
-    <tbody>
-      <% for (const s of stats) { %>
-      <tr>
-        <td><a href="/admin/grievances?status=&category=<%= encodeURIComponent(s.category) %>"><%= s.category %></a></td>
-        <td class="num"><%= s.open %></td>
-        <td class="num"><%= s.in_progress %></td>
-        <td class="num"><%= s.resolved %></td>
-        <td class="num"><%= s.rejected %></td>
-        <td class="num"><%= s.avg_days_to_resolve === null ? '–' : s.avg_days_to_resolve %></td>
-        <td class="num"><%= s.oldest_open_days === null ? '–' : s.oldest_open_days %></td>
-      </tr>
-      <% } %>
-    </tbody>
-  </table></div>
-</section>
+<% } %>
 <%- include('../partials/layout-end') %>

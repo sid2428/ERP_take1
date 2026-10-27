@@ -72,24 +72,28 @@ describe.skipIf(!hasDatabase)('Group 3 examination database logic', () => {
 
   it('calculates CGPA from final-attempt course credits and grade points', async () => {
     await inRollback(async (db) => {
-      const fixture = await one<{
-        student_id: number;
-        expected_cgpa: number;
-        calculated_cgpa: number;
-      }>(db, `
-        SELECT student_id,
-               round((sum(c.credits * r.grade_points) / NULLIF(sum(c.credits), 0))::numeric, 2)::numeric(4,2)
-                 AS expected_cgpa,
-               calculate_cgpa(student_id) AS calculated_cgpa
-        FROM course_result r
-        JOIN course c USING (course_id)
-        WHERE is_final_attempt
-        GROUP BY student_id
-        HAVING sum(c.credits) > 0
-        ORDER BY student_id
-        LIMIT 1`);
-
-      expect(fixture.calculated_cgpa).toBe(fixture.expected_cgpa);
+      await db.query(`INSERT INTO grade_scale(grade,min_percentage,max_percentage,grade_points,description)
+        VALUES('ZZ',0,100,8,'test fixture') ON CONFLICT(grade) DO NOTHING`);
+      const course = await one<{course_id:number}>(db, `SELECT course_id FROM course WHERE course_type='TH' AND credits>0
+        AND NOT EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=course.course_id) ORDER BY course_id LIMIT 1`);
+      await db.query(`INSERT INTO course_exam_scheme(course_id,internal_max,midsem_max,endsem_max,total_max) VALUES($1,20,20,60,100)`,[course.course_id]);
+      const fixture = await one<{ student_id: number; course_id: number; session_id: string; semester: number }>(db, `
+        SELECT s.student_id, c.course_id, current_session_id() AS session_id,
+               COALESCE((SELECT min(pc.semester_no) FROM program_curriculum pc WHERE pc.course_id=c.course_id), 1) AS semester
+        FROM student s CROSS JOIN course c
+        WHERE c.course_id=$1 AND c.credits > 0
+          AND NOT EXISTS(SELECT 1 FROM course_result r WHERE r.student_id=s.student_id AND r.course_id=c.course_id)
+        ORDER BY s.student_id LIMIT 1`,[course.course_id]);
+      await db.query(`INSERT INTO course_result
+        (student_id,course_id,academic_session_id,semester,attempt_no,total_marks,max_marks,percentage,grade,grade_points,result_status,is_final_attempt)
+        SELECT $1,$2,$3,$4,1,80,100,80,grade,grade_points,'Pass',true FROM grade_scale WHERE grade='ZZ'`,
+      [fixture.student_id, fixture.course_id, fixture.session_id, fixture.semester]);
+      const result = await one<{ expected_cgpa: string; calculated_cgpa: string }>(db, `
+        SELECT round((sum(c.credits * r.grade_points) / sum(c.credits))::numeric, 2)::numeric(4,2) AS expected_cgpa,
+               calculate_cgpa($1) AS calculated_cgpa
+        FROM course_result r JOIN course c USING(course_id)
+        WHERE r.student_id=$1 AND r.is_final_attempt GROUP BY r.student_id`, [fixture.student_id]);
+      expect(Number(result.calculated_cgpa)).toBe(Number(result.expected_cgpa));
     });
   });
 
@@ -126,6 +130,33 @@ describe.skipIf(!hasDatabase)('Group 3 examination database logic', () => {
 
   it('keeps totals, grades, SGPA and CGPA consistent for five random students', async () => {
     await inRollback(async (db) => {
+      await db.query(`INSERT INTO grade_scale(grade,min_percentage,max_percentage,grade_points,description)
+        VALUES('ZY',0,100,8,'test fixture') ON CONFLICT(grade) DO NOTHING`);
+      const course = await one<{course_id:number}>(db, `SELECT course_id FROM course WHERE course_type='TH' AND credits>0
+        AND NOT EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=course.course_id) ORDER BY course_id LIMIT 1`);
+      await db.query(`INSERT INTO course_exam_scheme(course_id,internal_max,midsem_max,endsem_max,total_max) VALUES($1,20,20,60,100)`,[course.course_id]);
+      const fixture = await one<{ session_id: string; semester: number; grade: string; grade_points: number }>(db, `
+        SELECT current_session_id() AS session_id, 1 AS semester, grade, grade_points
+        FROM grade_scale WHERE grade='ZY'`);
+      const students = await db.query<{ student_id: number; course_id: number }>(`
+        SELECT s.student_id,$1::int AS course_id FROM student s
+        WHERE NOT EXISTS(SELECT 1 FROM course_result cr WHERE cr.student_id=s.student_id)
+          AND NOT EXISTS(SELECT 1 FROM student_cgpa sc WHERE sc.student_id=s.student_id)
+          AND NOT EXISTS(SELECT 1 FROM semester_result sr WHERE sr.student_id=s.student_id AND sr.academic_session_id=current_session_id())
+        ORDER BY s.student_id LIMIT 5`,[course.course_id]);
+      if (students.rows.length !== 5) throw new Error('Need five students without existing CGPA fixtures');
+      for (const row of students.rows) {
+        await db.query(`INSERT INTO course_result
+          (student_id,course_id,academic_session_id,semester,attempt_no,total_marks,max_marks,percentage,grade,grade_points,result_status,is_final_attempt)
+          VALUES($1,$2,$3,$4,1,80,100,80,$5,$6,'Pass',true)`,
+        [row.student_id,row.course_id,fixture.session_id,fixture.semester,fixture.grade,fixture.grade_points]);
+        await db.query(`INSERT INTO student_cgpa(student_id,semesters_completed,credits_attempted,credits_earned,cgpa,backlog_count)
+          VALUES($1,1,(SELECT credits FROM course WHERE course_id=$2),(SELECT credits FROM course WHERE course_id=$2),$3,0)`,
+        [row.student_id,row.course_id,fixture.grade_points]);
+        await db.query(`INSERT INTO semester_result(student_id,academic_session_id,semester,credits_registered,credits_earned,sgpa,backlogs,result_status)
+          VALUES($1,$2,$3,(SELECT credits FROM course WHERE course_id=$4),(SELECT credits FROM course WHERE course_id=$4),$5,0,'Pass')`,
+        [row.student_id,fixture.session_id,fixture.semester,row.course_id,fixture.grade_points]);
+      }
       const rows = await db.query<{
         student_id: number;
         mark_errors: number;
@@ -134,7 +165,7 @@ describe.skipIf(!hasDatabase)('Group 3 examination database logic', () => {
         cgpa_errors: number;
       }>(`
         WITH picked AS (
-          SELECT student_id FROM student_cgpa ORDER BY random() LIMIT 5
+          SELECT student_id FROM student_cgpa ORDER BY student_id DESC LIMIT 5
         ), semester_totals AS (
           SELECT r.student_id, r.academic_session_id, r.semester,
                  sum(c.credits)::smallint AS credits_registered,

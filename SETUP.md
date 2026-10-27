@@ -81,9 +81,9 @@ copy these files into the **project root** (next to `package.json`), keeping the
 They are already listed in `.gitignore`, so they can never be committed by accident.
 
 ### B3 · Start a local PostgreSQL database (Docker)
-Pick any password for the local database (example: `localpass123`) and run:
+Choose a local database password and replace the placeholder below with that same value before running:
 ```powershell
-docker run -d --name erp-pg -e POSTGRES_PASSWORD=localpass123 -e POSTGRES_DB=erp `
+docker run -d --name erp-pg -e POSTGRES_PASSWORD=replace-with-local-database-password -e POSTGRES_DB=erp `
   -p 54329:5432 -v erp-pg-data:/var/lib/postgresql/data postgres:17
 ```
 (In Git Bash, macOS or Linux, use `\` instead of the backtick `` ` `` at the end of the first line.)
@@ -95,9 +95,9 @@ Check that it is running: `docker ps` should list **erp-pg**.
 Copy-Item .env.example .env
 notepad .env
 ```
-Fill it in like this (use your own values):
+Replace the placeholder with the same local password you chose for Docker, then fill the copied `.env` with your own local values:
 ```ini
-DATABASE_URL=postgres://postgres:localpass123@localhost:54329/erp
+DATABASE_URL=postgres://postgres:replace-with-local-database-password@localhost:54329/erp
 DATABASE_SSL=false
 
 APP_DB_PASSWORD=<16+ random characters>
