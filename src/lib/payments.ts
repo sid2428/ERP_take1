@@ -30,7 +30,9 @@ const keySecret = () => process.env.RAZORPAY_KEY_SECRET ?? '';
 const simulatedSecret = () => process.env.SIMULATED_PAYMENT_SECRET ?? 'erp-simulated-gateway';
 
 export function gatewayMode(): GatewayMode {
-  if ((process.env.PAYMENTS_MODE ?? '').toLowerCase() === 'simulated') return 'SIMULATED';
+  if ((process.env.PAYMENTS_MODE ?? '').toLowerCase() === 'simulated' && process.env.NODE_ENV !== 'production') {
+    return 'SIMULATED';
+  }
   return keyId() && keySecret() ? 'RAZORPAY' : 'DISABLED';
 }
 

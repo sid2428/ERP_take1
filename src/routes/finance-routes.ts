@@ -239,6 +239,9 @@ financeApiRouter.post('/payments/verify', route(async (req, res, studentId) => {
     `SELECT ${PAY_COLS} FROM fee_payment WHERE gateway_order_id = $1 AND student_id = $2`,
     [b.razorpay_order_id, studentId]);
   if (!pay) throw new ApiFail(404, 'We could not find that payment order.');
+  if (pay.status === 'SUCCESS' && pay.gateway_payment_id !== b.razorpay_payment_id) {
+    throw new ApiFail(400, 'The payment ID does not match the successful order.');
+  }
 
   let done = pay;
   if (pay.status !== 'SUCCESS') {                               // SUCCESS already = the webhook got here first

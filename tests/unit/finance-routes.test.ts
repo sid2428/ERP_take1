@@ -1,6 +1,6 @@
 import express, { type Request } from 'express';
 import request from 'supertest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -91,7 +91,50 @@ beforeEach(() => {
   mocks.buildReceiptPdf.mockResolvedValue(new Uint8Array([1, 2, 3]));
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('fee payment routes', () => {
+  it('does not enable simulated payments in production without Razorpay keys', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('PAYMENTS_MODE', 'simulated');
+    vi.stubEnv('RAZORPAY_KEY_ID', '');
+    vi.stubEnv('RAZORPAY_KEY_SECRET', '');
+
+    const { gatewayMode } = await vi.importActual<typeof import('../../src/lib/payments.js')>(
+      '../../src/lib/payments.js',
+    );
+
+    expect(gatewayMode()).toBe('DISABLED');
+  });
+
+  it('keeps opted-in simulated payments available outside production', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('PAYMENTS_MODE', 'simulated');
+    vi.stubEnv('RAZORPAY_KEY_ID', '');
+    vi.stubEnv('RAZORPAY_KEY_SECRET', '');
+
+    const { gatewayMode } = await vi.importActual<typeof import('../../src/lib/payments.js')>(
+      '../../src/lib/payments.js',
+    );
+
+    expect(gatewayMode()).toBe('SIMULATED');
+  });
+
+  it('uses Razorpay in production when both gateway keys are configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('PAYMENTS_MODE', 'simulated');
+    vi.stubEnv('RAZORPAY_KEY_ID', 'rzp_live_test');
+    vi.stubEnv('RAZORPAY_KEY_SECRET', 'configured-test-secret');
+
+    const { gatewayMode } = await vi.importActual<typeof import('../../src/lib/payments.js')>(
+      '../../src/lib/payments.js',
+    );
+
+    expect(gatewayMode()).toBe('RAZORPAY');
+  });
+
   it('requires a signed-in student and rejects other roles', async () => {
     const unauthenticated = await request(appAs()).get('/fees/payments');
     const faculty = await request(appAs({ ...student, role: 'faculty', studentId: null, facultyId: 12 }))
@@ -173,6 +216,24 @@ describe('fee payment routes', () => {
     expect(retry.body.paymentId).toBe(first.body.paymentId);
     expect(mocks.queryOne.mock.calls.filter(([sql]) => String(sql).includes('FROM apply_fee_payment'))).toHaveLength(1);
     expect(mocks.confirmGatewayPayment).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a different payment ID for an already-successful order without changing it', async () => {
+    mocks.queryOne.mockResolvedValue(payment('SUCCESS'));
+
+    const response = await request(appAs(student)).post('/payments/verify')
+      .send({
+        razorpay_order_id: 'order-test-7',
+        razorpay_payment_id: 'pay-test-other',
+        razorpay_signature: 'valid-test-signature',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/payment ID does not match/i);
+    expect(mocks.queryOne).toHaveBeenCalledTimes(1);
+    expect(mocks.confirmGatewayPayment).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
 
   it('restricts receipt lookup to the signed-in student', async () => {
