@@ -93,6 +93,12 @@ export const NAV: Record<Role, NavGroup[]> = {
       ],
     },
     {
+      label: 'HR & FACULTY', items: [
+        { key: 'leave', label: 'Faculty leave', href: '/admin/leave', icon: 'calendar' },
+        { key: 'payroll', label: 'Faculty payroll', href: '/admin/payroll', icon: 'wallet' },
+      ],
+    },
+    {
       label: 'ATTENDANCE', items: [
         { key: 'attendance-unlocks', label: 'Attendance unlocks', href: '/admin/attendance-unlocks', icon: 'check' },
       ],
