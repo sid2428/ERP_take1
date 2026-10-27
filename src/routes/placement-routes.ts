@@ -304,6 +304,6 @@ placementAdminRouter.get('/statistics',async(_req,res)=>{
 
 export const placementFacultyRouter=Router();
 placementFacultyRouter.get('/placement',async(req,res)=>{
-  const isHod=await query(`SELECT 1 FROM department WHERE hod_faculty_id=$1 AND dept_id=$2`,[req.user!.facultyId,req.user!.deptId]);if(!isHod.length)throw forbidden();
+  if(!req.user!.isHod)throw forbidden();
   res.render('faculty/placement-report',{title:'Department placement report',nav:'placement',rows:await getDepartmentPlacementReport(req.user!.deptId!)});
 });

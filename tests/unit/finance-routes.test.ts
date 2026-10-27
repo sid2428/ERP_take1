@@ -49,6 +49,7 @@ const student: CurrentUser = {
   facultyId: null,
   displayName: 'Student Example',
   deptId: null,
+  isHod: false,
   mustChangePassword: false,
 };
 
