@@ -20,3 +20,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- tests/unit
+        env:
+          NODE_ENV: test
+          APP_DATABASE_URL: postgres://ci_test:ci_test@127.0.0.1:5432/erp_test
+          DATABASE_SSL: "false"
+          SESSION_SECRET: ci-only-session-secret-not-used-outside-tests-32chars
