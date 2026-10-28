@@ -25,6 +25,7 @@
       <div class="field"><label for="am">Alternate mobile</label><input id="am" type="text" name="alternate_mobile" value="<%= p.alternate_mobile || '' %>" maxlength="10"></div>
       <div class="field"><label for="ds">District</label><input id="ds" type="text" name="district_name" value="<%= p.district_name || '' %>"></div>
       <div class="field"><label for="pc">PIN code</label><input id="pc" type="text" name="pincode" value="<%= p.pincode || '' %>" maxlength="6"></div>
+      <div class="field"><label for="eg">Expected passing-out year</label><input id="eg" type="number" name="expected_graduation_year" value="<%= p.expected_graduation_year ?? '' %>" min="2000" max="2100" step="1"><small>Enter a verified expected graduation year, or leave blank when unknown. This is separate from graduation status.</small></div>
     </div>
     <div class="field"><label for="ad">Address</label><input id="ad" type="text" name="address" value="<%= p.address || '' %>"></div>
     <div class="actions"><button class="btn primary" type="submit">Save record</button><a class="btn" href="/admin/students/<%= p.student_id %>">Cancel</a></div>
@@ -41,6 +42,7 @@
         <div><dt>Admission number</dt><dd><%= p.admission_number %></dd></div>
         <div><dt>Program</dt><dd><a href="/admin/programs/<%= p.program_id %>"><%= p.program_name %></a></dd></div>
         <div><dt>Admission</dt><dd><%= p.admission_type %> · <%= fmt.date(p.admission_date) %></dd></div>
+        <div><dt>Expected passing-out year</dt><dd><%= p.expected_graduation_year ?? 'Unknown / unverified' %></dd></div>
         <div><dt>Division · roll</dt><dd><% if (p.division_id) { %><a href="/admin/sections/divisions/<%= p.division_id %>"><%= p.division_code %></a> · <%= p.roll_no %><% } else { %>–<% } %></dd></div>
         <div><dt>Lab batch · semester</dt><dd><%= p.batch_code || '–' %> · <%= p.semester ? fmt.roman(p.semester) : '–' %></dd></div>
       </dl>

@@ -2,6 +2,8 @@
 
 This migration adapts the MySQL/MariaDB Group 3 attendance and examination references to the portal's PostgreSQL schema. It adds the examination objects only; the portal already has the Group 3 attendance model and its tables must not be duplicated.
 
+Placement migration `099-student-expected-graduation-year.sql` adds nullable `student.expected_graduation_year` (2000–2100). It is explicitly maintained by admins and is separate from `admission_year`, program duration, academic session, and student completion status. Existing rows remain NULL; do not derive or backfill expected years.
+
 ## Dialect and loading differences
 
 - The reference SQL targets MySQL 8/MariaDB (`CREATE DATABASE`, `USE`, `AUTO_INCREMENT`, `ENUM`, `TINYINT`, `DATETIME`, inline `INDEX`, `IF`, `SIGNAL`, `DELIMITER`, and `LOAD DATA LOCAL INFILE`). The portal runs PostgreSQL in schema `erp`; the migration uses `SET search_path`, PostgreSQL enum types, identity columns, `boolean`, `timestamptz`, indexes, PL/pgSQL triggers, and `RAISE EXCEPTION`.

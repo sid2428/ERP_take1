@@ -7,7 +7,8 @@ import { flash } from '../middleware/auth.js';
 import { parsePlacementDrivePagination } from '../lib/placement-pagination.js';
 import { escapeCsvCell } from '../lib/csv.js';
 import { chartBarPercent, placementPercentage } from '../lib/placement-stats.js';
-import { getAdminDepartmentPlacementStats, getAdminDrives, getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
+import { getAdminBatchPlacementStats, getAdminDepartmentPlacementStats, getAdminDrives, getAdminExpectedGraduationYears,
+  getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
   getAcceptedFullTimePackageDistribution, getCompanyPlacementOffers, getDriveApplicants, getPlacementDashboard,
   getPlacementProfile, getStudentApplications, getStudentDrives } from '../queries/placement-queries.js';
 
@@ -301,17 +302,34 @@ placementAdminRouter.get('/statistics',async(req,res)=>{
     selectedDepartment=departments.find(d=>d.dept_id===requestedDeptId);
     if(!selectedDepartment)throw new HttpError(400,'Choose a valid branch.');
   }
-  const [overview,companyOffers,packageDistribution,byDepartment]=await Promise.all([
-    getAdminPlacementOverview(undefined,selectedDepartment?.dept_id),
-    getCompanyPlacementOffers(selectedDepartment?.dept_id),
-    getAcceptedFullTimePackageDistribution(undefined,selectedDepartment?.dept_id),
-    getAdminDepartmentPlacementStats(selectedDepartment?.dept_id),
+  const years=await getAdminExpectedGraduationYears(selectedDepartment?.dept_id);
+  const requestedYear=req.query.expected_graduation_year;
+  let selectedYear:number|undefined;
+  if(requestedYear!==undefined&&requestedYear!==''){
+    if(typeof requestedYear!=='string'||!/^\d{4}$/.test(requestedYear))
+      throw new HttpError(400,'Choose a valid expected passing-out year.');
+    selectedYear=Number(requestedYear);
+    if(!years.some(row=>row.expected_graduation_year===selectedYear))
+      throw new HttpError(400,'Choose a valid expected passing-out year.');
+  }
+  const [overview,companyOffers,packageDistribution,byDepartment,batchStats]=await Promise.all([
+    getAdminPlacementOverview(undefined,selectedDepartment?.dept_id,selectedYear),
+    getCompanyPlacementOffers(selectedDepartment?.dept_id,undefined,selectedYear),
+    getAcceptedFullTimePackageDistribution(undefined,selectedDepartment?.dept_id,selectedYear),
+    getAdminDepartmentPlacementStats(selectedDepartment?.dept_id,undefined,selectedYear),
+    getAdminBatchPlacementStats(undefined,selectedDepartment?.dept_id,selectedYear),
   ]);
   const maxPackages=Math.max(0,...packageDistribution.map((b)=>b.offer_count));
+  const reportingScope=[
+    selectedDepartment?.dept_name??'All branches (institution-wide)',
+    selectedYear===undefined?'All batches':'Batch '+selectedYear+' (recorded expected graduation year)',
+  ].join(' · ');
   res.render('admin/placement-statistics',{title:'Placement statistics',nav:'placement',
     overview:{...overview,overall_placement_pct:placementPercentage(overview?.placed_students??0,overview?.active_students??0)},
     byDepartment:byDepartment.map((d)=>({...d,bar_pct:chartBarPercent(d.placed_pct??0,100)})),
-    departments,selectedDepartment:selectedDepartment?.dept_id??'',reportingScope:selectedDepartment?.dept_name??'All branches (institution-wide)',
+    departments,selectedDepartment:selectedDepartment?.dept_id??'',years,selectedYear:selectedYear??'',
+    batchStats,unassignedStudents:byDepartment.reduce((total,row)=>total+row.unverified_cohort_students,0),
+    reportingScope,
     companyOffers,packageDistribution:packageDistribution.map((b)=>({...b,bar_pct:chartBarPercent(b.offer_count,maxPackages)})),
     hasPackageData:maxPackages>0});
 });

@@ -20,6 +20,11 @@ Migration: `migrations/087-attendance-unlocks.sql` (schema `erp`).
 - Approve: `POST /admin/attendance-unlocks/:id/approved`; reject: `POST /admin/attendance-unlocks/:id/rejected`. Admin-only, CSRF-protected form posts; `decideAttendanceUnlock()` rechecks active admin, rejects self-decisions, and permits only pending requests.
 - Approval unlocks that single session for 48 hours. The faculty attendance save endpoint is `POST /faculty/attendance/assignments/:assignmentId/sessions`; lock enforcement and audit writes are in `src/queries/faculty-attendance-queries.ts`.
 
+## Student expected graduation year
+- Migration `099-student-expected-graduation-year.sql` adds nullable `student.expected_graduation_year`; it is not inferred from admission data or program duration.
+- Only an admin can edit it through `/admin/students/:id?edit=1`. Enter a verified year from an authoritative academic record (2000–2100), or leave blank when unknown. Student updates use the existing CSRF middleware, audit log, and `/admin` role guard.
+- Placement batch reports use only recorded years. Unknown-year active students remain unassigned and are shown separately; they are excluded from batch denominators.
+
 ## Configuration and UI
 - `LOCK_DAYS = 14` and `UNLOCK_HOURS = 48`: `src/lib/attendance-lock.ts`; re-exported from `src/config.ts`. Lock-date calculation uses `todayIso()` from `src/lib/format.ts` (Asia/Kolkata).
 - `ATTENDANCE_WEEKEND_DAYS = [6, 7]` (ISO Saturday/Sunday): `src/config.ts`; consumed by `src/queries/faculty-attendance-queries.ts`.

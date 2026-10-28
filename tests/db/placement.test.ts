@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { hasDatabase, inRollback, one } from './helpers.js';
-import { getAcceptedFullTimePackageDistribution, getAdminDepartmentPlacementStats, getAdminPlacementOverview, getCompanyPlacementOffers, getStudentDrives } from '../../src/queries/placement-queries.js';
+import { getAcceptedFullTimePackageDistribution, getAdminBatchPlacementStats, getAdminDepartmentPlacementStats,
+  getAdminExpectedGraduationYears, getAdminPlacementOverview, getCompanyPlacementOffers, getStudentDrives } from '../../src/queries/placement-queries.js';
 import type { Db } from '../../src/db.js';
 
 async function fixture(db: import('pg').Client, options: { minYear?: number; packageLpa?: number; programMismatch?: boolean; title?: string; type?: 'FullTime' | 'Internship' } = {}) {
@@ -289,14 +290,31 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
   it('aggregates distinct branch placement counts and reports cohort records as unverified', async () => inRollback(async db => {
     const f = await fixture(db);
     const branch = await one<{ dept_id: string }>(db, 'SELECT dept_id FROM program WHERE program_id=$1', [f.program_id]);
+    const sameBranchStudent = await one<{ student_id: number }>(db, `SELECT s.student_id FROM student s
+      JOIN program p USING(program_id)
+      JOIN student_section ss ON ss.student_id=s.student_id AND ss.academic_session_id=current_session_id()
+      WHERE s.status='Active' AND p.dept_id=$1 AND s.student_id<>$2
+        AND NOT EXISTS (SELECT 1 FROM placement_application a WHERE a.student_id=s.student_id)
+      ORDER BY s.student_id LIMIT 1`, [branch.dept_id, f.student_id]);
+    const otherBranchStudents = await db.query<{ student_id: number }>(`SELECT s.student_id FROM student s
+      JOIN program p USING(program_id)
+      JOIN student_section ss ON ss.student_id=s.student_id AND ss.academic_session_id=current_session_id()
+      WHERE s.status='Active' AND p.dept_id<>$1 AND NOT (s.student_id=ANY($2::int[]))
+        AND NOT EXISTS (SELECT 1 FROM placement_application a WHERE a.student_id=s.student_id)
+      ORDER BY s.student_id LIMIT 2`, [branch.dept_id, [f.student_id, sameBranchStudent.student_id]]);
+    expect(otherBranchStudents.rows).toHaveLength(2);
+    await db.query('UPDATE student SET expected_graduation_year=2028 WHERE student_id=ANY($1::int[])',
+      [[f.student_id, sameBranchStudent.student_id, otherBranchStudents.rows[0]!.student_id]]);
+    await db.query('UPDATE student SET expected_graduation_year=2029 WHERE student_id=$1',
+      [otherBranchStudents.rows[1]!.student_id]);
     const queryDb = db as unknown as Db;
     const before = await getAdminDepartmentPlacementStats(branch.dept_id, queryDb);
     const overviewBefore = await getAdminPlacementOverview(queryDb, branch.dept_id);
     const packagesBefore = await getAcceptedFullTimePackageDistribution(queryDb, branch.dept_id);
     const companiesBefore = await getCompanyPlacementOffers(branch.dept_id, queryDb);
     expect(before).toHaveLength(1);
-    expect(before[0]!.verified_cohort_students).toBe(0);
-    expect(before[0]!.unverified_cohort_students).toBe(before[0]!.active_students);
+    expect(before[0]!.verified_cohort_students).toBe(2);
+    expect(before[0]!.unverified_cohort_students).toBe(before[0]!.active_students - 2);
 
     const application = await one<{ application_id: number }>(db, `INSERT INTO placement_application(student_id,drive_id)
       VALUES($1,$2) RETURNING application_id`, [f.student_id, f.driveId]);
@@ -359,7 +377,7 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     expect(after.total_offers).toBe(before[0]!.total_offers + 4);
     expect(after.accepted_fulltime_offers).toBe(before[0]!.accepted_fulltime_offers + 1);
     expect(after.accepted_internships).toBe(before[0]!.accepted_internships + 2);
-    expect(after.unverified_cohort_students).toBe(after.active_students);
+    expect(after.unverified_cohort_students).toBe(after.active_students - 2);
     expect(overviewAfter).toMatchObject({
       active_students: after.active_students,
       placed_students: after.placed_students,
@@ -382,6 +400,13 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const allOverview = await getAdminPlacementOverview(queryDb);
     const allCompanies = await getCompanyPlacementOffers(undefined, queryDb);
     const allPackages = await getAcceptedFullTimePackageDistribution(queryDb);
+    const batchRows = await getAdminBatchPlacementStats(queryDb);
+    const branchBatchRows = await getAdminBatchPlacementStats(queryDb, branch.dept_id);
+    const selectedBatchRows = await getAdminBatchPlacementStats(queryDb, branch.dept_id, 2028);
+    const otherBranchBatchRows = await getAdminBatchPlacementStats(queryDb, undefined, 2029);
+    const selectedBatchBranches = await getAdminDepartmentPlacementStats(branch.dept_id, queryDb, 2028);
+    const selectedBatchOverview = await getAdminPlacementOverview(queryDb, branch.dept_id, 2028);
+    const availableYears = await getAdminExpectedGraduationYears(branch.dept_id, queryDb);
     const packageCounts = await one<{ with_package: number; without_package: number }>(db, `SELECT
       count(*) FILTER (WHERE o.package_lpa IS NOT NULL)::int AS with_package,
       count(*) FILTER (WHERE o.package_lpa IS NULL)::int AS without_package
@@ -398,6 +423,46 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const packageBandOfferCount = allPackages.reduce((sum, band) => sum + band.offer_count, 0);
     expect(packageBandOfferCount).toBe(packageCounts.with_package);
     expect(packageBandOfferCount + packageCounts.without_package).toBe(allOverview?.accepted_fulltime_offers);
+    expect(batchRows.map(row => row.expected_graduation_year)).toEqual([2028, 2029]);
+    expect(branchBatchRows).toHaveLength(1);
+    expect(branchBatchRows[0]).toMatchObject({
+      expected_graduation_year: 2028,
+      active_students: 2,
+      placed_students: 1,
+      placed_pct: 50,
+      total_offers: 4,
+      accepted_fulltime_offers: 1,
+      accepted_internships: 2,
+      highest_package_lpa: 12,
+      average_package_lpa: 12,
+      median_package_lpa: 12,
+    });
+    expect(selectedBatchRows).toHaveLength(1);
+    expect(selectedBatchRows[0]).toMatchObject({
+      expected_graduation_year: 2028,
+      active_students: 2,
+      placed_students: 1,
+      total_offers: 4,
+    });
+    expect(otherBranchBatchRows).toHaveLength(1);
+    expect(otherBranchBatchRows[0]!.expected_graduation_year).toBe(2029);
+    expect(selectedBatchBranches).toHaveLength(1);
+    expect(selectedBatchBranches[0]).toMatchObject({
+      active_students: 2,
+      verified_cohort_students: 2,
+      placed_students: 1,
+      total_offers: 4,
+      accepted_fulltime_offers: 1,
+      accepted_internships: 2,
+    });
+    expect(selectedBatchOverview).toMatchObject({
+      active_students: 2,
+      placed_students: 1,
+      total_offers: 4,
+      accepted_fulltime_offers: 1,
+      accepted_internships: 2,
+    });
+    expect(availableYears.map(row => row.expected_graduation_year)).toEqual([2028]);
     expect(after.placed_pct).toBe(Math.round(after.placed_students / after.active_students * 10_000) / 100);
   }));
 

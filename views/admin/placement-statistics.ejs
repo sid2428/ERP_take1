@@ -14,7 +14,7 @@
   <div>
     <h1>Placement Statistics &amp; Analytics</h1>
     <span class="sub">Placement metrics and reporting limitations. Placed indicates an active student with an accepted full-time offer; internships are tracked separately.</span>
-    <p class="note" role="status">Reporting scope: <strong><%= reportingScope ?? 'All branches (institution-wide)' %></strong>. Headline, branch, company, and package statistics below use this scope.</p>
+    <p class="note" role="status">Reporting scope: <strong><%= reportingScope ?? 'All branches (institution-wide) · All batches' %></strong>. Headline, branch, batch, company, and package statistics below use this scope.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="/admin/placement">
@@ -40,7 +40,7 @@
       <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'briefcase', size: 16 }) %></div>
     </div>
     <div class="tnp-kpi-value"><%= overview?.total_offers ?? 0 %></div>
-    <p class="tnp-kpi-subtext">Cumulative offers across all corporate drives</p>
+    <p class="tnp-kpi-subtext">Recorded offers for students in the selected scope</p>
   </div>
 
   <div class="tnp-kpi-card">
@@ -91,13 +91,14 @@
   </div>
 </div>
 
-<!-- Department Placement Rates -->
+<!-- Branch and cohort placement rates -->
 <section class="card" style="box-shadow:var(--shadow-xs);">
   <div class="hd">
     <div>
       <h2>Placement percentage by branch</h2>
-      <p class="note" style="margin:2px 0 0;">Active students with accepted full-time offers &divide; active students enrolled in each department.</p>
-      <p class="note" style="margin:2px 0 0;">Expected graduation year is not stored authoritatively. Cohort analytics are withheld; active students without verified cohort data are reported separately.</p>
+      <p class="note" style="margin:2px 0 0;">Placed active students &divide; active students in each branch<% if (selectedYear) { %> with the selected recorded expected graduation year<% } %>.</p>
+      <p class="note" style="margin:2px 0 0;">Only explicitly maintained expected graduation years are treated as verified. Students with an unknown year are excluded from batch calculations and reported separately.</p>
+      <p class="note" style="margin:2px 0 0;">Only students with a recorded expected graduation year are included in batch-specific calculations. Unknown-year students are not assigned to a batch.</p>
     </div>
   </div>
 
@@ -109,11 +110,20 @@
         <option value="<%= department.dept_id %>" <%= selectedDepartment === department.dept_id ? 'selected' : '' %>><%= department.dept_name %></option>
       <% }) %>
     </select>
+    <label for="placement-batch">Passing-out year / batch</label>
+    <select id="placement-batch" name="expected_graduation_year">
+      <option value="">All batches</option>
+      <% (years ?? []).forEach(batch => { %>
+        <option value="<%= batch.expected_graduation_year %>" <%= Number(selectedYear) === batch.expected_graduation_year ? 'selected' : '' %>>Batch <%= batch.expected_graduation_year %></option>
+      <% }) %>
+    </select>
     <button class="btn secondary" type="submit">Filter</button>
   </form>
 
+  <p class="note">Active students without a verified expected passing-out year in this branch scope: <strong><%= fmt.num(unassignedStudents ?? 0) %></strong>. They are not included in any batch-specific denominator.</p>
+
   <% if (!byDepartment.length) { %>
-    <div class="empty">No department data is available.</div>
+    <div class="empty">No branch data is available for this reporting scope.</div>
   <% } else { %>
     <div class="stack" style="margin:16px 0;">
       <% byDepartment.forEach(d => { %>
@@ -132,13 +142,13 @@
         <thead>
           <tr>
             <th>Branch</th>
-            <th class="num">Active Students</th>
+            <th class="num"><%= selectedYear ? 'Active Students in Batch' : 'Active Students' %></th>
             <th class="num">Placed Students</th>
             <th class="num">Placed %</th>
             <th class="num">Total Offers</th>
             <th class="num">Accepted Full-Time</th>
             <th class="num">Accepted Internships</th>
-            <th class="num">Active Students — Cohort Unverified</th>
+            <th class="num">Unknown Expected Year (Branch)</th>
             <th class="num">Highest LPA</th>
           </tr>
         </thead>
@@ -154,6 +164,53 @@
               <td class="num"><%= fmt.num(d.accepted_internships) %></td>
               <td class="num"><%= fmt.num(d.unverified_cohort_students) %></td>
               <td class="num"><%= d.highest_package_lpa != null ? fmt.num(d.highest_package_lpa) + ' LPA' : '–' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd">
+    <div>
+      <h2>Placement statistics by passing-out batch</h2>
+      <p class="note" style="margin:2px 0 0;">Batch membership uses only an explicitly recorded expected graduation year. Percentages use active students in that verified cohort.</p>
+    </div>
+  </div>
+  <% if (!batchStats.length) { %>
+    <div class="empty">No active students with a recorded expected passing-out year are available for this scope.</div>
+  <% } else { %>
+    <div class="table-wrap" style="margin-top:12px;">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Batch / Expected Passing-Out Year</th>
+            <th class="num">Active Verified Cohort</th>
+            <th class="num">Placed Students</th>
+            <th class="num">Placement %</th>
+            <th class="num">Total Offers</th>
+            <th class="num">Accepted Full-Time</th>
+            <th class="num">Accepted Internships</th>
+            <th class="num">Highest LPA</th>
+            <th class="num">Average LPA</th>
+            <th class="num">Median LPA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% batchStats.forEach(batch => { %>
+            <tr>
+              <td><strong>Batch <%= batch.expected_graduation_year %></strong></td>
+              <td class="num"><%= fmt.num(batch.active_students) %></td>
+              <td class="num"><%= fmt.num(batch.placed_students) %></td>
+              <td class="num"><%= fmt.num(batch.placed_pct) %>%</td>
+              <td class="num"><%= fmt.num(batch.total_offers) %></td>
+              <td class="num"><%= fmt.num(batch.accepted_fulltime_offers) %></td>
+              <td class="num"><%= fmt.num(batch.accepted_internships) %></td>
+              <td class="num"><%= batch.highest_package_lpa != null ? fmt.num(batch.highest_package_lpa) + ' LPA' : '–' %></td>
+              <td class="num"><%= batch.average_package_lpa != null ? fmt.num(batch.average_package_lpa) + ' LPA' : '–' %></td>
+              <td class="num"><%= batch.median_package_lpa != null ? fmt.num(batch.median_package_lpa) + ' LPA' : '–' %></td>
             </tr>
           <% }) %>
         </tbody>
