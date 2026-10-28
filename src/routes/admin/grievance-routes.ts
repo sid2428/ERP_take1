@@ -7,7 +7,8 @@ import { notFound } from '../../lib/http-error.js';
 import { pageInfo, parsePage, withQuery } from '../../lib/pagination.js';
 import { flash } from '../../middleware/auth.js';
 import {
-  GRIEVANCE_CATEGORIES, GRIEVANCE_STATUSES, actAs, getGrievanceFor, getThread, insertComment, statusPill, type GrievanceRow,
+  GRIEVANCE_CATEGORIES, GRIEVANCE_STATUSES, actAs, getFacultySuggestions, getGrievanceFor, getThread, insertComment,
+  searchFacultyFallback, statusPill, type GrievanceRow,
 } from '../../queries/grievance-queries.js';
 import { idParam } from './helpers.js';
 
@@ -159,22 +160,20 @@ grievanceAdminRouter.get('/grievances/:id', async (req, res) => {
   const id = idParam(req.params.id);
   const g = await getGrievanceFor(req.user!.userId, id);
   if (!g) throw notFound('Grievance');
+  const facultySearch = str(req.query.faculty_search, 60);
   const [thread, faculty] = await Promise.all([
     getThread(id),
-    // suggestions for the assignee box: active faculty of the raiser's department, HOD first
-    query<{ faculty_code: string; name: string; designation: string; is_hod: boolean }>(`
-      SELECT f.faculty_code, f.first_name || ' ' || f.last_name AS name, f.designation::text AS designation,
-             d.hod_faculty_id = f.faculty_id AS is_hod
-      FROM faculty f JOIN department d ON d.dept_id = f.dept_id
-      WHERE f.status = 'Active' AND ($1::text IS NULL OR f.dept_id = $1::text)
-        AND NOT EXISTS (SELECT 1 FROM app_user u WHERE u.faculty_id = f.faculty_id AND u.user_id = $2)
-      ORDER BY (d.hod_faculty_id = f.faculty_id) DESC, f.faculty_code LIMIT 120`, [g.raised_by_dept, g.raised_by]),
+    getFacultySuggestions(g.raised_by, g.course_id),
   ]);
+  const fallbackFaculty = facultySearch && !g.course_id
+    ? await searchFacultyFallback(facultySearch, faculty.map((f) => f.faculty_id))
+    : [];
   // back to the teacher's list for a course grievance, else to the general queue
   const back = g.course_id && g.assigned_code
     ? `/admin/grievances${withQuery({ faculty: g.assigned_code })}` : '/admin/grievances?view=general';
   res.render('admin/grievance-detail', {
-    title: `Grievance #${id}`, nav: 'grievances', base: '/admin/grievances', back, g, thread, faculty, statusPill,
+    title: `Grievance #${id}`, nav: 'grievances', base: '/admin/grievances', back, g, thread, faculty, fallbackFaculty,
+    facultySearch, statusPill,
     isRaiser: false,
   });
 });
@@ -205,8 +204,11 @@ grievanceAdminRouter.post('/grievances/:id/assign', (req, res) => action(req, re
     }
     if (v.faculty_code !== '') {
       const { rows } = await db.query<{ faculty_id: number; name: string }>(
-        `SELECT faculty_id, first_name || ' ' || last_name AS name FROM faculty WHERE faculty_code = $1`, [v.faculty_code]);
-      if (!rows[0]) throw new ActionError(`No faculty member has the code ${v.faculty_code}.`);
+        `SELECT f.faculty_id, f.first_name || ' ' || f.last_name AS name
+         FROM faculty f JOIN app_user u ON u.faculty_id = f.faculty_id
+          AND u.role = 'faculty' AND u.is_active
+         WHERE f.faculty_code = $1 AND f.status = 'Active'`, [v.faculty_code]);
+      if (!rows[0]) throw new ActionError(`No active faculty portal account has the code ${v.faculty_code}.`);
       facultyId = rows[0].faculty_id;
       name = rows[0].name;
     }

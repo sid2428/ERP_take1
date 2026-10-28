@@ -42,18 +42,8 @@
 
   <section class="card">
     <div class="hd"><h2>Reassign</h2></div>
-    <p class="note">Only if <%= g.assigned_name %> cannot handle it, for example while on leave. The new teacher can see it and reply.</p>
-    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/assign" class="stack" style="gap:10px">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <div class="field">
-        <label for="fa">Faculty code</label>
-        <input id="fa" type="text" name="faculty_code" list="fac-list" maxlength="15" required value="<%= g.assigned_code || '' %>" autocomplete="off">
-        <datalist id="fac-list">
-          <% for (const f of faculty) { %><option value="<%= f.faculty_code %>"><%= f.name %> · <%= f.is_hod ? 'HOD' : f.designation %></option><% } %>
-        </datalist>
-      </div>
-      <div class="actions"><button class="btn" type="submit">Reassign</button></div>
-    </form>
+    <p class="note">Only if <%= g.assigned_name %> cannot handle it, for example while on leave. Student-related faculty are recommended first.</p>
+    <%- include('../partials/admin-faculty-assignment', { formAction: '/admin/grievances/' + g.grievance_id + '/assign', submitLabel: 'Reassign', allowEmpty: false, showFallbackSearch: false, selectedCode: g.assigned_code || '', hint: 'Choose a current course faculty member. Existing course rules only permit assignment to a teacher of this student and course.' }) %>
   </section>
 <% } else { %>
   <section class="card">
@@ -75,18 +65,7 @@
   <section class="card">
     <div class="hd"><h2>Assign</h2></div>
     <p class="note">The assigned faculty member can see this grievance and reply. Assigning also moves it to In progress.</p>
-    <form method="post" action="/admin/grievances/<%= g.grievance_id %>/assign" class="stack" style="gap:10px">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <div class="field">
-        <label for="fa">Faculty code</label>
-        <input id="fa" type="text" name="faculty_code" list="fac-list" maxlength="15" value="<%= g.assigned_code || '' %>" placeholder="e.g. FAC-CSE-014" autocomplete="off">
-        <datalist id="fac-list">
-          <% for (const f of faculty) { %><option value="<%= f.faculty_code %>"><%= f.name %> · <%= f.is_hod ? 'HOD' : f.designation %></option><% } %>
-        </datalist>
-        <span class="hint"><%= g.raised_by_dept ? 'Suggestions: ' + g.raised_by_dept + ' department, HOD first.' : 'Type any faculty code.' %> Leave empty to remove the assignment.</span>
-      </div>
-      <div class="actions"><button class="btn" type="submit"><%= g.assigned_code ? 'Change assignment' : 'Assign' %></button></div>
-    </form>
+    <%- include('../partials/admin-faculty-assignment', { formAction: '/admin/grievances/' + g.grievance_id + '/assign', submitLabel: g.assigned_code ? 'Change assignment' : 'Assign', allowEmpty: true, showFallbackSearch: true, selectedCode: g.assigned_code || '', hint: 'Recommended faculty are connected to the student. Leave empty to remove the assignment.' }) %>
   </section>
 
   <% if (g.status === 'Open') { %>
