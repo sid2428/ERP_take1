@@ -23,12 +23,7 @@ async function main() {
         const row = await db.query<{ company_id: number }>('SELECT company_id FROM company WHERE lower(company_name)=lower($1)', [company.name]);
         companyIds.push(row.rows[0]!.company_id);
       }
-      const candidates = await db.query<{student_id:number;program_id:string;year_of_study:number}>(`SELECT s.student_id,s.program_id,d.year_of_study
-        FROM student s JOIN student_section ss USING(student_id) JOIN division d USING(division_id)
-        WHERE s.status='Active' AND ss.academic_session_id=current_session_id() ORDER BY s.student_id`);
-      const byYear = new Map<number, typeof candidates.rows>();
-      for (const candidate of candidates.rows) byYear.set(candidate.year_of_study,[...(byYear.get(candidate.year_of_study)??[]),candidate]);
-      const offsets = new Map<number,number>();
+      const lastStudentByMinimumYear = new Map<number, number>();
       const now = new Date();
       for (let i = 0; i < 60; i++) {
         const type = i % 3 === 0 ? 'Internship' : 'FullTime';
@@ -53,10 +48,20 @@ async function main() {
         }
         if(i%4===3) continue;
         const year=type==='FullTime'?4:3;
-        const pool=byYear.get(year)??[];const offset=offsets.get(year)??0;const candidate=pool[offset];
+        const candidateResult=await db.query<{student_id:number;program_id:string;year_of_study:number}>(`
+          SELECT s.student_id,s.program_id,d.year_of_study
+          FROM student s JOIN student_section ss USING(student_id) JOIN division d USING(division_id)
+          CROSS JOIN LATERAL is_eligible(s.student_id,$1) eligibility
+          WHERE s.status='Active' AND ss.academic_session_id=current_session_id()
+            AND d.year_of_study >= $2 AND eligibility.eligible
+          ORDER BY CASE WHEN s.student_id > $3 THEN 0 ELSE 1 END,s.student_id
+          LIMIT 1`,[driveId,year,lastStudentByMinimumYear.get(year)??0]);
+        const candidate=candidateResult.rows[0];
         if(!candidate) continue;
-        offsets.set(year,offset+1);
+        lastStudentByMinimumYear.set(year,candidate.student_id);
         if(i%2===0) await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[driveId,candidate.program_id]);
+        const eligibility=await db.query<{eligible:boolean}>('SELECT eligible FROM is_eligible($1,$2)',[candidate.student_id,driveId]);
+        if(!eligibility.rows[0]?.eligible) continue;
         const application=await db.query<{application_id:number;status:string}>(`INSERT INTO placement_application(student_id,drive_id)
           VALUES($1,$2) ON CONFLICT(student_id,drive_id) DO NOTHING RETURNING application_id,status`,[candidate.student_id,driveId]);
         let applicationId=application.rows[0]?.application_id;
@@ -72,7 +77,16 @@ async function main() {
           const offer=await db.query<{offer_id:number;status:string}>(`INSERT INTO placement_offer(application_id,package_lpa,stipend_monthly,response_deadline)
             VALUES($1,$2,$3,now()+interval '7 days') ON CONFLICT(application_id) DO NOTHING RETURNING offer_id,status`,
           [applicationId,type==='FullTime'?5+(i%18):null,type==='Internship'?15000+(i%8)*5000:null]);
-          if(offer.rows[0]&&i%8===2) await db.query('SELECT respond_placement_offer($1,$2,true)',[offer.rows[0].offer_id,candidate.student_id]);
+          if(offer.rows[0]&&i%8===2){
+            const accepted=await db.query<{has_accepted_fulltime:boolean}>(`SELECT EXISTS(
+              SELECT 1 FROM placement_offer o JOIN placement_application a USING(application_id)
+              JOIN placement_drive d USING(drive_id)
+              WHERE a.student_id=$1 AND d.drive_type='FullTime' AND o.status='Accepted'
+            ) AS has_accepted_fulltime`,[candidate.student_id]);
+            if(type==='Internship'||!accepted.rows[0]?.has_accepted_fulltime){
+              await db.query('SELECT respond_placement_offer($1,$2,true)',[offer.rows[0].offer_id,candidate.student_id]);
+            }
+          }
         }
       }
       await db.query('COMMIT');
