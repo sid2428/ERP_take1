@@ -1,8 +1,8 @@
 <%- include('head') %>
 <body>
 <div class="app">
-<% if (user) { %>
-<aside class="side" id="sidebar" aria-label="Main navigation">
+<% if (typeof user !== 'undefined' && user) { %>
+  <aside class="side" id="sidebar" aria-label="Main navigation">
   <a class="brand" href="/"><div class="logo">P</div><div>PICT <%= { student: 'Student Portal', faculty: 'Faculty Portal', admin: 'Academic Console' }[user.role] %></div></a>
   <% for (const group of NAV[user.role]) { %>
     <div class="grp"><%= group.label %></div>
