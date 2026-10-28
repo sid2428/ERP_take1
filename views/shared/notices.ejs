@@ -38,7 +38,7 @@
 </section>
 <% } %>
 
-<section class="card">
+<section class="card" data-notification-board>
   <div class="hd">
     <h2><%= isAdmin ? 'For you' : 'Notice board' %></h2>
     <% if (unread) { %>
@@ -61,16 +61,17 @@
   </div>
   <% if (!notices.length) { %><p class="empty">No <%= kind === 'personal' ? 'personal updates' : kind === 'announcements' ? 'announcements' : 'notices' %><%= category ? ' in ' + category : '' %> right now.</p><% } %>
   <% for (const n of notices) { %>
+  <% const itemPath = n.item_type === 'notification' ? `${base}/notification/${n.notification_id}` : `${base}/${n.notice_id}`; %>
   <div class="notice<%= n.is_read ? '' : ' unread' %>">
     <div class="title">
       <% if (n.is_important) { %><span class="pill r">Important</span> <% } %>
       <% if (n.is_personal) { %><span class="pill v">For you</span> <% } %>
-      <a href="<%= base %>/<%= n.notice_id %><%= n.link ? '/go' : '' %>"><%= n.title %></a>
+      <a href="<%= itemPath %><%= n.link ? '/go' : '' %>"><%= n.title %></a>
       <% if (!n.is_read) { %><span class="dot b inline" title="Unread"></span><% } %>
     </div>
     <% if (n.is_personal) { %><div class="meta notice-body"><%= n.body %></div><% } %>
     <% if (n.is_personal) { %><div class="meta"><span class="pill <%= n.is_read ? 'n' : 'o' %>"><%= n.is_read ? 'Read' : 'Unread' %></span></div><% } %>
-    <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %><% if (n.link) { %> · <a href="<%= base %>/<%= n.notice_id %>/go">Open →</a><% } %></div>
+    <div class="meta"><span class="pill <%= categoryPill(n.category) %>"><%= n.category %></span> · <%= n.posted_by_name %> · <%= fmt.dateTime(n.posted_at) %><% if (n.link) { %> · <a href="<%= itemPath %>/go">Open →</a><% } %></div>
   </div>
   <% } %>
 </section>

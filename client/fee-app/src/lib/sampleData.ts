@@ -7,7 +7,7 @@ export const sampleStudent: Student = {
 };
 
 export const sampleStatement: FeeStatement = {
-  academicYear: '2026–27', amountPaid: 0, status: 'PENDING',
+  academicYear: '2026–27', amountPaid: 0, status: 'PENDING', hasRecord: true,
   components: [
     { id: 'dev', name: 'Development Fee', amount: 25000 },
     { id: 'tut', name: 'Tuition Fee', amount: 45000 },

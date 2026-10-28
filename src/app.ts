@@ -11,12 +11,16 @@ import { NAV } from './lib/nav.js';
 import { currentUser, homeFor, requireLogin, requireRole } from './middleware/auth.js';
 import { csrf } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errors.js';
-import { sessionMiddleware } from './middleware/session.js';
-import { unreadNoticeCount } from './queries/notice-queries.js';
+import { saveSessionBeforeRedirect, sessionMiddleware } from './middleware/session.js';
+import { notificationState } from './queries/notice-queries.js';
 import { adminRouter } from './routes/admin/index.js';
 import { authRouter } from './routes/auth-routes.js';
 import { facultyRouter } from './routes/faculty-routes.js';
+import { notificationRouter } from './routes/notification-routes.js';
 import { studentRouter } from './routes/student-routes.js';
+import { apiRouter } from './routes/api-routes.js';
+import { placementFacultyRouter } from './routes/placement-routes.js';
+import { razorpayWebhookRouter } from './routes/finance-routes.js';
 
 /** Project root (holds views/ and public/), whether running from src/ (tsx) or dist/src/ (compiled). */
 function findRoot(start: string): string {
@@ -41,44 +45,58 @@ export function createApp(): express.Express {
   app.locals.appName = 'PICT ERP';
 
   app.use(helmet({
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },   // lets the payment window open
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", 'https://fonts.googleapis.com'],
-        styleSrcAttr: ["'unsafe-inline'"],         // bar widths; no inline <style> blocks or scripts allowed
+        styleSrcAttr: ["'unsafe-inline'"],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:'],
-        formAction: ["'self'"],
+        scriptSrc: ["'self'", 'https://*.razorpay.com'],
+        frameSrc: ["'self'", 'https://*.razorpay.com'],
+        connectSrc: ["'self'", 'https://*.razorpay.com'],
+        imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
+        formAction: ["'self'", 'https://*.razorpay.com'],
       },
     },
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '7d' }));
   app.get('/healthz', (_req, res) => { res.json({ ok: true }); });
 
+  // This route needs the raw body to verify Razorpay's webhook signature.
+  // Mount it before body parsers, sessions, and CSRF middleware.
+  app.use(razorpayWebhookRouter);
+
+  app.use(express.json());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
   app.use(sessionMiddleware);
-  app.use(csrf);
+  app.use(saveSessionBeforeRedirect);
   app.use(currentUser);
+  app.use(csrf);
+  app.use('/api/notifications', notificationRouter);
 
-  // current term, shown in the top bar of every page
-  app.use(async (_req, res, next) => {
-    res.locals.currentSession = await queryOne<{ session_id: string; session_name: string; start_date: string; end_date: string }>(
-      'SELECT session_id, session_name, start_date, end_date FROM academic_session WHERE is_current');
-    res.locals.nav = null;
-    next();
-  });
+  app.use('/api', apiRouter);
+  app.use('/faculty/api', apiRouter);
 
-  // Shared header data: one focused count query per authenticated page request. Anonymous pages
-  // never touch the notice view, and pages with a dashboard notice card reuse this local.
+  // Shared header data: the current term (top bar of every page) and, for authenticated page
+  // requests, one focused notification count query; both run in parallel. Anonymous pages never
+  // touch the notice view, and pages with a dashboard notice card reuse this local.
   app.use(async (req, res, next) => {
+    res.locals.nav = null;
     res.locals.notificationHref = req.user?.role === 'student' ? '/student/notices'
       : req.user?.role === 'faculty' ? '/faculty/notices'
         : req.user?.role === 'admin' ? '/admin/inbox' : null;
     // The header is rendered by GET/HEAD page responses. Avoid a count query on authenticated
     // form submissions and other non-rendering requests; the following redirect loads fresh data.
-    res.locals.notificationUnreadCount = req.user && ['GET', 'HEAD'].includes(req.method)
-      ? await unreadNoticeCount(req.user.userId) : 0;
+    const [currentSession, state] = await Promise.all([
+      queryOne<{ session_id: string; session_name: string; start_date: string; end_date: string }>(
+        'SELECT session_id, session_name, start_date, end_date FROM academic_session WHERE is_current'),
+      req.user && ['GET', 'HEAD'].includes(req.method)
+        ? notificationState(req.user.userId) : Promise.resolve({ unread: 0, revision: '' }),
+    ]);
+    res.locals.currentSession = currentSession;
+    res.locals.notificationUnreadCount = state.unread;
+    res.locals.notificationRevision = state.revision;
     next();
   });
 
@@ -86,6 +104,7 @@ export function createApp(): express.Express {
   app.get('/', requireLogin, (req, res) => { res.redirect(homeFor(req.user!.role)); });
   app.use('/student', requireLogin, requireRole('student'), studentRouter);
   app.use('/faculty', requireLogin, requireRole('faculty'), facultyRouter);
+  app.use('/faculty', requireLogin, requireRole('faculty'), placementFacultyRouter);
   app.use('/admin', requireLogin, requireRole('admin'), adminRouter);
 
   app.use(notFoundHandler);

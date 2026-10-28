@@ -1,0 +1,96 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <h1>Payslips &amp; Salary Structure</h1>
+  <span class="sub">Institutional compensation structure, allowances and generated monthly payroll records.</span>
+</div>
+
+<% if (activeStructure) { %>
+  <section class="cards">
+    <div class="card">
+      <div class="hd"><h2>Basic monthly pay</h2><span class="pill g">Active</span></div>
+      <div class="kpi">₹<%= Number(activeStructure.basic_salary).toLocaleString('en-IN') %></div>
+      <div class="sm">Core compensation under institutional pay scale</div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Monthly allowances</h2><span class="pill">Monthly</span></div>
+      <div class="kpi">₹<%= Number(activeStructure.allowances).toLocaleString('en-IN') %></div>
+      <div class="sm">Includes HRA, DA and special academic allowances</div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Statutory deductions</h2><span class="pill o">Monthly</span></div>
+      <div class="kpi">₹<%= Number(activeStructure.deductions).toLocaleString('en-IN') %></div>
+      <div class="sm">Provident Fund (PF) and Professional Tax</div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Leave deduction rate</h2><span class="pill r">Per day</span></div>
+      <div class="kpi">₹<%= Number(activeStructure.leave_deduction_per_day).toLocaleString('en-IN') %></div>
+      <div class="sm">Deducted for unapproved or unpaid leave (Loss of Pay)</div>
+    </div>
+  </section>
+<% } else { %>
+  <div class="card"><div class="empty">No active salary structure assigned. Contact HR / Academic Office.</div></div>
+<% } %>
+
+<section class="card t" style="margin-top:20px">
+  <div class="hd">
+    <h2>Monthly Payslips</h2>
+    <span class="note">Official payment records and salary statements</span>
+  </div>
+  <div class="sc">
+    <table>
+      <thead>
+        <tr>
+          <th>Period</th>
+          <th class="num">Basic</th>
+          <th class="num">Allowances</th>
+          <th class="num">Gross Pay</th>
+          <th class="num">Deductions</th>
+          <th class="num">Leave Deductions</th>
+          <th class="num">Net Salary</th>
+          <th>Status</th>
+          <th>Disbursed On</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!payslips.length) { %>
+          <tr><td colspan="10" class="empty">No monthly payslips generated yet.</td></tr>
+        <% } %>
+        <% for (const p of payslips) { %>
+          <%
+            const basic = Number(p.basic_salary);
+            const allow = Number(p.allowances);
+            const gross = basic + allow;
+            const ded = Number(p.deductions);
+            const lDed = Number(p.leave_deductions);
+            const net = Number(p.net_salary);
+          %>
+          <tr>
+            <td><strong><%= p.period_text %></strong></td>
+            <td class="num">₹<%= basic.toLocaleString('en-IN') %></td>
+            <td class="num">₹<%= allow.toLocaleString('en-IN') %></td>
+            <td class="num"><strong>₹<%= gross.toLocaleString('en-IN') %></strong></td>
+            <td class="num">₹<%= ded.toLocaleString('en-IN') %></td>
+            <td class="num"><%= lDed > 0 ? `₹${lDed.toLocaleString('en-IN')}` : '—' %></td>
+            <td class="num"><strong style="color:var(--green)">₹<%= net.toLocaleString('en-IN') %></strong></td>
+            <td>
+              <span class="pill <%= p.status === 'PAID' ? 'g' : (p.status === 'APPROVED' ? 'o' : 'n') %>">
+                <%= p.status %>
+              </span>
+            </td>
+            <td class="nw"><%= p.paid_at ? fmt.shortDate(p.paid_at) : '—' %></td>
+            <td>
+              <a class="btn small" href="/faculty/payroll/<%= p.payroll_id %>">View statement</a>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>

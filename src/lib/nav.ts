@@ -1,6 +1,6 @@
 import type { Role } from '../types.js';
 
-export interface NavItem { key: string; label: string; href: string; icon: string; }
+export interface NavItem { key: string; label: string; href: string; icon: string; hodOnly?: boolean; }
 export interface NavGroup { label: string; items: NavItem[]; }
 
 /** Sidebar per role. Only modules that are built appear here (no dead links). */
@@ -10,6 +10,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/student', icon: 'home' },
         { key: 'notices', label: 'Notices', href: '/student/notices', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/student/placement', icon: 'briefcase' },
       ],
     },
     {
@@ -17,6 +18,19 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'curriculum', label: 'Curriculum', href: '/student/curriculum', icon: 'list' },
         { key: 'offerings', label: 'Course offerings', href: '/student/offerings', icon: 'book' },
         { key: 'electives', label: 'Electives', href: '/student/electives', icon: 'list' },
+      ],
+    },
+    {
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-summary', label: 'Attendance Summary', href: '/student/attendance', icon: 'check' },
+        { key: 'attendance-detail', label: 'Attendance Detail', href: '/student/attendance/detail', icon: 'list' },
+      ],
+    },
+    {
+      label: 'EXAMINATION', items: [
+        { key: 'exam-schedule', label: 'Exam Schedule', href: '/student/exams', icon: 'calendar' },
+        { key: 'hall-ticket', label: 'Hall Ticket', href: '/student/hall-ticket', icon: 'briefcase' },
+        { key: 'results', label: 'Results', href: '/student/results', icon: 'check' },
       ],
     },
     {
@@ -34,7 +48,19 @@ export const NAV: Record<Role, NavGroup[]> = {
         { key: 'notices', label: 'Notices', href: '/faculty/notices', icon: 'bell' },
       ],
     },
-    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }] },
+    { label: 'ATTENDANCE', items: [{ key: 'attendance', label: 'Attendance', href: '/faculty/attendance', icon: 'check' }] },
+    { label: 'EXAMINATION', items: [{ key: 'examination', label: 'Examination', href: '/faculty/examination', icon: 'list' }] },
+    { label: 'TEACHING', items: [{ key: 'classes', label: 'My classes', href: '/faculty/classes', icon: 'users' }, { key: 'placement', label: 'Placement report', href: '/faculty/placement', icon: 'briefcase', hodOnly: true }] },
+    {
+      label: 'LEAVE & HR', items: [
+        { key: 'leave', label: 'Leave management', href: '/faculty/leave', icon: 'calendar' },
+      ],
+    },
+    {
+      label: 'FINANCE', items: [
+        { key: 'payroll', label: 'Payslips & Salary', href: '/faculty/payroll', icon: 'wallet' },
+      ],
+    },
     {
       label: 'RECORDS', items: [
         { key: 'profile', label: 'Profile', href: '/faculty/profile', icon: 'user' },
@@ -47,6 +73,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: 'OVERVIEW', items: [
         { key: 'dashboard', label: 'Dashboard', href: '/admin', icon: 'home' },
         { key: 'inbox', label: 'Inbox', href: '/admin/inbox', icon: 'bell' },
+        { key: 'placement', label: 'Placement', href: '/admin/placement', icon: 'briefcase' },
       ],
     },
     {
@@ -66,11 +93,25 @@ export const NAV: Record<Role, NavGroup[]> = {
       ],
     },
     {
+      label: 'HR & FACULTY', items: [
+        { key: 'leave', label: 'Faculty leave', href: '/admin/leave', icon: 'calendar' },
+        { key: 'payroll', label: 'Faculty payroll', href: '/admin/payroll', icon: 'wallet' },
+      ],
+    },
+    {
+      label: 'ATTENDANCE', items: [
+        { key: 'attendance-unlocks', label: 'Attendance unlocks', href: '/admin/attendance-unlocks', icon: 'check' },
+      ],
+    },
+    {
       label: 'COMMUNICATION', items: [
         { key: 'notices', label: 'Notices', href: '/admin/notices', icon: 'bell' },
         { key: 'grievances', label: 'Grievances', href: '/admin/grievances', icon: 'alert' },
       ],
     },
-    { label: 'SYSTEM', items: [{ key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' }] },
+    { label: 'SYSTEM', items: [
+      { key: 'ui', label: 'UI kit', href: '/admin/ui', icon: 'grid' },
+      { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'shield' },
+    ] },
   ],
 };

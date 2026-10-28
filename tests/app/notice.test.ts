@@ -4,18 +4,18 @@
  */
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { hasAppEnv, postForm, signIn } from './helpers.js';
+import { hasAdminEnv, postForm, signIn } from './helpers.js';
 
 const DEMO = process.env.DEMO_PASSWORD ?? '';
 const ADMIN = process.env.ADMIN_PASSWORD ?? '';
 const STUDENT = 'STU202600004';
 const FACULTY = 'FAC-CSE-074';
 
-const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
-const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
+const { createApp } = hasAdminEnv ? await import('../../src/app.js') : { createApp: null };
+const { pool } = hasAdminEnv ? await import('../../src/db.js') : { pool: null };
 
-describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
-  const app = createApp!();
+describe.skipIf(!hasAdminEnv)('T8-1 notices (pages and permissions)', () => {
+  const app = hasAdminEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
   type Agent = Awaited<ReturnType<typeof signIn>>['agent'];
   let admin: Agent;
@@ -26,6 +26,8 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
   let notTaught: { id: number; code: string };
 
   const cleanup = async () => {
+    await db.query(`DELETE FROM notification WHERE title LIKE '[test]%' OR link IN
+      (SELECT '/admin/grievances/' || grievance_id FROM grievance WHERE subject LIKE '[test]%')`);
     await db.query(`DELETE FROM notice WHERE title LIKE '[test]%' OR (source = 'grievance' AND substring(link FROM '/grievances/([0-9]+)$')::int IN
                       (SELECT grievance_id FROM grievance WHERE subject LIKE '[test]%'))`);
     await db.query(`DELETE FROM grievance WHERE subject LIKE '[test]%'`);
@@ -65,6 +67,8 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     const res = await request(app).get('/student/notices');
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('/login');
+    const state = await request(app).get('/api/notifications/state');
+    expect(state.status).toBe(401);
   });
 
   it('keeps students out of posting and the admin pages', async () => {
@@ -92,6 +96,40 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     expect(bellLabel(adminPage.text)).toBe(expected(await unreadFor(adminId)));
   });
 
+  it('synchronizes persisted notification state across independent sessions', async () => {
+    const studentId = await userIdFor(STUDENT);
+    const secondSession = (await signIn(app, STUDENT.toLowerCase(), DEMO)).agent;
+    const before = await student.get('/api/notifications/state');
+    const facultyBefore = await faculty.get('/api/notifications/state');
+    expect(before.status).toBe(200);
+    expect(facultyBefore.status).toBe(200);
+    expect(before.headers['cache-control']).toContain('no-store');
+
+    const created = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Cross-device update', 'A persisted update shared by both sessions.',
+         'Academic', '/student/notices', 'cross_device_test') AS id`, [studentId]);
+    const notificationId = created.rows[0]!.id;
+
+    const [firstState, secondState, board] = await Promise.all([
+      student.get('/api/notifications/state'),
+      secondSession.get('/api/notifications/state'),
+      secondSession.get('/student/notices'),
+    ]);
+    expect(firstState.body.unread).toBe(before.body.unread + 1);
+    expect(secondState.body).toEqual(firstState.body);
+    expect(secondState.body.revision).not.toBe(before.body.revision);
+    expect(board.text).toContain('[test] Cross-device update');
+    expect((await faculty.get(`/faculty/notices/notification/${notificationId}`)).status).toBe(404);
+    expect((await faculty.get('/api/notifications/state')).body).toEqual(facultyBefore.body);
+
+    // Reading from one session changes the same server-backed row seen by the other.
+    expect((await student.get(`/student/notices/notification/${notificationId}`)).status).toBe(200);
+    const afterRead = await secondSession.get('/api/notifications/state');
+    expect(afterRead.body.unread).toBe(before.body.unread);
+    expect(afterRead.body.revision).not.toBe(firstState.body.revision);
+    await db.query('DELETE FROM notification WHERE notification_id = $1', [notificationId]);
+  });
+
   it('separates personal updates, marks linked notices read, and protects recipient counts', async () => {
     const studentId = await userIdFor(STUDENT);
     const facultyId = await userIdFor(FACULTY);
@@ -107,18 +145,24 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     expect((await student.get('/student/notices?kind=announcements')).text).toContain('[test] Bell announcement');
     expect((await faculty.get('/faculty/notices?kind=personal')).text).not.toContain('[test] Bell personal');
 
-    const go = await student.get(`/student/notices/${personalId}/go`);
+    const go = await student.get(`/student/notices/notification/${personalId}/go`);
     expect(go.status).toBe(302);
     expect(go.headers.location).toBe('/student/grievances/1');
     expect(await unreadFor(studentId)).toBe(before - 1);
-    expect((await faculty.get(`/faculty/notices/${personalId}`)).status).toBe(404);
+    expect((await faculty.get(`/faculty/notices/notification/${personalId}`)).status).toBe(404);
 
     const facultyPersonal = await db.query<{ id: number }>(
       `SELECT notify_user($1, '[test] Bell faculty personal', 'Only faculty should receive this.', 'General') AS id`, [facultyId]);
     expect((await student.get('/student/notices')).text).not.toContain('[test] Bell faculty personal');
     expect(await unreadFor(studentId)).toBe(before - 1);
-    await db.query('DELETE FROM notice WHERE notice_id = $1', [facultyPersonal.rows[0]!.id]);
+    await db.query('DELETE FROM notification WHERE notification_id = $1', [facultyPersonal.rows[0]!.id]);
+    const noLink = await db.query<{ id: number }>(
+      `SELECT notify_user($1, '[test] Bell no link', 'This notification has no destination.', 'General') AS id`, [studentId]);
+    const noLinkPage = await student.get(`/student/notices/notification/${noLink.rows[0]!.id}`);
+    expect(noLinkPage.status).toBe(200);
+    expect(noLinkPage.text).toContain('This notification has no destination.');
     await db.query('DELETE FROM notice WHERE notice_id = $1', [announcement.rows[0]!.id]);
+    await db.query('DELETE FROM notification WHERE notification_id = $1', [noLink.rows[0]!.id]);
   });
 
   it('marks only the selected personal filter read', async () => {
@@ -129,10 +173,11 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
       `SELECT post_notice($1, '[test] Bell mark announcement', 'Leave this announcement unread.', 'Academic', '[{}]'::jsonb) AS id`, [await userIdFor('admin')]);
     const cleared = await postForm(student, '/student/notices?kind=personal', '/student/notices/read-all', { kind: 'personal' });
     expect(cleared.headers.location).toBe('/student/notices?kind=personal');
-    const states = await db.query<{ notice_id: number; is_read: boolean }>(
-      `SELECT notice_id, is_read FROM v_user_notices WHERE user_id = $1 AND notice_id = ANY($2::int[])`,
-      [studentId, [personal.rows[0]!.id, announcement.rows[0]!.id]]);
-    expect(states.rows.find((r) => r.notice_id === personal.rows[0]!.id)?.is_read).toBe(true);
+    const states = await db.query<{ notice_id: number | null; notification_id: number | null; is_read: boolean }>(
+      `SELECT notice_id, notification_id, is_read FROM v_user_notices WHERE user_id = $1
+       AND ((item_type = 'notification' AND notification_id = ANY($2::int[])) OR (item_type = 'notice' AND notice_id = ANY($3::int[])))`,
+      [studentId, [personal.rows[0]!.id], [announcement.rows[0]!.id]]);
+    expect(states.rows.find((r) => r.notification_id === personal.rows[0]!.id)?.is_read).toBe(true);
     expect(states.rows.find((r) => r.notice_id === announcement.rows[0]!.id)?.is_read).toBe(false);
   });
 
@@ -234,16 +279,16 @@ describe.skipIf(!hasAppEnv)('T8-1 notices (pages and permissions)', () => {
     const inbox = await admin.get('/admin/inbox');
     expect(inbox.status).toBe(200);
     expect(inbox.text).toContain(`New grievance #${gid}: [test] Marks missing`);
-    const { rows } = await db.query<{ notice_id: number }>(
-      `SELECT notice_id FROM notice WHERE link = $1 AND title LIKE 'New grievance%'`, [`/admin/grievances/${gid}`]);
-    const go = await admin.get(`/admin/inbox/${rows[0]!.notice_id}/go`);
+    const { rows } = await db.query<{ notification_id: number }>(
+      `SELECT notification_id FROM notification WHERE link = $1 AND title LIKE 'New grievance%'`, [`/admin/grievances/${gid}`]);
+    const go = await admin.get(`/admin/inbox/notification/${rows[0]!.notification_id}/go`);
     expect(go.status).toBe(302);
     expect(go.headers.location).toBe(`/admin/grievances/${gid}`);
-    const read = await db.query('SELECT 1 FROM notice_read r JOIN app_user u USING (user_id) WHERE u.role = $1 AND r.notice_id = $2',
-      ['admin', rows[0]!.notice_id]);
+    const read = await db.query('SELECT 1 FROM notification n JOIN app_user u USING (user_id) WHERE u.role = $1 AND n.notification_id = $2 AND n.read_at IS NOT NULL',
+      ['admin', rows[0]!.notification_id]);
     expect(read.rows).toHaveLength(1);
     // the student cannot open the admin's personal notice
-    expect((await student.get(`/student/notices/${rows[0]!.notice_id}`)).status).toBe(404);
+    expect((await student.get(`/student/notices/notification/${rows[0]!.notification_id}`)).status).toBe(404);
     // the admin's reply reaches the student as a personal notice
     await postForm(admin, `/admin/grievances/${gid}`, `/admin/grievances/${gid}/comments`, { body: 'Checking with the exam cell.' });
     expect((await student.get('/student/notices')).text).toContain(`New reply on grievance #${gid}`);

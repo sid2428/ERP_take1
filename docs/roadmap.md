@@ -25,7 +25,7 @@ Rules already decided in the approved specification are repeated under each phas
 - Student: dashboard, curriculum, profile (own contact details editable).
 - Faculty: dashboard, classes, class roster, view of their own students only.
 - Admin: dashboard, departments, programs & curriculum, course catalog & prerequisites, sessions, divisions & honors sections, students, faculty, account actions, audit log.
-- Deployed: Supabase (Tokyo) + Vercel; least-privilege `erp_app` role; 48 tests.
+- Deployed: Supabase (Tokyo) + Vercel; least-privilege `erp_app` role; 68 unit tests plus database and HTTP integration tests.
 
 ---
 

@@ -1,0 +1,11 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head">
+  <h1>Examination</h1>
+  <span class="sub">Enter and review marks for students enrolled in your assigned courses.</span>
+</div>
+<section class="card" data-faculty-examination aria-live="polite">
+  <div class="student-state">Loading your assigned courses…</div>
+</section>
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<script src="/static/js/faculty-examination.js?v=<%= Date.now() %>" defer></script>
+<%- include('../partials/layout-end') %>

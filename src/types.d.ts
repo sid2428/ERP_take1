@@ -10,6 +10,8 @@ export interface CurrentUser {
   facultyId: number | null;
   displayName: string;
   deptId: string | null;
+  /** Faculty who head their department (they see the department placement report). */
+  isHod: boolean;
   mustChangePassword: boolean;
 }
 

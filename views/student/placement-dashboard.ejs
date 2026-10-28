@@ -1,0 +1,14 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Training &amp; Placement</h1><span class="sub">Your placement profile, applications, and offers</span></div>
+<div class="cards">
+  <div class="card"><div class="s">Open drives</div><div class="kpi"><%= summary?.open_drives ?? 0 %></div></div>
+  <div class="card"><div class="s">Eligible drives</div><div class="kpi"><%= summary?.eligible_drives ?? 0 %></div></div>
+  <div class="card"><div class="s">Applications</div><div class="kpi"><%= summary?.applications ?? 0 %></div></div>
+  <div class="card"><div class="s">Offers awaiting response</div><div class="kpi"><%= summary?.pending_offers ?? 0 %></div></div>
+</div>
+<div class="actions"><a class="btn" href="/student/placement/drives">Browse drives</a><a class="btn secondary" href="/student/placement/profile">Edit placement profile</a><a class="btn secondary" href="/student/placement/applications">My applications</a></div>
+<section class="card"><h2>Profile completion</h2><p><%= summary?.profile_completion_pct ?? 0 %>%</p><div class="meter"><span style="width:<%= summary?.profile_completion_pct ?? 0 %>%"></span></div></section>
+<section class="card"><h2>Placement status</h2><p><%= status?.is_placed ? 'You have an accepted full-time offer.' : 'No accepted full-time offer recorded.' %></p>
+<% if (status?.best_offer_lpa) { %><p>Best accepted full-time offer: <%= fmt.num(status.best_offer_lpa) %> LPA</p><% } %>
+<% if (!profile) { %><p class="note">Complete your placement profile to keep your resume and skills ready for applications.</p><% } %></section>
+<%- include('../partials/layout-end') %>

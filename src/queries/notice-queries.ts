@@ -5,7 +5,10 @@ export const NOTICE_CATEGORIES = ['General', 'Academic', 'Exam', 'Fees', 'Placem
 export type NoticeCategory = (typeof NOTICE_CATEGORIES)[number];
 
 export interface UserNotice {
-  notice_id: number;
+  notice_id: number | null;
+  notification_id: number | null;
+  item_type: 'notice' | 'notification';
+  notification_kind: string | null;
   title: string;
   body: string;
   category: NoticeCategory;
@@ -24,6 +27,8 @@ export interface UserNotice {
 
 /** A live status alert (attendance shortage, fees pending): computed, not stored. */
 export interface UserAlert { kind: string; severity: 'high' | 'normal'; title: string; body: string; link: string | null; }
+
+export interface NotificationState { unread: number; revision: string; }
 
 export interface NoticeTarget {
   role: string | null;
@@ -51,6 +56,27 @@ export function unreadNoticeCount(userId: number): Promise<number> {
   ).then((row) => row?.unread ?? 0);
 }
 
+/** A compact recipient-scoped revision for cross-tab/device synchronization. */
+export function notificationState(userId: number): Promise<NotificationState> {
+  return queryOne<NotificationState>(
+    `SELECT count(*) FILTER (WHERE NOT is_read)::int AS unread,
+            md5(
+              COALESCE(string_agg(
+                item_type || ':' || COALESCE(notification_id, notice_id)::text || ':' ||
+                is_read::text || ':' || COALESCE(read_at::text, ''),
+                ',' ORDER BY item_type, COALESCE(notification_id, notice_id)
+              ), '') || '|alerts:' || COALESCE((
+                SELECT string_agg(
+                  kind || ':' || severity || ':' || title || ':' || body || ':' || COALESCE(link, ''),
+                  ',' ORDER BY kind
+                ) FROM user_alerts($1)
+              ), '')
+            ) AS revision
+       FROM v_user_notices
+      WHERE user_id = $1`, [userId]
+  ).then((row) => ({ unread: row?.unread ?? 0, revision: row?.revision ?? '' }));
+}
+
 /** The notices this user should see, important ones first. */
 export function boardFor(userId: number, category = '', kind: NoticeKind = 'all', limit = 100): Promise<UserNotice[]> {
   return query<UserNotice>(
@@ -63,7 +89,29 @@ export function boardFor(userId: number, category = '', kind: NoticeKind = 'all'
 }
 
 export function noticeFor(userId: number, noticeId: number): Promise<UserNotice | undefined> {
-  return queryOne<UserNotice>('SELECT * FROM v_user_notices WHERE user_id = $1 AND notice_id = $2', [userId, noticeId]);
+  return queryOne<UserNotice>(
+    `SELECT * FROM v_user_notices WHERE user_id = $1 AND item_type = 'notice' AND notice_id = $2`, [userId, noticeId]);
+}
+
+/** Legacy personal notice lookup retained so old /:id URLs remain usable after backfill. */
+export function legacyNoticeFor(userId: number, noticeId: number): Promise<UserNotice | undefined> {
+  return queryOne<UserNotice>(
+    `SELECT n.notice_id, NULL::int AS notification_id, 'notice'::text AS item_type, NULL::varchar(20) AS notification_kind,
+            n.title, n.body, n.category, n.is_important, n.posted_at, n.expires_at, n.posted_by,
+            COALESCE(p.display_name, 'Academic office') AS posted_by_name, p.role AS posted_by_role,
+            r.read_at, r.read_at IS NOT NULL AS is_read, n.link, n.source, true AS is_personal
+     FROM notice n
+     JOIN notice_target t ON t.notice_id = n.notice_id AND t.user_id = $1
+     LEFT JOIN notice_read r ON r.notice_id = n.notice_id AND r.user_id = $1
+     LEFT JOIN v_user_profile p ON p.user_id = n.posted_by
+     WHERE n.notice_id = $2`, [userId, noticeId]);
+}
+
+/** A dedicated notification is addressed only to its stored recipient. */
+export function notificationFor(userId: number, notificationId: number): Promise<UserNotice | undefined> {
+  return queryOne<UserNotice>(
+    `SELECT * FROM v_user_notices WHERE user_id = $1 AND item_type = 'notification' AND notification_id = $2`,
+    [userId, notificationId]);
 }
 
 /** Latest notices for the dashboard card, plus how many are unread. Pass a shared count to avoid a duplicate query. */
@@ -80,16 +128,27 @@ export async function markRead(db: Db, userId: number, noticeId: number): Promis
   await db.query('INSERT INTO notice_read (notice_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [noticeId, userId]);
 }
 
+export async function markNotificationRead(db: Db, userId: number, notificationId: number): Promise<void> {
+  await db.query('UPDATE notification SET read_at = COALESCE(read_at, now()) WHERE notification_id = $1 AND user_id = $2',
+    [notificationId, userId]);
+}
+
 export async function markAllRead(db: Db, userId: number, category = '', kind: NoticeKind = 'all'): Promise<number> {
-  const r = await db.query(
+  const notices = await db.query(
     `INSERT INTO notice_read (notice_id, user_id)
      SELECT notice_id, user_id FROM v_user_notices
-      WHERE user_id = $1 AND NOT is_read
+      WHERE user_id = $1 AND item_type = 'notice' AND NOT is_read
         AND ($2::text = '' OR category::text = $2::text)
-        AND ($3::text = 'all' OR ($3::text = 'personal' AND is_personal)
-                          OR ($3::text = 'announcements' AND NOT is_personal))
+        AND ($3::text = 'all' OR ($3::text = 'announcements' AND NOT is_personal)
+                              OR ($3::text = 'personal' AND is_personal))
      ON CONFLICT DO NOTHING`, [userId, category, kind]);
-  return r.rowCount ?? 0;
+  const notifications = await db.query(
+    `UPDATE notification SET read_at = now()
+      WHERE user_id = $1 AND read_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
+        AND ($2::text = '' OR category::text = $2::text)
+        AND ($3::text IN ('all', 'personal'))`, [userId, category, kind]);
+  return (notices.rowCount ?? 0) + (notifications.rowCount ?? 0);
 }
 
 /** Targets of several notices, keyed by notice id. */

@@ -62,6 +62,8 @@ def enrollments(sections: pd.DataFrame, divisions: pd.DataFrame, students_df: pd
     for _, hc in honors_courses.sort_values("program_id").iterrows():
         pool = s[(s.program_id == hc.program_id) & (s.year == 4)].student_id.to_numpy()
         chosen = np.sort(rng.choice(pool, size=round(len(pool) * HONORS_SHARE), replace=False))
+        if len(chosen) == 0:
+            continue
         n_sections = math.ceil(len(chosen) / HONORS_SECTION_SIZE)
         for k, members in enumerate(np.array_split(chosen, n_sections)):
             oid += 1

@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 
 export const hasAppEnv = Boolean(process.env.APP_DATABASE_URL && process.env.SESSION_SECRET && process.env.DEMO_PASSWORD);
+export const hasAdminEnv = Boolean(hasAppEnv && process.env.ADMIN_PASSWORD);
 
 export function csrfFrom(html: string): string {
   const match = html.match(/name="_csrf" value="([^"]+)"/);

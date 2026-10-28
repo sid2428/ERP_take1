@@ -1,0 +1,49 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head"><h1>Syllabus coverage</h1><span class="sub"><%= cls.course_code %> · <%= cls.course_name %> · <%= cls.class_label %></span></div>
+
+<section class="card">
+  <div class="hd"><h2>Overall progress</h2><a href="/faculty/classes/<%= cls.assignment_id %>">Class roster</a></div>
+  <% if (!summary) { %>
+    <p class="muted" style="margin-top:12px">No syllabus units are defined for this course yet.</p>
+  <% } else { %>
+    <div style="margin-top:12px"><%- include('../partials/pct-bar', { value: summary.pct, min: 1 }) %></div>
+    <p class="muted" style="margin-top:8px"><%= summary.delivered_total %> of <%= summary.planned_total %> planned lectures delivered · <%= summary.units_done %> of <%= summary.units_total %> units complete</p>
+  <% } %>
+</section>
+
+<section class="card t" style="margin-top:16px">
+  <div class="hd"><h2>Units</h2><span class="muted">Planned vs delivered lectures</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Unit</th><th>Topic</th><th class="num">Planned</th><th class="num">Delivered</th><th>Progress</th></tr></thead>
+    <tbody>
+      <% if (!units.length) { %><tr><td colspan="5" class="empty">No units defined.</td></tr><% } %>
+      <% for (const u of units) { %>
+        <tr>
+          <td class="nw">Unit <%= u.unit_no %></td>
+          <td><%= u.unit_title %></td>
+          <td class="num"><%= u.planned_lectures %></td>
+          <td class="num"><%= u.delivered %></td>
+          <td><%- include('../partials/pct-bar', { value: u.pct, min: 1 }) %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card t" style="margin-top:16px">
+  <div class="hd"><h2>Recent sessions</h2><span class="muted">The unit each conducted session was tagged with</span></div>
+  <div class="sc"><table>
+    <thead><tr><th>Date</th><th class="num">Session</th><th>Unit covered</th></tr></thead>
+    <tbody>
+      <% if (!recent.length) { %><tr><td colspan="3" class="empty">No sessions conducted yet.</td></tr><% } %>
+      <% for (const r of recent) { %>
+        <tr>
+          <td class="nw"><%= fmt.shortDate(r.session_date) %></td>
+          <td class="num"><%= r.session_number %></td>
+          <td><% if (r.unit_no) { %><span class="pill g">Unit <%= r.unit_no %></span> <%= r.unit_title %><% } else { %><span class="pill o">Not tagged</span><% } %></td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

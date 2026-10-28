@@ -1,0 +1,145 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head">
+  <h1>Placement statistics</h1>
+  <span class="sub">Placed means an active student with an accepted full-time offer. Internships are reported separately.</span>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="s">Overall placement</div>
+    <div class="kpi"><%= fmt.num(overview?.overall_placement_pct ?? 0) %>%</div>
+    <p class="note"><%= overview?.placed_students ?? 0 %> placed / <%= overview?.active_students ?? 0 %> active students</p>
+  </div>
+  <div class="card">
+    <div class="s">Total offers recorded</div>
+    <div class="kpi"><%= overview?.total_offers ?? 0 %></div>
+    <p class="note">All response statuses; each offer counted once</p>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="s">Highest package (LPA)</div>
+    <div class="kpi"><%= overview?.highest_package_lpa != null ? fmt.num(overview.highest_package_lpa) : '–' %></div>
+  </div>
+  <div class="card">
+    <div class="s">Average package (LPA)</div>
+    <div class="kpi"><%= overview?.average_package_lpa != null ? fmt.num(overview.average_package_lpa) : '–' %></div>
+    <p class="note">Accepted full-time offers only</p>
+  </div>
+  <div class="card">
+    <div class="s">Median package (LPA)</div>
+    <div class="kpi"><%= overview?.median_package_lpa != null ? fmt.num(overview.median_package_lpa) : '–' %></div>
+    <p class="note">Accepted full-time offers only</p>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="s">Accepted full-time offers</div>
+    <div class="kpi"><%= overview?.accepted_fulltime_offers ?? 0 %></div>
+  </div>
+  <div class="card">
+    <div class="s">Accepted internships</div>
+    <div class="kpi"><%= overview?.accepted_internships ?? 0 %></div>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Placement percentage by department</h2>
+  <p class="note">Active students with accepted full-time offers ÷ active students.</p>
+  <% if (!byDepartment.length) { %>
+    <div class="empty">No department data is available.</div>
+  <% } else { %>
+    <div class="stack">
+      <% byDepartment.forEach(d => { %>
+        <div class="row">
+          <span><%= d.dept_name %></span>
+          <div class="bar" role="img" aria-label="<%= d.dept_name %>: <%= d.placed_pct ?? 0 %>%">
+            <i style="width:<%= d.bar_pct %>%"></i>
+          </div>
+          <b><%= fmt.num(d.placed_pct ?? 0) %>%</b>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Accepted full-time package distribution</h2>
+  <p class="note">Accepted full-time offers counted once by LPA band; missing package values are excluded.</p>
+  <% if (!hasPackageData) { %>
+    <div class="empty">No accepted full-time package data is available.</div>
+  <% } else { %>
+    <div class="stack">
+      <% packageDistribution.forEach(b => { %>
+        <div class="row">
+          <span><%= b.label %></span>
+          <div class="bar" role="img" aria-label="<%= b.label %>: <%= b.offer_count %> offers">
+            <i style="width:<%= b.bar_pct %>%"></i>
+          </div>
+          <b><%= b.offer_count %></b>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>By department</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Department</th>
+          <th>Active students</th>
+          <th>Placed</th>
+          <th>Placed %</th>
+          <th>Highest LPA</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% byDepartment.forEach(d => { %>
+          <tr>
+            <td><%= d.dept_name %></td>
+            <td><%= d.active_students %></td>
+            <td><%= d.placed_students %></td>
+            <td><%= d.placed_pct != null ? fmt.num(d.placed_pct) + '%' : '–' %></td>
+            <td><%= d.highest_package_lpa != null ? fmt.num(d.highest_package_lpa) : '–' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Company-wise offers</h2>
+  <% if (!companyOffers.length) { %>
+    <div class="empty">No offers have been recorded.</div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Offers recorded</th>
+            <th>Accepted full-time</th>
+            <th>Accepted internships</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% companyOffers.forEach(c => { %>
+            <tr>
+              <td><%= c.company_name %></td>
+              <td><%= c.total_offers %></td>
+              <td><%= c.accepted_fulltime %></td>
+              <td><%= c.accepted_internships %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+<%- include('../partials/layout-end') %>

@@ -4,18 +4,18 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashPassword } from '../../src/auth/password.js';
-import { hasAppEnv, postForm, signIn } from './helpers.js';
+import { hasAdminEnv, postForm, signIn } from './helpers.js';
 
 const DEMO = process.env.DEMO_PASSWORD ?? '';
 const ADMIN = process.env.ADMIN_PASSWORD ?? '';
 const TEMP_PASSWORD = 'Temp-pass-2026';
 
 // the app reads its configuration on import, so only load it when the environment is set up
-const { createApp } = hasAppEnv ? await import('../../src/app.js') : { createApp: null };
-const { pool } = hasAppEnv ? await import('../../src/db.js') : { pool: null };
+const { createApp } = hasAdminEnv ? await import('../../src/app.js') : { createApp: null };
+const { pool } = hasAdminEnv ? await import('../../src/db.js') : { pool: null };
 
-describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
-  const app = createApp!();
+describe.skipIf(!hasAdminEnv)('PICT ERP portal', () => {
+  const app = hasAdminEnv ? createApp!() : (null as unknown as ReturnType<NonNullable<typeof createApp>>);
   const db = pool!;
 
   beforeAll(async () => {
@@ -107,6 +107,8 @@ describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
       expect(dash.text).toContain('STU202600004');
       expect(dash.text).toContain('Semester V of 8');
       expect((await agent.get('/admin')).status).toBe(403);
+      expect((await agent.get('/admin/ui')).status).toBe(403);
+      expect((await agent.get('/api/admin/hr/leave/requests')).status).toBe(403);
       expect((await agent.get('/faculty')).status).toBe(403);
     });
 
@@ -128,12 +130,23 @@ describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
   });
 
   describe('admin console', () => {
+    it('shows the shared UI kit only to admins', async () => {
+      const { agent: admin } = await signIn(app, 'admin', ADMIN);
+      const page = await admin.get('/admin/ui');
+      expect(page.status).toBe(200);
+      expect(page.text).toContain('Shared UI kit');
+      expect(page.text).toContain('ui-ring');
+
+      const { agent: student } = await signIn(app, 'STU202600004', DEMO);
+      expect((await student.get('/admin/ui')).status).toBe(403);
+    });
+
     it('renders every admin page', async () => {
       const { agent } = await signIn(app, 'admin', ADMIN);
       for (const path of ['/admin', '/admin/departments', '/admin/departments/CSE', '/admin/programs', '/admin/programs/BTECH-IT',
         '/admin/courses', '/admin/courses?dept=IT&type=LAB', '/admin/courses/new', '/admin/courses/4', '/admin/sessions',
         '/admin/sections', '/admin/sections/divisions/1', '/admin/students?q=STU2026000', '/admin/students/4',
-        '/admin/faculty', '/admin/faculty/1', '/admin/audit']) {
+        '/admin/faculty', '/admin/faculty/1', '/admin/audit', '/admin/attendance-unlocks', '/admin/ui']) {
         const res = await agent.get(path);
         expect(res.status, path).toBe(200);
       }
@@ -184,5 +197,29 @@ describe.skipIf(!hasAppEnv)('PICT ERP portal', () => {
       expect(page.text).toContain('Type the session id to confirm');
       expect((await db.query('SELECT current_session_id() AS id')).rows[0].id).toBe('2026-ODD');
     });
+  });
+
+  // A browser follows a redirect as soon as the headers arrive, so the session must be stored by
+  // then; otherwise the first page after signing in finds no session and asks to sign in again.
+  it('keeps a new login for a request sent the moment the sign-in redirect arrives', async () => {
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const cookieOf = (r: Response) => r.headers.getSetCookie()[0]!.split(';')[0]!;
+    try {
+      for (let i = 0; i < 5; i++) {
+        const page = await fetch(`${base}/login`, { redirect: 'manual' });
+        const csrf = /name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+        const login = await fetch(`${base}/login`, {
+          method: 'POST', redirect: 'manual',
+          headers: { cookie: cookieOf(page), 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ _csrf: csrf, login_id: 'STU202600004', password: DEMO, next: '' }),
+        });
+        expect(login.headers.get('location')).toBe('/student');
+        const home = await fetch(`${base}/student`, { redirect: 'manual', headers: { cookie: cookieOf(login) } });
+        expect(home.status, `attempt ${i + 1}`).toBe(200);
+      }
+    } finally {
+      server.close();
+    }
   });
 });

@@ -11,12 +11,17 @@
     </div>
     <% for (const e of thread) { %>
       <% if (e.kind === 'status') { %>
-      <div class="item sys">
+      <% const unlocked = e.from_status === 'Resolved' || e.from_status === 'Rejected';
+         const closing = e.to_status === 'Resolved' || e.to_status === 'Rejected'; %>
+      <div class="item<%= e.note ? '' : ' sys' %>">
         <div class="t"><div class="s">
-          Status <span class="pill <%= statusPill(e.from_status) %>"><%= e.from_status %></span> →
+          <% if (unlocked) { %>Unlocked <span class="pill <%= statusPill(e.from_status) %>"><%= e.from_status %></span> →
+          <% } else { %>Status <span class="pill <%= statusPill(e.from_status) %>"><%= e.from_status %></span> →<% } %>
           <span class="pill <%= statusPill(e.to_status) %>"><%= e.to_status %></span>
-          <% if (e.author_name) { %> by <%= e.author_name %><% } %>
-        </div></div>
+          <% if (e.author_name) { %> by <%= e.author_role === 'admin' ? 'the academic office' : e.author_name %><% } %>
+        </div>
+        <% if (e.note) { %><div class="body"><% if (closing) { %><b>Outcome:</b> <% } else if (unlocked) { %><b>Reason:</b> <% } %><%= e.note %></div><% } %>
+        </div>
         <div class="w"><%= fmt.dateTime(e.at) %></div>
       </div>
       <% } else { %>
@@ -29,19 +34,10 @@
       </div>
       <% } %>
     <% } %>
-    <% if (g.resolution_note) { %>
-    <div class="item">
-      <div class="t">
-        <div>Outcome <span class="pill <%= statusPill(g.status) %>"><%= g.status %></span></div>
-        <div class="body"><%= g.resolution_note %></div>
-      </div>
-      <div class="w"><%= fmt.dateTime(g.resolved_at) %></div>
-    </div>
-    <% } %>
   </div>
 
   <% if (g.status === 'Resolved' || g.status === 'Rejected') { %>
-    <p class="muted" style="margin-top:12px">This grievance is closed. <% if (isRaiser) { %>If the problem continues, raise a new grievance.<% } %></p>
+    <p class="muted" style="margin-top:12px">This grievance is <%= g.status.toLowerCase() %> and locked, so no more replies can be added. Only the academic office can unlock it.</p>
   <% } else { %>
     <form method="post" action="<%= base %>/<%= g.grievance_id %>/comments" class="stack" style="margin-top:12px;gap:10px">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

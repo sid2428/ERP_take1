@@ -15,6 +15,13 @@ STUDENT_COLUMNS = [
     "category", "nationality", "status", "admission_number", "admission_date", "admission_type",
     "admission_year", "program_id", "district_name", "address", "pincode",
 ]
+SOURCE_DEPT_CODES = {
+    "Artificial Intelligence and Data Science": "AIDS",
+    "Computer Engineering": "CSE",
+    "Electronics and Telecommunication Engineering": "ENTC",
+    "Information Technology": "IT",
+    "Mechanical Engineering": "MECH",
+}
 
 
 def _random_dates(base: list[dt.date], max_offset_days: int) -> list[dt.date]:
@@ -29,9 +36,19 @@ def students(report: Report) -> tuple[pd.DataFrame, pd.Series]:
     year of study from it (2026 -> Y1 ... 2023 -> Y4).
     """
     st = read_raw("students (3).csv", encoding="cp1252", dtype=str)
+    extra_rows = int(st.student_number.isna().sum())
+    if extra_rows:
+        st = st.loc[st.student_number.notna()].copy()
+    st["dept_id"] = st.department_name.map(SOURCE_DEPT_CODES)
+    unknown_departments = sorted(st.loc[st.dept_id.isna(), "department_name"].dropna().unique())
+    if unknown_departments:
+        raise ValueError(f"unknown student department names: {', '.join(unknown_departments)}")
+    st["address"] = st[["address_line", "city", "state"]].fillna("").agg(", ".join, axis=1).str.strip(", ")
+    st["district_name"] = st["city"]
     st = st.sort_values("student_number").reset_index(drop=True)
-    st.insert(0, "student_id", np.arange(1, len(st) + 1))
+    st["student_id"] = np.arange(1, len(st) + 1)
     report.section("Students (students (3).csv, 50,000 rows)")
+    report.item("Rows without a student number discarded", extra_rows)
     report.item("Re-encoded from Windows-1252 to UTF-8", len(st))
 
     curly = st.last_name.str.contains("’")
