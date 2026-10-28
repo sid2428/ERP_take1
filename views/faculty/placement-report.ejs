@@ -1,4 +1,116 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Department placement report</h1><span class="sub">Read-only report for your department. Placement status counts accepted full-time offers.</span></div>
-<div class="table-wrap card"><table><thead><tr><th>Program</th><th>Active students</th><th>Placed</th><th>Placed %</th><th>Highest LPA</th></tr></thead><tbody><% rows.forEach(r=>{ %><tr><td><%= r.program_name %></td><td><%= r.active_students %></td><td><%= r.placed_students %></td><td><%= r.placed_pct??'—' %></td><td><%= r.highest_package_lpa??'—' %></td></tr><% }) %></tbody></table></div>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/faculty">Dashboard</a>
+  <span class="sep">/</span>
+  <span class="current">Department Placement Report</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <h1>Department Placement Report</h1>
+    <span class="sub">Executive placement report for department leadership. Placement status counts verified accepted full-time offers.</span>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="/faculty">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>Back to Faculty Dashboard</span>
+    </a>
+  </div>
+</div>
+
+<%
+  const totalActive = rows.reduce((acc, r) => acc + (Number(r.active_students) || 0), 0);
+  const totalPlaced = rows.reduce((acc, r) => acc + (Number(r.placed_students) || 0), 0);
+  const overallPct = totalActive > 0 ? ((totalPlaced / totalActive) * 100).toFixed(1) : '0.0';
+  const highestLpa = rows.reduce((max, r) => r.highest_package_lpa != null ? Math.max(max, Number(r.highest_package_lpa)) : max, 0);
+%>
+
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Department Enrolment</span>
+      <div class="tnp-kpi-icon navy"><%- include('../partials/icon', { name: 'users', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(totalActive) %></div>
+    <p class="tnp-kpi-subtext">Active students in department programs.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Placed Students</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'award', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(totalPlaced) %><small style="color:var(--green-text);font-weight:600;"> (<%= overallPct %>%)</small></div>
+    <p class="tnp-kpi-subtext">Verified accepted full-time corporate offers.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Highest Package</span>
+      <div class="tnp-kpi-icon warning"><%- include('../partials/icon', { name: 'trending-up', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= highestLpa > 0 ? fmt.num(highestLpa) : '—' %><small> LPA</small></div>
+    <p class="tnp-kpi-subtext">Peak compensation accepted in department.</p>
+  </div>
+</div>
+
+<section class="tnp-table-card">
+  <div class="tnp-table-header">
+    <div class="tnp-table-title-wrap">
+      <h2 class="tnp-table-title">Program-wise Placement Statistics</h2>
+      <span class="tnp-count-pill"><%= rows.length %> programs</span>
+    </div>
+  </div>
+
+  <% if (!rows.length) { %>
+    <div class="tnp-empty-state">
+      <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'briefcase', size: 24 }) %></div>
+      <h3 class="tnp-empty-title">No Program Data Available</h3>
+      <p class="tnp-empty-desc">No active student placement records found for programs in your department.</p>
+    </div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Academic Program</th>
+            <th class="num">Active Students</th>
+            <th class="num">Placed Students</th>
+            <th style="min-width:180px;">Placement Rate</th>
+            <th class="num">Highest Package</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(r => { 
+            const pct = r.placed_pct != null ? Number(r.placed_pct) : 0;
+          %>
+            <tr>
+              <td>
+                <div class="tnp-table-primary"><%= r.program_name %></div>
+                <div class="tnp-table-secondary"><code><%= r.program_id %></code></div>
+              </td>
+              <td class="num"><%= fmt.num(r.active_students) %></td>
+              <td class="num"><%= fmt.num(r.placed_students) %></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div class="bar" style="flex:1;margin:0;">
+                    <i style="width:<%= Math.min(100, pct) %>%;background:var(--green);"></i>
+                  </div>
+                  <strong style="font-size:13px;color:var(--green-text);min-width:44px;text-align:right;">
+                    <%= r.placed_pct != null ? `${r.placed_pct}%` : '—' %>
+                  </strong>
+                </div>
+              </td>
+              <td class="num">
+                <strong><%= r.highest_package_lpa != null ? `${r.highest_package_lpa} LPA` : '—' %></strong>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>

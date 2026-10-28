@@ -1,5 +1,102 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Edit company</h1><span class="sub">Company records with history cannot be deleted.</span></div>
-<form class="card form-grid" method="post" action="/admin/placement/companies/<%= company.company_id %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<label>Company name<input name="company_name" required maxlength="140" value="<%= company.company_name %>"></label><label>Industry<input name="industry" maxlength="80" value="<%= company.industry||'' %>"></label><label>Website<input name="website_url" type="url" value="<%= company.website_url||'' %>"></label><label>Contact name<input name="contact_name" maxlength="100" value="<%= company.contact_name||'' %>"></label><label>Contact email<input name="contact_email" type="email" value="<%= company.contact_email||'' %>"></label><label>Contact phone<input name="contact_phone" maxlength="30" value="<%= company.contact_phone||'' %>"></label><label>Headquarters<input name="headquarters" maxlength="100" value="<%= company.headquarters||'' %>"></label><label class="wide">Description<textarea name="description" maxlength="3000"><%= company.description||'' %></textarea></label><div class="wide"><button class="btn">Save company</button></div></form>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement">Placement</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement/companies">Companies</a>
+  <span class="sep">/</span>
+  <span class="current">Edit <%= company.company_name %></span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'companies' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Edit Corporate Partner</h1>
+    <span class="sub">Update company credentials, primary recruitment liaison details, and campus profile.</span>
+  </div>
+  <div class="actions">
+    <span class="tnp-badge <%= company.is_active ? 'tnp-badge-open' : 'tnp-badge-draft' %>">
+      <%= company.is_active ? 'Active Partner' : 'Inactive Partner' %>
+    </span>
+    <a class="btn secondary" href="/admin/placement/companies">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>Back to Companies</span>
+    </a>
+  </div>
+</div>
+
+<form class="tnp-form-card" method="post" action="/admin/placement/companies/<%= company.company_id %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <div class="tnp-form-section">
+    <h3 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'building', size: 16 }) %>
+      <span>Company Identity</span>
+    </h3>
+    <p class="tnp-form-section-desc">Organization name and general corporate information.</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="company_name">Company Name<span class="required-star">*</span></label>
+        <input id="company_name" name="company_name" required maxlength="140" value="<%= company.company_name %>">
+      </div>
+      <div class="field">
+        <label for="industry">Industry Sector</label>
+        <input id="industry" name="industry" maxlength="80" value="<%= company.industry || '' %>">
+      </div>
+      <div class="field">
+        <label for="website_url">Official Website</label>
+        <input id="website_url" name="website_url" type="url" value="<%= company.website_url || '' %>">
+      </div>
+      <div class="field">
+        <label for="headquarters">Headquarters Location</label>
+        <input id="headquarters" name="headquarters" maxlength="100" value="<%= company.headquarters || '' %>">
+      </div>
+    </div>
+  </div>
+
+  <div class="tnp-form-section">
+    <h3 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'user', size: 16 }) %>
+      <span>Contact Liaison / SPOC</span>
+    </h3>
+    <p class="tnp-form-section-desc">Primary point of contact for placement office communications.</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="contact_name">Liaison Name</label>
+        <input id="contact_name" name="contact_name" maxlength="100" value="<%= company.contact_name || '' %>">
+      </div>
+      <div class="field">
+        <label for="contact_email">Liaison Email</label>
+        <input id="contact_email" name="contact_email" type="email" maxlength="120" value="<%= company.contact_email || '' %>">
+      </div>
+      <div class="field">
+        <label for="contact_phone">Contact Phone</label>
+        <input id="contact_phone" name="contact_phone" maxlength="30" value="<%= company.contact_phone || '' %>">
+      </div>
+    </div>
+  </div>
+
+  <div class="tnp-form-section">
+    <h3 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'file-text', size: 16 }) %>
+      <span>Company Profile</span>
+    </h3>
+    <div class="field">
+      <label for="description">Description &amp; Notes</label>
+      <textarea id="description" name="description" maxlength="3000" rows="4"><%= company.description || '' %></textarea>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:6px;">
+    <button class="btn primary" type="submit">
+      <%- include('../partials/icon', { name: 'check', size: 15 }) %>
+      <span>Save Company</span>
+    </button>
+    <a class="btn secondary" href="/admin/placement/companies">Cancel</a>
+  </div>
+</form>
+
 <%- include('../partials/layout-end') %>

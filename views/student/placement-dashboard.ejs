@@ -1,14 +1,185 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Training &amp; Placement</h1><span class="sub">Your placement profile, applications, and offers</span></div>
-<div class="cards">
-  <div class="card"><div class="s">Open drives</div><div class="kpi"><%= summary?.open_drives ?? 0 %></div></div>
-  <div class="card"><div class="s">Eligible drives</div><div class="kpi"><%= summary?.eligible_drives ?? 0 %></div></div>
-  <div class="card"><div class="s">Applications</div><div class="kpi"><%= summary?.applications ?? 0 %></div></div>
-  <div class="card"><div class="s">Offers awaiting response</div><div class="kpi"><%= summary?.pending_offers ?? 0 %></div></div>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/student">Dashboard</a>
+  <span class="sep">/</span>
+  <span class="current">Placement</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'overview' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Training &amp; Placement</h1>
+    <span class="sub">Campus placement opportunities, eligibility verification, interview stages, and job offers.</span>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="/student/placement/drives">
+      <%- include('../partials/icon', { name: 'briefcase', size: 15 }) %>
+      <span>Browse Drives</span>
+    </a>
+    <a class="btn secondary" href="/student/placement/applications">
+      <%- include('../partials/icon', { name: 'file-text', size: 15 }) %>
+      <span>My Applications</span>
+    </a>
+    <a class="btn secondary" href="/student/placement/profile">
+      <%- include('../partials/icon', { name: 'user', size: 15 }) %>
+      <span>Profile</span>
+    </a>
+  </div>
 </div>
-<div class="actions"><a class="btn" href="/student/placement/drives">Browse drives</a><a class="btn secondary" href="/student/placement/profile">Edit placement profile</a><a class="btn secondary" href="/student/placement/applications">My applications</a></div>
-<section class="card"><h2>Profile completion</h2><p><%= summary?.profile_completion_pct ?? 0 %>%</p><div class="meter"><span style="width:<%= summary?.profile_completion_pct ?? 0 %>%"></span></div></section>
-<section class="card"><h2>Placement status</h2><p><%= status?.is_placed ? 'You have an accepted full-time offer.' : 'No accepted full-time offer recorded.' %></p>
-<% if (status?.best_offer_lpa) { %><p>Best accepted full-time offer: <%= fmt.num(status.best_offer_lpa) %> LPA</p><% } %>
-<% if (!profile) { %><p class="note">Complete your placement profile to keep your resume and skills ready for applications.</p><% } %></section>
+
+<%
+  const isPlaced = Boolean(status?.is_placed);
+  const bestLpa = status?.best_offer_lpa;
+  const completionPct = summary?.profile_completion_pct ?? 0;
+  const pendingOffers = summary?.pending_offers ?? 0;
+%>
+
+<!-- Student Status Hero -->
+<section class="tnp-hero">
+  <div class="tnp-hero-content">
+    <div class="tnp-hero-top">
+      <div>
+        <span class="tnp-hero-badge">Student Placement Record</span>
+        <div class="tnp-hero-title">
+          <%= isPlaced ? 'Placed Student — Congratulations!' : 'Active Placement Candidate' %>
+        </div>
+        <div class="tnp-hero-desc">
+          <%= isPlaced 
+            ? `You have an accepted full-time offer. Under institutional placement rules, you remain eligible for full-time drives paying at least 1.5× (${(bestLpa * 1.5).toFixed(2)} LPA) or any internship drive.`
+            : 'Explore open campus recruitment drives, verify your academic criteria, and submit applications before deadlines.' %>
+        </div>
+      </div>
+      <div class="tags">
+        <span class="tag <%= isPlaced ? 'ok' : '' %>"><%= isPlaced ? 'Placed' : 'Active Candidate' %></span>
+        <% if (bestLpa) { %>
+          <span class="tag ok">Best Offer: <%= fmt.num(bestLpa) %> LPA</span>
+        <% } %>
+        <% if (pendingOffers > 0) { %>
+          <a href="/student/placement/applications" class="tag warn" style="text-decoration:none;">
+            ⚠ <%= pendingOffers %> Offer<%= pendingOffers === 1 ? '' : 's' %> Awaiting Response
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.08);padding:14px 18px;border-radius:var(--radius-sm);margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#C0CEE8;">
+        <span>Placement Profile Completion: <strong style="color:#fff;"><%= completionPct %>%</strong></span>
+        <a href="/student/placement/profile" style="color:#8FB8FF;text-decoration:underline;">
+          <%= completionPct < 100 ? 'Complete Profile &rarr;' : 'Update Profile &rarr;' %>
+        </a>
+      </div>
+      <div class="tnp-meter" style="background:rgba(255,255,255,0.2);">
+        <div class="tnp-meter-fill" style="width:<%= completionPct %>%;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick KPI Grid -->
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Open Drives</span>
+      <div class="tnp-kpi-icon navy"><%- include('../partials/icon', { name: 'briefcase', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(summary?.open_drives ?? 0) %></div>
+    <p class="tnp-kpi-subtext">Active campus drives with open application windows.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Eligible Drives</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'check-circle', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(summary?.eligible_drives ?? 0) %></div>
+    <p class="tnp-kpi-subtext">Drives matching your program, year, and academic standing.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">My Applications</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'file-text', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(summary?.applications ?? 0) %></div>
+    <p class="tnp-kpi-subtext"><%= fmt.num(summary?.in_progress ?? 0) %> applications actively in progress.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Pending Offers</span>
+      <div class="tnp-kpi-icon <%= pendingOffers > 0 ? 'warning' : '' %>">
+        <%- include('../partials/icon', { name: 'award', size: 16 }) %>
+      </div>
+    </div>
+    <div class="tnp-kpi-value" style="<%= pendingOffers > 0 ? 'color:var(--org);' : '' %>">
+      <%= fmt.num(pendingOffers) %>
+    </div>
+    <p class="tnp-kpi-subtext">
+      <%= pendingOffers > 0 ? 'Action required: Review offer terms and accept or decline.' : 'No offers currently awaiting your decision.' %>
+    </p>
+  </div>
+</div>
+
+<!-- Guidelines & Code of Conduct -->
+<div class="grid2">
+  <section class="card" style="box-shadow:var(--shadow-xs);">
+    <div class="hd">
+      <h2>Placement Cell Guidelines &amp; Institutional Policy</h2>
+    </div>
+    <p class="note">Standards enforced programmatically by the ERP database for fair campus placement.</p>
+    
+    <div class="stack" style="gap:12px;font-size:13px;line-height:1.5;color:var(--text-2);">
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        <div style="color:var(--link);flex:none;margin-top:2px;"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+        <div>
+          <strong>Attendance Threshold:</strong> If a drive specifies a minimum attendance %, your current academic session attendance must meet or exceed the criterion.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        <div style="color:var(--link);flex:none;margin-top:2px;"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+        <div>
+          <strong>Upgrade Rule (1.5× Policy):</strong> After accepting a full-time offer, a candidate may only apply for full-time drives offering at least 1.5× the accepted package.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        <div style="color:var(--link);flex:none;margin-top:2px;"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+        <div>
+          <strong>Offer Acceptance:</strong> Candidates have until the specified response deadline to accept or decline. Expired offers cannot be recovered.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start;">
+        <div style="color:var(--link);flex:none;margin-top:2px;"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+        <div>
+          <strong>Withdrawal:</strong> You may withdraw an active application while in Applied or Shortlisted status, provided the drive's application deadline has not passed.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="box-shadow:var(--shadow-xs);">
+    <div class="hd">
+      <h2>Quick Actions</h2>
+    </div>
+    <p class="note">Direct links to candidate placement workflows.</p>
+
+    <div class="stack" style="gap:10px;">
+      <a class="btn primary" href="/student/placement/drives" style="justify-content:flex-start;">
+        <%- include('../partials/icon', { name: 'briefcase', size: 15 }) %>
+        <span>Browse Campus Drives</span>
+      </a>
+      <a class="btn secondary" href="/student/placement/applications" style="justify-content:flex-start;">
+        <%- include('../partials/icon', { name: 'file-text', size: 15 }) %>
+        <span>View My Applications</span>
+      </a>
+      <a class="btn secondary" href="/student/placement/profile" style="justify-content:flex-start;">
+        <%- include('../partials/icon', { name: 'user', size: 15 }) %>
+        <span>Update Placement Profile</span>
+      </a>
+    </div>
+  </section>
+</div>
+
 <%- include('../partials/layout-end') %>
