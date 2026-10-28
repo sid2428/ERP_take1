@@ -20,9 +20,25 @@ const dateTimeInput = z.preprocess((v) => {
   const normalized = v.length === 16 ? `${v}:00` : v;
   return `${normalized}+05:30`;
 }, z.iso.datetime({ offset: true }));
+const submittedExpectedGraduationYearSchema = z.union([
+  z.literal('').transform(() => null),
+  z.string().transform((value, ctx) => {
+    if (!/^\d{4}$/.test(value)) {
+      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be a four-digit year.' });
+      return z.NEVER;
+    }
+    const year = Number(value);
+    if (year < 2000 || year > 2100) {
+      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be between 2000 and 2100.' });
+      return z.NEVER;
+    }
+    return year;
+  }),
+]);
 const profileSchema = z.object({
   skills: z.string().trim().max(2000), resume_url: emptyToNull,
   linkedin_url: emptyToNull, github_url: emptyToNull, portfolio_url: emptyToNull,
+  submitted_expected_graduation_year: submittedExpectedGraduationYearSchema.optional(),
 });
 const applicationTransitions:Record<string,string[]>={Applied:['Shortlisted','Rejected'],Shortlisted:['Selected','Rejected'],Selected:['Rejected'],Rejected:[],Withdrawn:[]};
 
@@ -47,7 +63,12 @@ placementStudentRouter.post('/profile',async(req,res)=>{
       VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(student_id) DO UPDATE SET skills=EXCLUDED.skills,resume_url=EXCLUDED.resume_url,
       linkedin_url=EXCLUDED.linkedin_url,github_url=EXCLUDED.github_url,portfolio_url=EXCLUDED.portfolio_url,updated_at=now()`,
       [studentId,parsed.data.skills,...[parsed.data.resume_url,parsed.data.linkedin_url,parsed.data.github_url,parsed.data.portfolio_url].map(v=>v||null)]);
-    await audit(req,{action:'PLACEMENT_PROFILE_UPDATE',entity:'student_placement_profile',entityId:studentId,details:{updated:true}},db);
+    if(parsed.data.submitted_expected_graduation_year!==undefined){
+      await db.query(`UPDATE student SET submitted_expected_graduation_year=$2 WHERE student_id=$1`,
+        [studentId,parsed.data.submitted_expected_graduation_year]);
+    }
+    await audit(req,{action:'PLACEMENT_PROFILE_UPDATE',entity:'student_placement_profile',entityId:studentId,
+      details:{updated:true,submitted_expected_graduation_year:parsed.data.submitted_expected_graduation_year}},db);
   });
   flash(req,'success','Placement profile saved.');res.redirect('/student/placement/profile');
 });

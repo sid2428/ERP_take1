@@ -1,7 +1,9 @@
 import { query, queryOne, type Db } from '../db.js';
 
 export async function getPlacementProfile(studentId: number) {
-  return queryOne(`SELECT * FROM student_placement_profile WHERE student_id=$1`, [studentId]);
+  return queryOne(`SELECT pp.*,s.submitted_expected_graduation_year,s.expected_graduation_year
+    FROM student s LEFT JOIN student_placement_profile pp USING(student_id)
+    WHERE s.student_id=$1`, [studentId]);
 }
 
 export async function getStudentDrives(

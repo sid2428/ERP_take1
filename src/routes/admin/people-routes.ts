@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { hashPassword } from '../../auth/password.js';
 import { query, queryOne, transaction } from '../../db.js';
 import { audit } from '../../lib/audit.js';
-import { notFound } from '../../lib/http-error.js';
+import { HttpError, notFound } from '../../lib/http-error.js';
 import { pageInfo, parsePage, withQuery } from '../../lib/pagination.js';
 import { flash } from '../../middleware/auth.js';
 import { getFacultyClasses, getFacultyProfile } from '../../queries/faculty-queries.js';
@@ -15,20 +15,6 @@ import { handleForm, idParam, nullIfEmpty } from './helpers.js';
 export const peopleRouter = Router();
 
 const DEPT_IDS = ['AIDS', 'CIVIL', 'CSE', 'EE', 'ENTC', 'IT', 'MECH'];
-const expectedGraduationYearSchema = z.string({ error: 'Provide an expected passing-out year or leave it blank if unknown.' })
-  .transform((value, ctx) => {
-    if (value === '') return null;
-    if (!/^\d{4}$/.test(value)) {
-      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be a four-digit year.' });
-      return z.NEVER;
-    }
-    const year = Number(value);
-    if (year < 2000 || year > 2100) {
-      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be between 2000 and 2100.' });
-      return z.NEVER;
-    }
-    return year;
-  });
 
 interface AccountRow {
   user_id: number; login_id: string; is_active: boolean; must_change_password: boolean; failed_logins: number;
@@ -66,6 +52,20 @@ peopleRouter.get('/students', async (req, res) => {
   });
 });
 
+peopleRouter.get('/students/expected-graduation-year-submissions', async (_req, res) => {
+  const submissions = await query(`SELECT s.student_id,s.student_number,
+      concat_ws(' ',s.first_name,s.middle_name,s.last_name) AS student_name,
+      d.dept_name,s.submitted_expected_graduation_year,s.expected_graduation_year
+    FROM student s
+    JOIN program p USING(program_id)
+    JOIN department d USING(dept_id)
+    WHERE s.submitted_expected_graduation_year IS NOT NULL
+    ORDER BY d.dept_name,s.student_number`);
+  res.render('admin/expected-graduation-year-submissions', {
+    title: 'Expected passing-out year submissions', nav: 'students', submissions,
+  });
+});
+
 peopleRouter.get('/students/:id', async (req, res) => {
   const id = idParam(req.params.id);
   const [profile, courses, account] = await Promise.all([getStudentProfile(id), getStudentCourses(id), accountFor('student_id', id)]);
@@ -74,6 +74,70 @@ peopleRouter.get('/students/:id', async (req, res) => {
     title: `${profile.first_name} ${profile.last_name}`, nav: 'students', profile, courses, account,
     editing: req.query.edit === '1',
   });
+});
+
+peopleRouter.post('/students/:id/verify-expected-graduation-year', async (req, res) => {
+  const id = idParam(req.params.id);
+  const parsed = z.object({
+    verification_source: z.string().trim().min(3, 'Enter the institutional record or source used to verify this year.')
+      .max(200, 'Verification source must be 200 characters or fewer.')
+      .regex(/^[^\u0000-\u001f\u007f]+$/, 'Verification source cannot contain control characters.'),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    flash(req, 'error', parsed.error.issues.map((issue) => issue.message).join(' · '));
+    res.redirect('/admin/students/expected-graduation-year-submissions');
+    return;
+  }
+  await transaction(async (db) => {
+    const student = await queryOne<{ submitted_expected_graduation_year: number | null; expected_graduation_year: number | null }>(
+      `SELECT submitted_expected_graduation_year,expected_graduation_year
+       FROM student WHERE student_id=$1 FOR UPDATE`, [id], db);
+    if (!student) throw notFound('Student');
+    if (student.submitted_expected_graduation_year === null)
+      throw new HttpError(409, 'There is no pending expected passing-out year to verify.');
+    await db.query(`UPDATE student
+      SET expected_graduation_year=submitted_expected_graduation_year,
+          submitted_expected_graduation_year=NULL
+      WHERE student_id=$1`, [id]);
+    await audit(req, {
+      action: 'STUDENT_EXPECTED_GRADUATION_YEAR_VERIFY', entity: 'student', entityId: id,
+      details: {
+        submitted_expected_graduation_year: student.submitted_expected_graduation_year,
+        new_submitted_expected_graduation_year: null,
+        previous_expected_graduation_year: student.expected_graduation_year,
+        new_expected_graduation_year: student.submitted_expected_graduation_year,
+        verification_source: parsed.data.verification_source,
+      },
+    }, db);
+  });
+  flash(req, 'success', 'Expected passing-out year verified and added to placement cohort reporting.');
+  res.redirect('/admin/students/expected-graduation-year-submissions');
+});
+
+peopleRouter.post('/students/:id/reject-expected-graduation-year', async (req, res) => {
+  const id = idParam(req.params.id);
+  await transaction(async (db) => {
+    const student = await queryOne<{
+      submitted_expected_graduation_year: number | null;
+      expected_graduation_year: number | null;
+    }>(`SELECT submitted_expected_graduation_year,expected_graduation_year
+       FROM student WHERE student_id=$1 FOR UPDATE`, [id], db);
+    if (!student) throw notFound('Student');
+    if (student.submitted_expected_graduation_year === null)
+      throw new HttpError(409, 'There is no pending expected passing-out year to reject.');
+    await db.query(`UPDATE student SET submitted_expected_graduation_year=NULL WHERE student_id=$1`, [id]);
+    await audit(req, {
+      action: 'STUDENT_EXPECTED_GRADUATION_YEAR_REJECT', entity: 'student', entityId: id,
+      details: {
+        rejected_submitted_expected_graduation_year: student.submitted_expected_graduation_year,
+        new_submitted_expected_graduation_year: null,
+        previous_expected_graduation_year: student.expected_graduation_year,
+        new_expected_graduation_year: student.expected_graduation_year,
+      },
+    }, db);
+  });
+  flash(req, 'success', 'Expected passing-out year submission rejected.');
+  res.redirect('/admin/students/expected-graduation-year-submissions');
 });
 
 const studentSchema = z.object({
@@ -92,7 +156,9 @@ const studentSchema = z.object({
   address: z.string().trim().max(200),
   district_name: z.string().trim().max(60),
   pincode: z.union([z.literal(''), z.string().regex(/^[1-9]\d{5}$/, 'PIN code must be 6 digits')]),
-  expected_graduation_year: expectedGraduationYearSchema,
+  expected_graduation_year: z.undefined({
+    error: 'Verified passing-out years can only be changed through the expected-year review queue.',
+  }).optional(),
 });
 
 peopleRouter.post('/students/:id', (req, res) => handleForm(req, res, studentSchema, `/admin/students/${req.params.id}?edit=1`, async (v) => {
@@ -102,11 +168,11 @@ peopleRouter.post('/students/:id', (req, res) => handleForm(req, res, studentSch
     if (!before) throw notFound('Student');
     await db.query(`UPDATE student SET first_name = $2, middle_name = $3, last_name = $4, date_of_birth = $5, gender = $6,
                       blood_group = $7, category = $8, status = $9, email = $10, personal_email = $11, mobile_number = $12,
-      alternate_mobile = $13, address = $14, district_name = $15, pincode = $16, expected_graduation_year = $17
+                      alternate_mobile = $13, address = $14, district_name = $15, pincode = $16
                     WHERE student_id = $1`,
       [id, v.first_name, nullIfEmpty(v.middle_name), v.last_name, v.date_of_birth, v.gender, nullIfEmpty(v.blood_group),
         v.category, v.status, v.email, nullIfEmpty(v.personal_email), v.mobile_number, nullIfEmpty(v.alternate_mobile),
-        nullIfEmpty(v.address), nullIfEmpty(v.district_name), nullIfEmpty(v.pincode), v.expected_graduation_year]);
+                        nullIfEmpty(v.address), nullIfEmpty(v.district_name), nullIfEmpty(v.pincode)]);
     await audit(req, { action: 'STUDENT_UPDATE', entity: 'student', entityId: id, details: { before, after: v } }, db);
   });
   return { message: 'Student record updated.', redirect: `/admin/students/${id}` };

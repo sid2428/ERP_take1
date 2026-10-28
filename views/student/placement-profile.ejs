@@ -93,6 +93,20 @@
 
   <div class="tnp-form-section">
     <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'calendar', size: 16 }) %>
+      <span>Expected Passing-out Year</span>
+    </h2>
+    <p class="tnp-form-section-desc">Enter your expected graduation year only if you know it. This submission is not verified and will not be used in batch statistics until an administrator reviews it.</p>
+    <div class="field">
+      <label for="submitted_expected_graduation_year">Expected passing-out year (optional)</label>
+      <input id="submitted_expected_graduation_year" type="number" name="submitted_expected_graduation_year"
+        value="<%= profile?.submitted_expected_graduation_year ?? '' %>" min="2000" max="2100" step="1">
+      <span class="hint">Currently recorded verified year: <strong><%= profile?.expected_graduation_year ?? 'None' %></strong>. A new submission does not change this until verified by an administrator.</span>
+    </div>
+  </div>
+
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
       <%- include('../partials/icon', { name: 'external-link', size: 16 }) %>
       <span>Professional Links &amp; Resume Document</span>
     </h2>

@@ -105,17 +105,99 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
 
   it('saves a student placement profile and restores the prior profile after the test',async()=>{
     const before=await pool!.query(`SELECT skills,resume_url,linkedin_url,github_url,portfolio_url,updated_at FROM student_placement_profile WHERE student_id=$1`,[studentId]);
+    const priorYears=await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId]);
     const marker=`tnp-profile-${randomUUID()}`;
     try{
       const page=await student.get('/student/placement/profile');
-      const saved=await student.post('/student/placement/profile').type('form').send({_csrf:csrfFrom(page.text),skills:marker,resume_url:'https://example.test/resume',linkedin_url:'',github_url:'',portfolio_url:''});
+      const invalid=await student.post('/student/placement/profile').type('form')
+        .send({_csrf:csrfFrom(page.text),skills:marker,resume_url:'https://example.test/resume',linkedin_url:'',github_url:'',portfolio_url:'',submitted_expected_graduation_year:'1900'});
+      expect(invalid.status).toBe(400);
+      expect(invalid.text).toContain('Expected passing-out year must be between 2000 and 2100.');
+      expect((await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId])).rows[0])
+        .toMatchObject({expected_graduation_year:priorYears.rows[0].expected_graduation_year,submitted_expected_graduation_year:priorYears.rows[0].submitted_expected_graduation_year});
+      const saved=await student.post('/student/placement/profile').type('form').send({_csrf:csrfFrom(page.text),skills:marker,resume_url:'https://example.test/resume',linkedin_url:'',github_url:'',portfolio_url:'',submitted_expected_graduation_year:'2097'});
       expect(saved.status).toBe(302);
       const refreshed=await student.get('/student/placement/profile');
       expect(refreshed.status).toBe(200);
       expect(refreshed.text).toContain(marker);
+      expect(refreshed.text).toContain('will not be used in batch statistics until an administrator reviews it');
+      expect((await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId])).rows[0])
+        .toMatchObject({expected_graduation_year:priorYears.rows[0].expected_graduation_year,submitted_expected_graduation_year:2097});
+      const queue=await admin.get('/admin/students/expected-graduation-year-submissions');
+      expect(queue.status).toBe(200);
+      expect(queue.text).toContain('2097');
+      expect((await student.get('/admin/students/expected-graduation-year-submissions')).status).toBe(403);
+      const studentCsrf=csrfFrom(refreshed.text);
+      expect((await student.post(`/admin/students/${studentId}/verify-expected-graduation-year`).type('form')
+        .send({_csrf:studentCsrf,verification_source:'Registrar record'})).status).toBe(403);
+      expect((await student.post(`/admin/students/${studentId}/reject-expected-graduation-year`).type('form')
+        .send({_csrf:studentCsrf})).status).toBe(403);
+      const emptyReference=await admin.post(`/admin/students/${studentId}/verify-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(queue.text),verification_source:''});
+      expect(emptyReference.status).toBe(302);
+      expect((await admin.get(emptyReference.headers.location!)).text)
+        .toContain('Enter the institutional record or source used to verify this year.');
+      expect((await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId])).rows[0])
+        .toMatchObject({expected_graduation_year:priorYears.rows[0].expected_graduation_year,submitted_expected_graduation_year:2097});
+      const badReference=await admin.post(`/admin/students/${studentId}/verify-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(queue.text),verification_source:'x'.repeat(201)});
+      expect(badReference.status).toBe(302);
+      expect((await admin.get(badReference.headers.location!)).text).toContain('Verification source must be 200 characters or fewer.');
+      const verificationSource='Registrar cohort confirmation REG-2026-042';
+      const verified=await admin.post(`/admin/students/${studentId}/verify-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(queue.text),verification_source:verificationSource});
+      expect(verified.status).toBe(302);
+      expect((await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId])).rows[0])
+        .toMatchObject({expected_graduation_year:2097,submitted_expected_graduation_year:null});
+      const verificationAudit=await pool!.query(`SELECT user_id,details FROM audit_log
+        WHERE action='STUDENT_EXPECTED_GRADUATION_YEAR_VERIFY' AND entity='student' AND entity_id=$1
+        ORDER BY audit_id DESC LIMIT 1`,[String(studentId)]);
+      expect(verificationAudit.rows[0]?.details).toMatchObject({
+        submitted_expected_graduation_year:2097,
+        new_submitted_expected_graduation_year:null,
+        previous_expected_graduation_year:priorYears.rows[0].expected_graduation_year,
+        new_expected_graduation_year:2097,
+        verification_source:verificationSource,
+      });
+      expect(verificationAudit.rows[0]?.user_id).toBe((await pool!.query(
+        `SELECT user_id FROM app_user WHERE login_id='admin'`)).rows[0]?.user_id);
+      const batchReport=await admin.get('/admin/placement/statistics?expected_graduation_year=2097');
+      expect(batchReport.status).toBe(200);
+      expect(batchReport.text).toContain('Batch 2097 (recorded expected graduation year)');
+      const refreshedQueue=await admin.get('/admin/students/expected-graduation-year-submissions');
+      expect(refreshedQueue.text).not.toContain(`/admin/students/${studentId}/verify-expected-graduation-year`);
+      const duplicateVerification=await admin.post(`/admin/students/${studentId}/verify-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(refreshedQueue.text),verification_source:verificationSource});
+      expect(duplicateVerification.status).toBe(409);
+      const profileAfterVerify=await student.get('/student/placement/profile');
+      const changedSubmission=await student.post('/student/placement/profile').type('form')
+        .send({_csrf:csrfFrom(profileAfterVerify.text),skills:marker,resume_url:'https://example.test/resume',linkedin_url:'',github_url:'',portfolio_url:'',submitted_expected_graduation_year:'2098'});
+      expect(changedSubmission.status).toBe(302);
+      const queueAfterChange=await admin.get('/admin/students/expected-graduation-year-submissions');
+      const rejected=await admin.post(`/admin/students/${studentId}/reject-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(queueAfterChange.text)});
+      expect(rejected.status).toBe(302);
+      expect((await pool!.query(`SELECT expected_graduation_year,submitted_expected_graduation_year FROM student WHERE student_id=$1`,[studentId])).rows[0])
+        .toMatchObject({expected_graduation_year:2097,submitted_expected_graduation_year:null});
+      const rejectionAudit=await pool!.query(`SELECT user_id,details FROM audit_log
+        WHERE action='STUDENT_EXPECTED_GRADUATION_YEAR_REJECT' AND entity='student' AND entity_id=$1
+        ORDER BY audit_id DESC LIMIT 1`,[String(studentId)]);
+      expect(rejectionAudit.rows[0]?.user_id).toBe((await pool!.query(
+        `SELECT user_id FROM app_user WHERE login_id='admin'`)).rows[0]?.user_id);
+      expect(rejectionAudit.rows[0]?.details).toMatchObject({
+        rejected_submitted_expected_graduation_year:2098,
+        new_submitted_expected_graduation_year:null,
+        previous_expected_graduation_year:2097,
+        new_expected_graduation_year:2097,
+      });
+      const duplicateRejection=await admin.post(`/admin/students/${studentId}/reject-expected-graduation-year`).type('form')
+        .send({_csrf:csrfFrom(queueAfterChange.text)});
+      expect(duplicateRejection.status).toBe(409);
       const row=await pool!.query(`SELECT skills,resume_url FROM student_placement_profile WHERE student_id=$1`,[studentId]);
       expect(row.rows[0]).toMatchObject({skills:marker,resume_url:'https://example.test/resume'});
     }finally{
+      await pool!.query(`UPDATE student SET expected_graduation_year=$2,submitted_expected_graduation_year=$3 WHERE student_id=$1`,
+        [studentId,priorYears.rows[0].expected_graduation_year,priorYears.rows[0].submitted_expected_graduation_year]);
       if(before.rows[0]){
         await pool!.query(`UPDATE student_placement_profile SET skills=$2,resume_url=$3,linkedin_url=$4,github_url=$5,portfolio_url=$6,updated_at=$7 WHERE student_id=$1`,[studentId,before.rows[0].skills,before.rows[0].resume_url,before.rows[0].linkedin_url,before.rows[0].portfolio_url,before.rows[0].updated_at]);
       }else await pool!.query(`DELETE FROM student_placement_profile WHERE student_id=$1`,[studentId]);

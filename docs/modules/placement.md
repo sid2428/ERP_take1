@@ -4,12 +4,13 @@ The placement module provides student placement profiles, drive eligibility, app
 
 ## Setup and routes
 
-Apply the forward-only migrations against a verified local database with `npm run db:migrate`. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Migration `090` enforces drive and recruitment-round state transitions and prevents newly scheduled or rescheduled rounds from being placed in the past. Migration `091` fixes row assignment in the drive notification procedure. Migration `092` adds the drive/application/offer summary view. Migration `099` adds a nullable, explicitly maintained expected graduation year; it deliberately does not backfill existing students. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Do not use production credentials for local setup.
+Apply forward-only migrations only after confirming the database target and reviewing every pending migration. The runner `npm run db:migrate` applies all pending migrations in filename order, each in its own transaction; it cannot select one migration. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Migration `090` enforces drive and recruitment-round state transitions and prevents newly scheduled or rescheduled rounds from being placed in the past. Migration `091` fixes row assignment in the drive notification procedure. Migration `092` adds the drive/application/offer summary view. Migration `099` adds a nullable, explicitly maintained expected graduation year; it deliberately does not backfill existing students. Migration `100` adds a separate nullable student-submission field and index; it does not change verified years or statistics. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Never point local scripts at Supabase or production.
 
 | User | Route | Capabilities |
 | --- | --- | --- |
 | Student | `/student/placement` | Summary and placement status |
-| Student | `/student/placement/profile` | Edit skills and resume/profile links |
+| Student | `/student/placement/profile` | Edit skills and resume/profile links; optionally submit an expected passing-out year |
+| Administrator | `/admin/students/expected-graduation-year-submissions` | Verify or reject student-submitted expected passing-out years |
 | Student | `/student/placement/drives` | Search, filter, inspect eligibility, and browse paginated results |
 | Student | `/student/placement/applications` | Review rounds, withdraw, and respond to offers |
 | Admin | `/admin/placement` | Placement summary |
@@ -18,7 +19,7 @@ Apply the forward-only migrations against a verified local database with `npm ru
 | Admin | `/admin/placement/drives/:id` | Manage status, round schedules and states, applicants, results, and offers |
 | Admin | `/admin/placement/drives/:id/edit` | Edit Draft drives before publication |
 | Admin | `/admin/placement/statistics` | Branch- and verified passing-out-batch statistics with combined filters |
-| Admin | `/admin/students/:id?edit=1` | Maintain a student's verified expected passing-out year |
+| Admin | `/admin/students/:id?edit=1` | View verified expected passing-out year; it cannot be changed through the general student editor |
 | Department HOD | `/faculty/placement` | Read-only report for their department |
 
 All mutating endpoints use POST, the shared CSRF middleware, a transaction, and the existing audit log. No file uploads are supported; profile documents are links only. CSV exports quote cells and escape formula-leading content.
@@ -41,13 +42,21 @@ The examination module defines `student_cgpa` from final course results, but the
 
 ### Expected passing-out year and batch statistics
 
-A batch is the student's expected graduation/passing-out year explicitly recorded in `student.expected_graduation_year`, not admission year, current academic session, program duration, or actual graduation status. Migration `099-student-expected-graduation-year.sql` adds the nullable `smallint` field with a 2000–2100 constraint. Existing values remain `NULL`; no year is inferred or backfilled. Admins maintain the field through the existing student detail edit form only after verifying the expected year from an authoritative academic record. Leave it blank when unverified. Every change is included in the existing student-update audit event.
+A batch is the student's expected graduation/passing-out year explicitly recorded in `student.expected_graduation_year`, not admission year, current academic session, program duration, or actual graduation status. Migration `099-student-expected-graduation-year.sql` adds the nullable verified `smallint` field with a 2000–2100 constraint. Migration `100-student-expected-graduation-year-submissions.sql` adds a separate nullable field for student submissions; it does not populate existing records. No year is inferred or backfilled. Students may submit a year from their TNP profile, but that value remains pending and is excluded from all cohort analytics until an administrator verifies it against an authoritative institutional record. Verification requires a short source description or institutional record reference, which is stored in the audit event; do not upload or enter sensitive documents or details. Admins can review pending values at `/admin/students/expected-graduation-year-submissions`; general student edits cannot change the verified year. Verification, rejection, and student submission changes are audited with the actor, decision, and old/new values.
 
 The statistics page's branch and passing-out-year filters can be used independently or together. An empty filter means all branches or all batches. A requested branch or year that is malformed or unavailable returns HTTP 400 rather than widening the report. The batch dropdown lists years currently held by active students in the selected branch scope.
 
 Batch denominators include active students with that recorded year only. Placed students are distinct active students with at least one accepted full-time offer; accepted internships do not qualify. Total recorded offers count every offer status for students in the selected branch/year scope. Accepted full-time and internship offers are counted separately. Highest, average, median, and package bands use accepted full-time offers with a recorded package; missing package values are omitted from package calculations, but accepted-offer counts still include them. Active students without a recorded expected year are reported separately at branch/institution scope and are never assigned to a batch.
 
 Cohort completeness depends on administrators maintaining verified values. Until records are reviewed and entered, batch statistics represent only the known-year subset and must not be interpreted as a complete graduating class.
+
+### Safe release sequence
+
+1. Review the current diff and run focused unit tests, workflow tests against an isolated database, typecheck, and production builds.
+2. Before any database change, confirm the exact host, port, and database name. Review the complete pending migration list and effects; this runner applies the entire pending set.
+3. Back up the target database and obtain explicit change approval before running migrations. Apply migrations before deploying code that reads the new submission column. Do not apply local migration commands to Supabase or production.
+4. After migration, verify the migration ledger/checksum, new column constraints/index, and no existing student years changed. Then run authenticated student submission and admin review checks with approved test accounts.
+5. Deploy only through the separately approved deployment workflow; this module documentation does not authorize or perform deployment.
 
 ## Dependencies and limitations
 
