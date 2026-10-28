@@ -13,7 +13,8 @@
 <div class="page-head">
   <div>
     <h1>Placement Statistics &amp; Analytics</h1>
-    <span class="sub">Verified institutional placement metrics. Placed indicates an active student with an accepted full-time offer; internships are tracked separately.</span>
+    <span class="sub">Placement metrics and reporting limitations. Placed indicates an active student with an accepted full-time offer; internships are tracked separately.</span>
+    <p class="note" role="status">Reporting scope: <strong><%= reportingScope ?? 'All branches (institution-wide)' %></strong>. Headline, branch, company, and package statistics below use this scope.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="/admin/placement">
@@ -94,10 +95,22 @@
 <section class="card" style="box-shadow:var(--shadow-xs);">
   <div class="hd">
     <div>
-      <h2>Placement percentage by department</h2>
+      <h2>Placement percentage by branch</h2>
       <p class="note" style="margin:2px 0 0;">Active students with accepted full-time offers &divide; active students enrolled in each department.</p>
+      <p class="note" style="margin:2px 0 0;">Expected graduation year is not stored authoritatively. Cohort analytics are withheld; active students without verified cohort data are reported separately.</p>
     </div>
   </div>
+
+  <form method="get" action="/admin/placement/statistics" class="actions" style="margin:12px 0;">
+    <label for="placement-department">Branch</label>
+    <select id="placement-department" name="dept_id">
+      <option value="">All branches</option>
+      <% (departments ?? []).forEach(department => { %>
+        <option value="<%= department.dept_id %>" <%= selectedDepartment === department.dept_id ? 'selected' : '' %>><%= department.dept_name %></option>
+      <% }) %>
+    </select>
+    <button class="btn secondary" type="submit">Filter</button>
+  </form>
 
   <% if (!byDepartment.length) { %>
     <div class="empty">No department data is available.</div>
@@ -118,10 +131,14 @@
       <table class="tnp-table">
         <thead>
           <tr>
-            <th>Department</th>
+            <th>Branch</th>
             <th class="num">Active Students</th>
             <th class="num">Placed Students</th>
             <th class="num">Placed %</th>
+            <th class="num">Total Offers</th>
+            <th class="num">Accepted Full-Time</th>
+            <th class="num">Accepted Internships</th>
+            <th class="num">Active Students — Cohort Unverified</th>
             <th class="num">Highest LPA</th>
           </tr>
         </thead>
@@ -132,6 +149,10 @@
               <td class="num"><%= fmt.num(d.active_students) %></td>
               <td class="num"><%= fmt.num(d.placed_students) %></td>
               <td class="num" style="font-weight:600;color:var(--green-text);"><%= d.placed_pct != null ? fmt.num(d.placed_pct) + '%' : '–' %></td>
+              <td class="num"><%= fmt.num(d.total_offers) %></td>
+              <td class="num"><%= fmt.num(d.accepted_fulltime_offers) %></td>
+              <td class="num"><%= fmt.num(d.accepted_internships) %></td>
+              <td class="num"><%= fmt.num(d.unverified_cohort_students) %></td>
               <td class="num"><%= d.highest_package_lpa != null ? fmt.num(d.highest_package_lpa) + ' LPA' : '–' %></td>
             </tr>
           <% }) %>

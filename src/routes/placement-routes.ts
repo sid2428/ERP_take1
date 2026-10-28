@@ -7,7 +7,7 @@ import { flash } from '../middleware/auth.js';
 import { parsePlacementDrivePagination } from '../lib/placement-pagination.js';
 import { escapeCsvCell } from '../lib/csv.js';
 import { chartBarPercent, placementPercentage } from '../lib/placement-stats.js';
-import { getAdminDrives, getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
+import { getAdminDepartmentPlacementStats, getAdminDrives, getAdminPlacementOverview, getCompanies, getDepartmentPlacementReport,
   getAcceptedFullTimePackageDistribution, getCompanyPlacementOffers, getDriveApplicants, getPlacementDashboard,
   getPlacementProfile, getStudentApplications, getStudentDrives } from '../queries/placement-queries.js';
 
@@ -291,13 +291,27 @@ placementAdminRouter.get('/drives/:id/applicants.csv',async(req,res)=>{
   const driveId=Number(req.params.id);const rows=await query(`SELECT s.student_number,s.first_name,s.last_name,p.program_name,a.status,a.applied_at FROM placement_application a JOIN student s USING(student_id) JOIN program p USING(program_id) WHERE a.drive_id=$1 ORDER BY a.applied_at`,[driveId]);
   res.type('text/csv').attachment(`placement-applicants-${driveId}.csv`).send(['Student number,First name,Last name,Program,Status,Applied at',...rows.map(r=>[r.student_number,r.first_name,r.last_name,r.program_name,r.status,r.applied_at].map(escapeCsvCell).join(','))].join('\r\n'));
 });
-placementAdminRouter.get('/statistics',async(_req,res)=>{
-  const byDepartment=await query<{dept_name:string;active_students:number;placed_students:number;placed_pct:number|null;highest_package_lpa:number|null}>(`SELECT d.dept_name,count(DISTINCT s.student_id)::int AS active_students,count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)::int AS placed_students,round(100.0*count(DISTINCT s.student_id) FILTER(WHERE ps.is_placed)/NULLIF(count(DISTINCT s.student_id),0),2) AS placed_pct,max(ps.best_offer_lpa) AS highest_package_lpa FROM department d JOIN program p USING(dept_id) JOIN student s USING(program_id) JOIN v_student_placement_status ps USING(student_id) WHERE s.status='Active' GROUP BY d.dept_name ORDER BY d.dept_name`);
-  const [overview,companyOffers,packageDistribution]=await Promise.all([getAdminPlacementOverview(),getCompanyPlacementOffers(),getAcceptedFullTimePackageDistribution()]);
+placementAdminRouter.get('/statistics',async(req,res)=>{
+  const departments=await query<{dept_id:string;dept_name:string}>('SELECT dept_id,dept_name FROM department ORDER BY dept_name');
+  const requestedDeptId=req.query.dept_id;
+  let selectedDepartment:typeof departments[number]|undefined;
+  if(requestedDeptId!==undefined&&requestedDeptId!==''){
+    if(typeof requestedDeptId!=='string'||requestedDeptId.length>10)
+      throw new HttpError(400,'Choose a valid branch.');
+    selectedDepartment=departments.find(d=>d.dept_id===requestedDeptId);
+    if(!selectedDepartment)throw new HttpError(400,'Choose a valid branch.');
+  }
+  const [overview,companyOffers,packageDistribution,byDepartment]=await Promise.all([
+    getAdminPlacementOverview(undefined,selectedDepartment?.dept_id),
+    getCompanyPlacementOffers(selectedDepartment?.dept_id),
+    getAcceptedFullTimePackageDistribution(undefined,selectedDepartment?.dept_id),
+    getAdminDepartmentPlacementStats(selectedDepartment?.dept_id),
+  ]);
   const maxPackages=Math.max(0,...packageDistribution.map((b)=>b.offer_count));
   res.render('admin/placement-statistics',{title:'Placement statistics',nav:'placement',
     overview:{...overview,overall_placement_pct:placementPercentage(overview?.placed_students??0,overview?.active_students??0)},
     byDepartment:byDepartment.map((d)=>({...d,bar_pct:chartBarPercent(d.placed_pct??0,100)})),
+    departments,selectedDepartment:selectedDepartment?.dept_id??'',reportingScope:selectedDepartment?.dept_name??'All branches (institution-wide)',
     companyOffers,packageDistribution:packageDistribution.map((b)=>({...b,bar_pct:chartBarPercent(b.offer_count,maxPackages)})),
     hasPackageData:maxPackages>0});
 });

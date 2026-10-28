@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { hasDatabase, inRollback, one } from './helpers.js';
-import { getAcceptedFullTimePackageDistribution, getAdminPlacementOverview, getStudentDrives } from '../../src/queries/placement-queries.js';
+import { getAcceptedFullTimePackageDistribution, getAdminDepartmentPlacementStats, getAdminPlacementOverview, getCompanyPlacementOffers, getStudentDrives } from '../../src/queries/placement-queries.js';
 import type { Db } from '../../src/db.js';
 
 async function fixture(db: import('pg').Client, options: { minYear?: number; packageLpa?: number; programMismatch?: boolean; title?: string; type?: 'FullTime' | 'Internship' } = {}) {
@@ -284,5 +284,154 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const bandBefore = bandsBefore.find((b) => b.label === '10–<15 LPA')!.offer_count;
     const bandAfter = bandsAfter.find((b) => b.label === '10–<15 LPA')!.offer_count;
     expect(bandAfter).toBe(bandBefore + 1);
+  }));
+
+  it('aggregates distinct branch placement counts and reports cohort records as unverified', async () => inRollback(async db => {
+    const f = await fixture(db);
+    const branch = await one<{ dept_id: string }>(db, 'SELECT dept_id FROM program WHERE program_id=$1', [f.program_id]);
+    const queryDb = db as unknown as Db;
+    const before = await getAdminDepartmentPlacementStats(branch.dept_id, queryDb);
+    const overviewBefore = await getAdminPlacementOverview(queryDb, branch.dept_id);
+    const packagesBefore = await getAcceptedFullTimePackageDistribution(queryDb, branch.dept_id);
+    const companiesBefore = await getCompanyPlacementOffers(branch.dept_id, queryDb);
+    expect(before).toHaveLength(1);
+    expect(before[0]!.verified_cohort_students).toBe(0);
+    expect(before[0]!.unverified_cohort_students).toBe(before[0]!.active_students);
+
+    const application = await one<{ application_id: number }>(db, `INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`, [f.student_id, f.driveId]);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`, [application.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`, [application.application_id]);
+    const fullTimeOffer = await one<{ offer_id: number }>(db, `INSERT INTO placement_offer(application_id,package_lpa,response_deadline)
+      VALUES($1,12,now()+interval '1 day') RETURNING offer_id`, [application.application_id]);
+    await db.query('SELECT respond_placement_offer($1,$2,true)', [fullTimeOffer.offer_id, f.student_id]);
+
+    const company = await one<{ company_id: number }>(db,
+      `INSERT INTO company(company_name) VALUES('placement-cohort-test-'||to_char(clock_timestamp(),'YYYYMMDDHH24MISSUS')) RETURNING company_id`);
+    const internship = await one<{ drive_id: number }>(db, `INSERT INTO placement_drive
+      (company_id,title,role_title,drive_type,stipend_monthly,min_year,opens_at,deadline,status)
+      VALUES($1,'internship cohort test','Intern','Internship',20000,$2,now()-interval '1 hour',now()+interval '1 day','Open')
+      RETURNING drive_id`, [company.company_id, f.year_of_study]);
+    await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [internship.drive_id, f.program_id]);
+    const internshipApplication = await one<{ application_id: number }>(db, `INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`, [f.student_id, internship.drive_id]);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`, [internshipApplication.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`, [internshipApplication.application_id]);
+    const internshipOffer = await one<{ offer_id: number }>(db, `INSERT INTO placement_offer(application_id,stipend_monthly,response_deadline)
+      VALUES($1,20000,now()+interval '1 day') RETURNING offer_id`, [internshipApplication.application_id]);
+    await db.query('SELECT respond_placement_offer($1,$2,true)', [internshipOffer.offer_id, f.student_id]);
+
+    const secondInternship = await one<{ drive_id: number }>(db, `INSERT INTO placement_drive
+      (company_id,title,role_title,drive_type,stipend_monthly,min_year,opens_at,deadline,status)
+      VALUES($1,'second internship cohort test','Intern','Internship',25000,$2,now()-interval '1 hour',now()+interval '1 day','Open')
+      RETURNING drive_id`, [company.company_id, f.year_of_study]);
+    await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [secondInternship.drive_id, f.program_id]);
+    const secondInternshipApplication = await one<{ application_id: number }>(db, `INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`, [f.student_id, secondInternship.drive_id]);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`, [secondInternshipApplication.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`, [secondInternshipApplication.application_id]);
+    const secondInternshipOffer = await one<{ offer_id: number }>(db, `INSERT INTO placement_offer(application_id,stipend_monthly,response_deadline)
+      VALUES($1,25000,now()+interval '1 day') RETURNING offer_id`, [secondInternshipApplication.application_id]);
+    await db.query('SELECT respond_placement_offer($1,$2,true)', [secondInternshipOffer.offer_id, f.student_id]);
+
+    const pendingFullTime = await one<{ drive_id: number }>(db, `INSERT INTO placement_drive
+      (company_id,title,role_title,drive_type,package_lpa,min_year,opens_at,deadline,status)
+      VALUES($1,'pending full-time cohort test','Engineer','FullTime',20,$2,now()-interval '1 hour',now()+interval '1 day','Open')
+      RETURNING drive_id`, [company.company_id, f.year_of_study]);
+    await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [pendingFullTime.drive_id, f.program_id]);
+    const pendingApplication = await one<{ application_id: number }>(db, `INSERT INTO placement_application(student_id,drive_id)
+      VALUES($1,$2) RETURNING application_id`, [f.student_id, pendingFullTime.drive_id]);
+    await db.query(`UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1`, [pendingApplication.application_id]);
+    await db.query(`UPDATE placement_application SET status='Selected' WHERE application_id=$1`, [pendingApplication.application_id]);
+    await db.query(`INSERT INTO placement_offer(application_id,package_lpa,response_deadline)
+      VALUES($1,20,now()+interval '1 day')`, [pendingApplication.application_id]);
+
+    const allBranches = await getAdminDepartmentPlacementStats(undefined, queryDb);
+    const selectedBranch = await getAdminDepartmentPlacementStats(branch.dept_id, queryDb);
+    const overviewAfter = await getAdminPlacementOverview(queryDb, branch.dept_id);
+    const packagesAfter = await getAcceptedFullTimePackageDistribution(queryDb, branch.dept_id);
+    const companiesAfter = await getCompanyPlacementOffers(branch.dept_id, queryDb);
+    expect(selectedBranch).toHaveLength(1);
+    expect(selectedBranch[0]!.dept_id).toBe(branch.dept_id);
+    const after = selectedBranch[0]!;
+    expect(after.active_students).toBe(before[0]!.active_students);
+    expect(after.placed_students).toBe(before[0]!.placed_students + 1);
+    expect(after.total_offers).toBe(before[0]!.total_offers + 4);
+    expect(after.accepted_fulltime_offers).toBe(before[0]!.accepted_fulltime_offers + 1);
+    expect(after.accepted_internships).toBe(before[0]!.accepted_internships + 2);
+    expect(after.unverified_cohort_students).toBe(after.active_students);
+    expect(overviewAfter).toMatchObject({
+      active_students: after.active_students,
+      placed_students: after.placed_students,
+      total_offers: after.total_offers,
+      accepted_fulltime_offers: after.accepted_fulltime_offers,
+      accepted_internships: after.accepted_internships,
+      highest_package_lpa: after.highest_package_lpa,
+    });
+    expect(overviewAfter?.placed_students).toBe(overviewBefore?.placed_students + 1);
+    expect(overviewAfter?.total_offers).toBe(overviewBefore?.total_offers + 4);
+    expect(packagesAfter.reduce((sum, band) => sum + band.offer_count, 0))
+      .toBe(packagesBefore.reduce((sum, band) => sum + band.offer_count, 0) + 1);
+    expect(companiesAfter.reduce((sum, companyRow) => sum + companyRow.total_offers, 0))
+      .toBe(companiesBefore.reduce((sum, companyRow) => sum + companyRow.total_offers, 0) + 4);
+    expect(allBranches.find(row => row.dept_id === branch.dept_id)).toMatchObject({
+      placed_students: after.placed_students,
+      total_offers: after.total_offers,
+    });
+
+    const allOverview = await getAdminPlacementOverview(queryDb);
+    const allCompanies = await getCompanyPlacementOffers(undefined, queryDb);
+    const allPackages = await getAcceptedFullTimePackageDistribution(queryDb);
+    const packageCounts = await one<{ with_package: number; without_package: number }>(db, `SELECT
+      count(*) FILTER (WHERE o.package_lpa IS NOT NULL)::int AS with_package,
+      count(*) FILTER (WHERE o.package_lpa IS NULL)::int AS without_package
+      FROM placement_offer o
+      JOIN placement_application a USING(application_id)
+      JOIN placement_drive d USING(drive_id)
+      WHERE o.status='Accepted' AND d.drive_type='FullTime'`);
+    expect(allBranches.reduce((sum, row) => sum + row.active_students, 0)).toBe(allOverview?.active_students);
+    expect(allBranches.reduce((sum, row) => sum + row.placed_students, 0)).toBe(allOverview?.placed_students);
+    expect(allBranches.reduce((sum, row) => sum + row.total_offers, 0)).toBe(allOverview?.total_offers);
+    expect(allBranches.reduce((sum, row) => sum + row.accepted_fulltime_offers, 0)).toBe(allOverview?.accepted_fulltime_offers);
+    expect(allBranches.reduce((sum, row) => sum + row.accepted_internships, 0)).toBe(allOverview?.accepted_internships);
+    expect(allCompanies.reduce((sum, companyRow) => sum + companyRow.total_offers, 0)).toBe(allOverview?.total_offers);
+    const packageBandOfferCount = allPackages.reduce((sum, band) => sum + band.offer_count, 0);
+    expect(packageBandOfferCount).toBe(packageCounts.with_package);
+    expect(packageBandOfferCount + packageCounts.without_package).toBe(allOverview?.accepted_fulltime_offers);
+    expect(after.placed_pct).toBe(Math.round(after.placed_students / after.active_students * 10_000) / 100);
+  }));
+
+  it('returns zero-safe branch metrics for an empty department', async () => inRollback(async db => {
+    const branch = await one<{ dept_id: string }>(db, `INSERT INTO department(dept_id,dept_name)
+      VALUES('T'||substr(md5(random()::text),1,9),'placement-empty-'||to_char(clock_timestamp(),'YYYYMMDDHH24MISSUS'))
+      RETURNING dept_id`);
+    const rows = await getAdminDepartmentPlacementStats(branch.dept_id, db as unknown as Db);
+    const overview = await getAdminPlacementOverview(db as unknown as Db, branch.dept_id);
+    const packages = await getAcceptedFullTimePackageDistribution(db as unknown as Db, branch.dept_id);
+    const companies = await getCompanyPlacementOffers(branch.dept_id, db as unknown as Db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      active_students: 0,
+      placed_students: 0,
+      placed_pct: 0,
+      total_offers: 0,
+      accepted_fulltime_offers: 0,
+      accepted_internships: 0,
+      verified_cohort_students: 0,
+      unverified_cohort_students: 0,
+      highest_package_lpa: null,
+    });
+    expect(overview).toMatchObject({
+      active_students: 0,
+      placed_students: 0,
+      total_offers: 0,
+      accepted_fulltime_offers: 0,
+      accepted_internships: 0,
+      highest_package_lpa: null,
+      median_package_lpa: null,
+      average_package_lpa: null,
+    });
+    expect(packages.reduce((sum, band) => sum + band.offer_count, 0)).toBe(0);
+    expect(companies).toEqual([]);
   }));
 });
