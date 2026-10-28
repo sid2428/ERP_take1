@@ -121,6 +121,11 @@ main { padding: 24px 28px 48px; display: flex; flex-direction: column; gap: 20px
 .item .t > div:first-child { font-weight: 500; }
 .item .s { font-size: 12.5px; color: var(--muted); }
 .item .w { font-size: 12.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+.notice-summary-item { align-items: flex-start; }
+.notice-summary-item.unread .notice-summary-title { font-weight: 600; }
+.notice-summary-title { line-height: 1.35; overflow-wrap: anywhere; }
+.notice-summary-title .pill { margin-right: 2px; }
+.notice-summary-body { margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--org); margin-top: 6px; }
 .dot.r { background: var(--red); } .dot.b { background: var(--link); } .dot.g { background: var(--green); }
 .empty { color: var(--muted); padding: 8px 0; }
@@ -408,6 +413,8 @@ fieldset.field legend { padding: 0; margin-bottom: 5px; font-size: 12.5px; font-
 .notice { padding: 14px 0; border-top: 1px solid var(--line-2); }
 .notice:first-of-type { border-top: 0; padding-top: 4px; }
 .notice .meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.notice-title { line-height: 1.4; overflow-wrap: anywhere; }
+.notice-title a { overflow-wrap: anywhere; }
 .notice.unread .title { font-weight: 600; }
 .notice-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
 /* audience picker: show only the fields of the chosen audience (no script needed) */

@@ -291,7 +291,18 @@ describe.skipIf(!hasAdminEnv)('T8-1 notices (pages and permissions)', () => {
     expect((await student.get(`/student/notices/notification/${rows[0]!.notification_id}`)).status).toBe(404);
     // the admin's reply reaches the student as a personal notice
     await postForm(admin, `/admin/grievances/${gid}`, `/admin/grievances/${gid}/comments`, { body: 'Checking with the exam cell.' });
-    expect((await student.get('/student/notices')).text).toContain(`New reply on grievance #${gid}`);
+    const studentBoard = await student.get('/student/notices');
+    expect(studentBoard.text).toContain(`New reply on grievance #${gid}`);
+    expect(studentBoard.text).toContain('The academic office wrote: Checking with the exam cell.');
+    const { rows: replyNotifications } = await db.query<{ notification_id: number }>(
+      `SELECT notification_id FROM notification WHERE user_id = (SELECT user_id FROM app_user WHERE login_id = $1)
+       AND link = $2 AND title = $3 ORDER BY notification_id DESC LIMIT 1`,
+      [STUDENT, `/student/grievances/${gid}`, `New reply on grievance #${gid}`]);
+    expect(replyNotifications).toHaveLength(1);
+    const replyNotificationId = replyNotifications[0]!.notification_id;
+    expect(studentBoard.text).toContain(`/student/notices/notification/${replyNotificationId}/go`);
+    const replyGo = await student.get(`/student/notices/notification/${replyNotificationId}/go`);
+    expect(replyGo.headers.location).toBe(`/student/grievances/${gid}`);
   });
 
   it('admin can withdraw; the notice leaves every board', async () => {

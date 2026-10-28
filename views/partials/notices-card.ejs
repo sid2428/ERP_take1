@@ -13,13 +13,18 @@
   <% } %>
   <% for (const n of notices.latest) { %>
   <% const itemPath = n.item_type === 'notification' ? `${noticeBase}/notification/${n.notification_id}` : `${noticeBase}/${n.notice_id}`; %>
-  <div class="item">
+  <article class="item notice-summary-item<%= n.is_read ? '' : ' unread' %>">
     <div class="t">
-      <div><a href="<%= itemPath %><%= n.link ? '/go' : '' %>"><%= n.is_important ? '★ ' : '' %><%= n.title %></a><% if (!n.is_read) { %> <span class="dot b inline" title="Unread"></span><% } %></div>
-      <div class="s"><%= n.category %> · <%= n.posted_by_name %></div>
+      <div class="notice-summary-title">
+        <% if (n.notification_kind === 'grievance') { %><span class="pill v">Grievance</span> <% } %>
+        <a href="<%= itemPath %><%= n.link ? '/go' : '' %>"><%= n.is_important ? '★ ' : '' %><%= n.title %></a>
+        <% if (!n.is_read) { %> <span class="dot b inline" title="Unread" aria-label="Unread"></span><% } %>
+      </div>
+      <% if (n.is_personal) { %><div class="s notice-summary-body"><%= n.body %></div><% } %>
+      <div class="s"><%= n.category %> · <%= n.posted_by_name %><% if (n.is_personal) { %> · <span class="pill <%= n.is_read ? 'n' : 'o' %>"><%= n.is_read ? 'Read' : 'Unread' %></span><% } %></div>
     </div>
-    <div class="w"><%= fmt.shortDate(n.posted_at) %></div>
-  </div>
+    <time class="w" datetime="<%= new Date(n.posted_at).toISOString() %>"><%= fmt.shortDate(n.posted_at) %></time>
+  </article>
   <% } %>
   <div style="margin-top:10px"><a href="<%= noticeBase %>"><%= noticeBase.endsWith('/inbox') ? 'Open inbox' : 'All notices' %> →</a></div>
 </div>
