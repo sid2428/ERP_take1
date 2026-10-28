@@ -123,15 +123,15 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const offer = await one<{ offer_id: number }>(db, `INSERT INTO placement_offer(application_id,package_lpa,response_deadline)
       VALUES($1,10,now()+interval '1 day') RETURNING offer_id`, [app.application_id]);
     await db.query('SELECT respond_placement_offer($1,$2,true)', [offer.offer_id, f.student_id]);
-    const low = await fixture(db, { packageLpa: 14.99 });
+    const low = await fixture(db, { packageLpa: 14.99, minYear: f.year_of_study });
     await db.query('DELETE FROM drive_program WHERE drive_id=$1', [low.driveId]);
     await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [low.driveId, f.program_id]);
     expect(await fails(db, 'INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)', [f.student_id, low.driveId])).toMatch(/1.5x/i);
-    const threshold = await fixture(db, { packageLpa: 15 });
+    const threshold = await fixture(db, { packageLpa: 15, minYear: f.year_of_study });
     await db.query('DELETE FROM drive_program WHERE drive_id=$1', [threshold.driveId]);
     await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [threshold.driveId, f.program_id]);
     await expect(db.query('INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2)', [f.student_id, threshold.driveId])).resolves.toBeTruthy();
-    const internship = await fixture(db, { packageLpa: 20 });
+    const internship = await fixture(db, { packageLpa: 20, minYear: f.year_of_study });
     await db.query('UPDATE placement_drive SET drive_type=\'Internship\',package_lpa=NULL,stipend_monthly=20000 WHERE drive_id=$1', [internship.driveId]);
     await db.query('DELETE FROM drive_program WHERE drive_id=$1', [internship.driveId]);
     await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [internship.driveId, f.program_id]);
@@ -188,6 +188,46 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const total = await one<{ n: number }>(db,
       `SELECT count(*)::int AS n FROM notification WHERE kind = 'placement' AND link = $1`, [driveLink]);
     expect(total.n).toBe(expected.length);
+  }));
+
+  it('finds the same eligible students in bulk as is_eligible() does one by one', async () => inRollback(async db => {
+    // a student with an accepted 10 LPA full-time offer, so the 1.5x rule applies to them
+    const f = await fixture(db);
+    const app = await one<{ application_id: number }>(db,
+      'INSERT INTO placement_application(student_id,drive_id) VALUES($1,$2) RETURNING application_id', [f.student_id, f.driveId]);
+    await db.query("UPDATE placement_application SET status='Shortlisted' WHERE application_id=$1", [app.application_id]);
+    await db.query("UPDATE placement_application SET status='Selected' WHERE application_id=$1", [app.application_id]);
+    const offer = await one<{ offer_id: number }>(db, `INSERT INTO placement_offer(application_id,package_lpa,response_deadline)
+      VALUES($1,10,now()+interval '1 day') RETURNING offer_id`, [app.application_id]);
+    await db.query('SELECT respond_placement_offer($1,$2,true)', [offer.offer_id, f.student_id]);
+
+    const sample = `SELECT s.student_id FROM student s WHERE s.student_id % 97 = 0 OR s.student_id = $2`;
+    const variants: Array<[string, string]> = [
+      ['any year, any program', `UPDATE placement_drive SET min_year=1, package_lpa=20 WHERE drive_id=$1`],
+      ['year 3+, one program', `UPDATE placement_drive SET min_year=3 WHERE drive_id=$1`],
+      ['attendance 75%+', `UPDATE placement_drive SET min_year=1, min_attendance_pct=75 WHERE drive_id=$1`],
+      ['CGPA rule (unassessable)', `UPDATE placement_drive SET min_attendance_pct=NULL, min_cgpa=7 WHERE drive_id=$1`],
+      ['pays under 1.5x the accepted offer', `UPDATE placement_drive SET min_cgpa=NULL, package_lpa=14 WHERE drive_id=$1`],
+    ];
+    const drive = await fixture(db, { minYear: 1 });
+    await db.query('DELETE FROM drive_program WHERE drive_id=$1', [drive.driveId]);
+    for (const [label, change] of variants) {
+      if (label === 'year 3+, one program') {
+        await db.query('INSERT INTO drive_program(drive_id,program_id) VALUES($1,$2)', [drive.driveId, f.program_id]);
+      } else if (label === 'attendance 75%+') {
+        await db.query('DELETE FROM drive_program WHERE drive_id=$1', [drive.driveId]);
+      }
+      await db.query(change, [drive.driveId]);
+      const oneByOne = (await db.query<{ student_id: number }>(`SELECT x.student_id FROM (${sample}) x
+        CROSS JOIN LATERAL is_eligible(x.student_id, $1) e WHERE e.eligible ORDER BY 1`, [drive.driveId, f.student_id]))
+        .rows.map((r) => r.student_id);
+      const bulk = (await db.query<{ student_id: number }>(`SELECT e.student_id FROM eligible_students_for_drive($1) e
+        WHERE e.student_id IN (${sample}) ORDER BY 1`, [drive.driveId, f.student_id])).rows.map((r) => r.student_id);
+      expect(bulk, label).toEqual(oneByOne);
+      if (label === 'any year, any program') expect(bulk).toContain(f.student_id);
+      if (label === 'pays under 1.5x the accepted offer') expect(bulk).not.toContain(f.student_id);
+      if (label === 'CGPA rule (unassessable)') expect(bulk).toEqual([]);
+    }
   }));
 
   it('counts accepted full-time offers without multiplying them by rounds', async () => inRollback(async db => {

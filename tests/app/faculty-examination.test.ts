@@ -14,7 +14,33 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
   const db = pool!;
   let faculty: Awaited<ReturnType<typeof signIn>>['agent'];
   let facultyId = 0;
-  let fixture: { courseId: number; cycleId: number; schemeCreated: boolean; gradeCreated: boolean } | undefined;
+  let fixture: {
+    courseId: number;
+    cycleId: number;
+    sessionId: string;
+    schemeCreated: boolean;
+    gradeCreated: boolean;
+  } | undefined;
+  let summarySnapshot: {
+    studentId: number;
+    semesterResult: {
+      semester_result_id: number;
+      semester: number;
+      credits_registered: number;
+      credits_earned: number;
+      sgpa: number;
+      backlogs: number;
+      result_status: string;
+    } | null;
+    cgpa: {
+      semesters_completed: number;
+      credits_attempted: number;
+      credits_earned: number;
+      cgpa: number;
+      backlog_count: number;
+    } | null;
+    courseResults: { attempt_no: number; is_final_attempt: boolean }[];
+  } | undefined;
 
   beforeAll(async () => {
     const login = await signIn(app, 'FAC-CSE-074', DEMO);
@@ -36,16 +62,20 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
           AND (NOT EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=c.course_id)
             OR EXISTS(SELECT 1 FROM course_exam_scheme s WHERE s.course_id=c.course_id
               AND (s.internal_max,s.midsem_max,s.endsem_max,s.total_max)=(20,20,60,100)))
-          AND NOT EXISTS(SELECT 1 FROM exam_marks m WHERE m.course_id=c.course_id)
-          AND NOT EXISTS(SELECT 1 FROM course_result cr WHERE cr.course_id=c.course_id)
         ORDER BY c.course_id LIMIT 1`,[facultyId]);
-      if (!chosen.rows[0]) throw new Error('No unused assigned theory course for faculty examination fixture');
+      if (!chosen.rows[0]) throw new Error('No assigned theory course for faculty examination fixture');
       const courseId=chosen.rows[0].course_id;
       const schemeCreated=(await client.query(`INSERT INTO course_exam_scheme(course_id,internal_max,midsem_max,endsem_max,total_max)
         VALUES($1,20,20,60,100) ON CONFLICT(course_id) DO NOTHING RETURNING course_id`,[courseId])).rows.length>0;
       const cycle=await client.query<{exam_cycle_id:number}>(`INSERT INTO exam_cycle(academic_session_id,exam_type,start_date,end_date,status)
         VALUES($1,'EndSem',current_date+100,current_date+101,'Upcoming') RETURNING exam_cycle_id`,[chosen.rows[0].session_id]);
-      fixture={courseId,cycleId:cycle.rows[0]!.exam_cycle_id,schemeCreated,gradeCreated};
+      fixture={
+        courseId,
+        cycleId: cycle.rows[0]!.exam_cycle_id,
+        sessionId: chosen.rows[0]!.session_id,
+        schemeCreated,
+        gradeCreated,
+      };
       await client.query('COMMIT');
     } catch(error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
@@ -53,6 +83,59 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
 
   afterAll(async () => {
     if(fixture) {
+      if (summarySnapshot) {
+        await db.query(`DELETE FROM course_result
+          WHERE student_id=$1 AND course_id=$2
+            AND NOT (attempt_no = ANY($3::smallint[]))`, [
+          summarySnapshot.studentId,
+          fixture.courseId,
+          summarySnapshot.courseResults.map((result) => result.attempt_no),
+        ]);
+        for (const result of summarySnapshot.courseResults) {
+          await db.query(`UPDATE course_result SET is_final_attempt=$4
+            WHERE student_id=$1 AND course_id=$2 AND attempt_no=$3`, [
+            summarySnapshot.studentId,
+            fixture.courseId,
+            result.attempt_no,
+            result.is_final_attempt,
+          ]);
+        }
+        await db.query('DELETE FROM exam_marks WHERE course_id=$1 AND exam_cycle_id=$2', [fixture.courseId, fixture.cycleId]);
+        if (summarySnapshot.semesterResult) {
+          const result = summarySnapshot.semesterResult;
+          await db.query(`UPDATE semester_result
+            SET semester=$2, credits_registered=$3, credits_earned=$4, sgpa=$5, backlogs=$6, result_status=$7
+            WHERE semester_result_id=$1`, [
+            result.semester_result_id,
+            result.semester,
+            result.credits_registered,
+            result.credits_earned,
+            result.sgpa,
+            result.backlogs,
+            result.result_status,
+          ]);
+        } else {
+          await db.query('DELETE FROM semester_result WHERE student_id=$1 AND academic_session_id=$2', [
+            summarySnapshot.studentId,
+            fixture.sessionId,
+          ]);
+        }
+        if (summarySnapshot.cgpa) {
+          const cgpa = summarySnapshot.cgpa;
+          await db.query(`UPDATE student_cgpa
+            SET semesters_completed=$2, credits_attempted=$3, credits_earned=$4, cgpa=$5, backlog_count=$6
+            WHERE student_id=$1`, [
+            summarySnapshot.studentId,
+            cgpa.semesters_completed,
+            cgpa.credits_attempted,
+            cgpa.credits_earned,
+            cgpa.cgpa,
+            cgpa.backlog_count,
+          ]);
+        } else {
+          await db.query('DELETE FROM student_cgpa WHERE student_id=$1', [summarySnapshot.studentId]);
+        }
+      }
       await db.query('DELETE FROM exam_cycle WHERE exam_cycle_id=$1',[fixture.cycleId]);
       if(fixture.schemeCreated) await db.query('DELETE FROM course_exam_scheme WHERE course_id=$1',[fixture.courseId]);
       if(fixture.gradeCreated) await db.query("DELETE FROM grade_scale WHERE grade='X2' AND description='faculty examination test'");
@@ -126,31 +209,58 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
       `/faculty/examination/courses/${course.course_id}?exam_cycle_id=${course.exam_cycle_id}`,
     ).set('Accept', 'application/json');
     expect(detail.status).toBe(200);
+    expect(detail.body.course).toMatchObject({
+      internal_max: 20,
+      midsem_max: 20,
+      endsem_max: 60,
+      total_max: 100,
+    });
     const student = detail.body.students[0] as { student_id: number };
     expect(student).toBeDefined();
 
-    const rejected = await postForm(faculty, '/faculty/examination',
-      `/faculty/examination/courses/${course.course_id}/marks`, {
+    const marksEndpoint = `/faculty/examination/courses/${course.course_id}/marks`;
+    const submit = (values: { internal_marks: unknown; midsem_marks: unknown; endsem_marks: unknown }) =>
+      postForm(faculty, '/faculty/examination', marksEndpoint, {
         exam_cycle_id: String(course.exam_cycle_id),
         entries_json: JSON.stringify([{
           student_id: student.student_id,
-          internal_marks: course.internal_max + 1,
-          midsem_marks: null,
-          endsem_marks: null,
+          ...values,
         }]),
       });
-    expect(rejected.status).toBe(400);
-    const negative = await postForm(faculty, '/faculty/examination',
-      `/faculty/examination/courses/${course.course_id}/marks`, {
-        exam_cycle_id: String(course.exam_cycle_id),
-        entries_json: JSON.stringify([{
-          student_id: student.student_id,
-          internal_marks: -0.1,
-          midsem_marks: null,
-          endsem_marks: null,
-        }]),
-      });
-    expect(negative.status).toBe(400);
+
+    for (const invalid of [
+      { internal_marks: 21, midsem_marks: null, endsem_marks: null },
+      { internal_marks: null, midsem_marks: 21, endsem_marks: null },
+      { internal_marks: null, midsem_marks: null, endsem_marks: 61 },
+      { internal_marks: -0.1, midsem_marks: null, endsem_marks: null },
+      { internal_marks: 'not numeric', midsem_marks: null, endsem_marks: null },
+    ]) {
+      const rejected = await submit(invalid);
+      expect(rejected.status).toBe(400);
+    }
+
+    const previousSemester = await db.query<NonNullable<typeof summarySnapshot>['semesterResult'] & object>(`
+      SELECT semester_result_id, semester, credits_registered, credits_earned, sgpa, backlogs, result_status
+      FROM semester_result WHERE student_id=$1 AND academic_session_id=$2`,
+    [student.student_id, fixture!.sessionId]);
+    const previousCgpa = await db.query<NonNullable<typeof summarySnapshot>['cgpa'] & object>(`
+      SELECT semesters_completed, credits_attempted, credits_earned, cgpa, backlog_count
+      FROM student_cgpa WHERE student_id=$1`,
+    [student.student_id]);
+    const previousCourseResults = await db.query<{ attempt_no: number; is_final_attempt: boolean }>(`
+      SELECT attempt_no, is_final_attempt FROM course_result
+      WHERE student_id=$1 AND course_id=$2`,
+    [student.student_id, course.course_id]);
+    summarySnapshot = {
+      studentId: student.student_id,
+      semesterResult: previousSemester.rows[0] ?? null,
+      cgpa: previousCgpa.rows[0] ?? null,
+      courseResults: previousCourseResults.rows,
+    };
+
+    const valid = await submit({ internal_marks: 15, midsem_marks: 18, endsem_marks: 55 });
+    expect(valid.status).toBe(200);
+    expect(valid.body.saved).toBe(1);
 
     const client = await db.connect();
     try {
@@ -171,6 +281,17 @@ describe.skipIf(!hasAppEnv)('faculty examination', () => {
         WHERE student_id = $1 AND course_id = $2 AND exam_cycle_id = $3`,
       [student.student_id, course.course_id, course.exam_cycle_id]);
       expect(marks.rows).toContainEqual({ internal_marks: 15, midsem_marks: 18, endsem_marks: 55 });
+
+      const reloaded = await faculty.get(
+        `/faculty/examination/courses/${course.course_id}?exam_cycle_id=${course.exam_cycle_id}`,
+      ).set('Accept', 'application/json');
+      expect(reloaded.status).toBe(200);
+      expect(reloaded.body.students.find((item: { student_id: number }) =>
+        item.student_id === student.student_id)).toMatchObject({
+        internal_marks: 15,
+        midsem_marks: 18,
+        endsem_marks: 55,
+      });
 
       const result = await client.query<{
         total_marks: number; max_marks: number; is_final_attempt: boolean; grade: string; grade_points: number;

@@ -1,0 +1,62 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head hall-ticket-page-head">
+  <h1>Hall Ticket</h1>
+  <span class="sub"><%= ticket.hall_ticket_no %> · Issued <%= fmt.date(ticket.issued_on) %></span>
+</div>
+<section class="card hall-ticket-document" aria-label="Printable hall ticket">
+  <div class="hall-ticket-document-head">
+    <div>
+      <div class="hall-ticket-brand">PICT ERP · EXAMINATION</div>
+      <h1><%= ticket.exam_type %> Hall Ticket</h1>
+      <p class="hall-ticket-session">Academic session <strong><%= ticket.academic_session_id %></strong> · Ticket <strong><%= ticket.hall_ticket_no %></strong></p>
+    </div>
+    <div class="hall-ticket-photo" role="img" aria-label="Student photo placeholder">Photo</div>
+  </div>
+
+  <dl class="hall-ticket-identity">
+    <div><dt>Student name</dt><dd><%= student.full_name %></dd></div>
+    <div><dt>Student number</dt><dd><%= student.student_number %></dd></div>
+    <div><dt>Roll number</dt><dd><%= student.roll_no ?? 'Not assigned' %></dd></div>
+    <div><dt>Program</dt><dd><%= student.program_name %></dd></div>
+    <div><dt>Division</dt><dd><%= student.division_code ?? 'Not assigned' %></dd></div>
+    <div><dt>Issued on</dt><dd><%= fmt.date(ticket.issued_on) %></dd></div>
+  </dl>
+
+  <h2 class="hall-ticket-section-title">Eligible examinations</h2>
+  <div class="sc hall-ticket-exams-table">
+    <table>
+      <thead>
+        <tr><th>Course</th><th>Date</th><th>Session</th><th>Time</th></tr>
+      </thead>
+      <tbody>
+        <% exams.forEach((exam) => { %>
+          <tr>
+            <td><strong><%= exam.course_code %></strong> · <%= exam.course_name %></td>
+            <td><%= fmt.date(exam.exam_date) %></td>
+            <td><%= exam.session %></td>
+            <td><%= exam.start_time.slice(0, 5) %> – <%= exam.end_time.slice(0, 5) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <ol class="hall-ticket-instructions">
+    <li>Bring this hall ticket and your valid student identity card to every examination.</li>
+    <li>Report to the examination venue at least 30 minutes before the scheduled start.</li>
+    <li>Use only permitted stationery and materials; electronic devices are not allowed.</li>
+    <li>Keep your hall ticket visible and follow all instructions given by the invigilator.</li>
+    <li>Do not leave the examination room without the invigilator's permission.</li>
+  </ol>
+
+  <div class="hall-ticket-signatures">
+    <div><span></span><strong>Student signature</strong></div>
+    <div><span></span><strong>Invigilator signature</strong></div>
+  </div>
+</section>
+<div class="actions hall-ticket-print-actions">
+  <button class="btn primary" type="button" data-print-ticket>Print</button>
+  <a class="btn" href="/student/hall-ticket">Back to hall tickets</a>
+</div>
+<script src="/static/js/student-records.js" defer></script>
+<%- include('../partials/layout-end') %>

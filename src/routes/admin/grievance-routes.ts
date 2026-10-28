@@ -58,6 +58,14 @@ function statusesFor(filter: string): string[] {
 
 interface GrievanceCounts { total: number; active: number; locked: number; }
 
+/** General grievances (no course: fees, facilities, faculty-raised ...) still waiting for the admin. */
+function generalWaiting(): Promise<{ open: number; faculty: number }> {
+  return queryOne<{ open: number; faculty: number }>(`
+    SELECT count(*)::int AS open, count(*) FILTER (WHERE raised_by_role = 'faculty')::int AS faculty
+    FROM grievance WHERE course_id IS NULL AND status IN ('Open', 'In progress')`)
+    .then((r) => r ?? { open: 0, faculty: 0 });
+}
+
 grievanceAdminRouter.get('/grievances', async (req, res) => {
   if (req.query.view === 'general') {
     await generalQueue(req, res);
@@ -86,7 +94,7 @@ grievanceAdminRouter.get('/grievances', async (req, res) => {
   const teacher = found && found.dept_id === filters.dept ? found : undefined;
   const dept = departments.find((d) => d.dept_id === filters.dept);
 
-  const [teachers, rows] = await Promise.all([
+  const [teachers, rows, waiting] = await Promise.all([
     dept ? query<{ faculty_code: string; name: string; designation: string } & GrievanceCounts>(`
       SELECT f.faculty_code, f.first_name || ' ' || f.last_name AS name, f.designation::text AS designation,
              count(g.grievance_id)::int AS total,
@@ -99,11 +107,12 @@ grievanceAdminRouter.get('/grievances', async (req, res) => {
       SELECT * FROM v_grievance_overview WHERE assigned_to = $1 AND status::text = ANY($2::text[])
       ORDER BY (status IN ('Resolved', 'Rejected')) DESC, updated_at DESC LIMIT 200`,
       [teacher.faculty_id, statusesFor(filters.status)]) : [],
+    generalWaiting(),
   ]);
 
   res.render('admin/grievances', {
     title: 'Grievances', nav: 'grievances', view: 'teacher', filters, departments, dept, teachers, teacher, rows,
-    statusPill, statuses: GRIEVANCE_STATUSES,
+    statusPill, statuses: GRIEVANCE_STATUSES, waiting,
   });
 });
 
@@ -124,7 +133,7 @@ async function generalQueue(req: Request, res: Response): Promise<void> {
          OR raised_by_name ILIKE '%' || $4::text || '%' OR grievance_id::text = $4::text)`;
   const params = [statusesFor(filters.status), filters.category, filters.role, filters.q];
 
-  const [rows, count, totals] = await Promise.all([
+  const [rows, count, totals, waiting] = await Promise.all([
     query<GrievanceRow>(`SELECT * FROM v_grievance_overview WHERE ${where}
       ORDER BY (status = 'Open') DESC, created_at ${filters.status === ACTIVE ? 'ASC' : 'DESC'}
       LIMIT $5 OFFSET $6`, [...params, page.limit, page.offset]),
@@ -135,10 +144,11 @@ async function generalQueue(req: Request, res: Response): Promise<void> {
              count(*) FILTER (WHERE status = 'Resolved')::int AS resolved,
              count(*) FILTER (WHERE status = 'Rejected')::int AS rejected
       FROM grievance WHERE course_id IS NULL`),
+    generalWaiting(),
   ]);
 
   res.render('admin/grievances', {
-    title: 'Grievances', nav: 'grievances', view: 'general', rows, filters, totals: totals!, statusPill,
+    title: 'Grievances', nav: 'grievances', view: 'general', rows, filters, totals: totals!, statusPill, waiting,
     categories: GRIEVANCE_CATEGORIES, statuses: GRIEVANCE_STATUSES,
     pager: pageInfo(page, count?.n ?? 0), qs: (o: Record<string, unknown>) => withQuery(filters, o),
   });

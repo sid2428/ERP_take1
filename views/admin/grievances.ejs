@@ -3,8 +3,11 @@
 
 <nav class="chips" style="margin-bottom:16px" aria-label="Grievance views">
   <a class="chip-link<%= view === 'teacher' ? ' on' : '' %>" href="/admin/grievances">By teacher</a>
-  <a class="chip-link<%= view === 'general' ? ' on' : '' %>" href="/admin/grievances?view=general">General queue</a>
+  <a class="chip-link<%= view === 'general' ? ' on' : '' %>" href="/admin/grievances?view=general">General queue<%= waiting.open ? ` · ${waiting.open} open` : '' %></a>
 </nav>
+<% if (view === 'teacher' && waiting.open) { %>
+<div class="flash info" role="status"><%= waiting.open %> general grievance<%= waiting.open === 1 ? ' is' : 's are' %> waiting for you<%= waiting.faculty ? `, ${waiting.faculty} raised by faculty` : '' %>. <a href="/admin/grievances?view=general">Open the general queue</a></div>
+<% } %>
 
 <% const row = (g, showCourse) => { %>
 <tr>

@@ -277,3 +277,34 @@ export async function updatePayrollStatus(payrollId: number, status: 'APPROVED' 
   await query('CALL update_payroll_status($1, $2, $3)', [payrollId, status, adminUserId]);
 }
 
+export function getAllPayrolls(month?: number, year?: number, status?: string): Promise<FacultyPayslip[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (month) {
+    params.push(month);
+    conditions.push(`p.payroll_month = $${params.length}`);
+  }
+  if (year) {
+    params.push(year);
+    conditions.push(`p.payroll_year = $${params.length}`);
+  }
+  if (status) {
+    params.push(status);
+    conditions.push(`p.status = $${params.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return query<FacultyPayslip>(`
+    SELECT p.payroll_id, p.faculty_id, f.faculty_code, f.first_name || ' ' || f.last_name AS faculty_name,
+           d.dept_name,
+           p.payroll_month, p.payroll_year,
+           to_char(make_date(p.payroll_year, p.payroll_month, 1), 'FMMonth YYYY') AS period_text,
+           p.basic_salary, p.allowances, p.deductions, p.leave_deductions, p.net_salary,
+           p.status, p.generated_at, p.approved_by, p.approved_at, p.paid_at
+    FROM payroll p
+    JOIN faculty f USING (faculty_id)
+    LEFT JOIN department d USING (dept_id)
+    ${where}
+    ORDER BY p.payroll_year DESC, p.payroll_month DESC, f.faculty_code ASC`, params);
+}
+
+

@@ -198,4 +198,28 @@ describe.skipIf(!hasAdminEnv)('PICT ERP portal', () => {
       expect((await db.query('SELECT current_session_id() AS id')).rows[0].id).toBe('2026-ODD');
     });
   });
+
+  // A browser follows a redirect as soon as the headers arrive, so the session must be stored by
+  // then; otherwise the first page after signing in finds no session and asks to sign in again.
+  it('keeps a new login for a request sent the moment the sign-in redirect arrives', async () => {
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const cookieOf = (r: Response) => r.headers.getSetCookie()[0]!.split(';')[0]!;
+    try {
+      for (let i = 0; i < 5; i++) {
+        const page = await fetch(`${base}/login`, { redirect: 'manual' });
+        const csrf = /name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+        const login = await fetch(`${base}/login`, {
+          method: 'POST', redirect: 'manual',
+          headers: { cookie: cookieOf(page), 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ _csrf: csrf, login_id: 'STU202600004', password: DEMO, next: '' }),
+        });
+        expect(login.headers.get('location')).toBe('/student');
+        const home = await fetch(`${base}/student`, { redirect: 'manual', headers: { cookie: cookieOf(login) } });
+        expect(home.status, `attempt ${i + 1}`).toBe(200);
+      }
+    } finally {
+      server.close();
+    }
+  });
 });

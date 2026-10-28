@@ -9,6 +9,7 @@ import { noticeAdminRouter } from './notice-routes.js';
 import { noticeRouter } from '../notice-routes.js';
 import { placementAdminRouter } from '../placement-routes.js';
 import { attendanceUnlockAdminRouter } from './attendance-unlock-routes.js';
+import { hrAdminRouter } from './hr-routes.js';
 
 export const adminRouter = Router();
 adminRouter.get('/ui', (_req, res) => res.render('admin/ui', { title: 'Shared UI kit', nav: 'ui' }));
@@ -20,5 +21,6 @@ adminRouter.use(electiveRouter);
 adminRouter.use(grievanceAdminRouter);
 adminRouter.use(noticeAdminRouter);
 adminRouter.use(attendanceUnlockAdminRouter);
+adminRouter.use(hrAdminRouter);
 adminRouter.use('/placement', placementAdminRouter);
 adminRouter.use('/inbox', noticeRouter);

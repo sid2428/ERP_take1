@@ -51,6 +51,7 @@ const student: CurrentUser = {
   facultyId: null,
   displayName: 'Test Student',
   deptId: 'CE',
+  isHod: false,
   mustChangePassword: false,
 };
 
@@ -62,6 +63,7 @@ const facultyUser: CurrentUser = {
   facultyId: 199,
   displayName: 'Faculty Member',
   deptId: 'CE',
+  isHod: false,
   mustChangePassword: false,
 };
 

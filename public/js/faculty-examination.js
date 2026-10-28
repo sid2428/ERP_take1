@@ -33,14 +33,24 @@
   }
 
   function getGradeInfo(pct) {
-    if (pct >= 80) return { grade: 'O', label: 'Outstanding (≥16/20)', cls: 'g' };
-    if (pct >= 70) return { grade: 'A+', label: 'Excellent (≥14/20)', cls: 'g' };
-    if (pct >= 60) return { grade: 'A', label: 'Very Good (≥12/20)', cls: 'g' };
-    if (pct >= 55) return { grade: 'B+', label: 'Good (≥11/20)', cls: '' };
-    if (pct >= 50) return { grade: 'B', label: 'Above Avg (≥10/20)', cls: '' };
-    if (pct >= 45) return { grade: 'C', label: 'Average (≥9/20)', cls: 'o' };
-    if (pct >= 40) return { grade: 'P', label: 'Pass (≥8/20)', cls: 'o' };
-    return { grade: 'F', label: 'Needs Attention (<8/20)', cls: 'r' };
+    if (pct >= 80) return { grade: 'O', label: 'Outstanding (≥80%)', cls: 'g' };
+    if (pct >= 70) return { grade: 'A+', label: 'Excellent (≥70%)', cls: 'g' };
+    if (pct >= 60) return { grade: 'A', label: 'Very Good (≥60%)', cls: 'g' };
+    if (pct >= 55) return { grade: 'B+', label: 'Good (≥55%)', cls: '' };
+    if (pct >= 50) return { grade: 'B', label: 'Above Avg (≥50%)', cls: '' };
+    if (pct >= 45) return { grade: 'C', label: 'Average (≥45%)', cls: 'o' };
+    if (pct >= 40) return { grade: 'P', label: 'Pass (≥40%)', cls: 'o' };
+    return { grade: 'F', label: 'Needs Attention (<40%)', cls: 'r' };
+  }
+
+  function formatMark(value) {
+    return String(Math.round(value * 10) / 10);
+  }
+
+  function hasMarks(student, fields) {
+    return fields.some(function (field) {
+      return student[field.key] !== null && student[field.key] !== undefined;
+    });
   }
 
   function setup(data) {
@@ -129,8 +139,12 @@
         });
         cycleSelect.disabled = result.cycles.length === 0;
 
-        // Subject teacher internal marks rule: Max 20 marks
-        scheme.textContent = 'Internal Continuous Assessment — Max 20 Marks. Subject teachers evaluate only internal assessment for their assigned class.';
+        var fields = componentFields(result.course);
+        scheme.textContent = fields.length
+          ? 'Assessment scheme: ' + fields.map(function (field) {
+            return field.label + ' / ' + field.max;
+          }).join(' · ')
+          : 'No examination scheme is configured for this course.';
 
         renderSummary();
         renderFilterButtons();
@@ -143,22 +157,27 @@
       if (!current) return;
       var data = current.summary;
 
+      var fields = componentFields(current.course);
+      var totalMax = Number(current.course.total_max);
       var enteredCount = 0;
       var passCount = 0;
       var totalSum = 0;
       var highestMark = null;
 
       current.students.forEach(function (s) {
-        if (s.internal_marks !== null && s.internal_marks !== undefined) {
-          enteredCount += 1;
-          var val = Number(s.internal_marks);
-          totalSum += val;
-          if (highestMark === null || val > highestMark) highestMark = val;
-          if ((val / 20) * 100 >= 40) passCount += 1;
-        }
+        if (!hasMarks(s, fields)) return;
+        enteredCount += 1;
+        var val = fields.reduce(function (sum, field) {
+          return sum + Number(s[field.key] || 0);
+        }, 0);
+        totalSum += val;
+        if (highestMark === null || val > highestMark) highestMark = val;
+        if (totalMax > 0 && (val / totalMax) * 100 >= 40) passCount += 1;
       });
 
-      var avgText = enteredCount > 0 ? (totalSum / enteredCount).toFixed(1) + ' / 20' : '—';
+      var avgText = enteredCount > 0
+        ? formatMark(totalSum / enteredCount) + ' / ' + totalMax
+        : '—';
       var passRateText = enteredCount > 0 ? Math.round((passCount / enteredCount) * 100) + '%' : '—';
 
       [
@@ -166,8 +185,8 @@
         ['Marks Entered', enteredCount + ' / ' + data.roster_size],
         ['Pending Entry', Math.max(0, data.roster_size - enteredCount)],
         ['Class Average', avgText],
-        ['Pass Rate (≥8/20)', passRateText],
-        ['Highest Mark', highestMark !== null ? highestMark.toFixed(1) + ' / 20' : '—'],
+        ['Pass Rate (≥40%)', passRateText],
+        ['Highest Mark', highestMark !== null ? formatMark(highestMark) + ' / ' + totalMax : '—'],
       ].forEach(function (item) {
         var card = el('div', null, 'faculty-exam-stat');
         card.append(el('span', item[0], 'muted'), el('strong', item[1]));
@@ -179,15 +198,16 @@
       filterGroup.replaceChildren();
       if (!current) return;
       var total = current.students.length;
+      var fields = componentFields(current.course);
       var pending = current.students.filter(function (s) {
-        return s.internal_marks === null || s.internal_marks === undefined;
+        return !hasMarks(s, fields);
       }).length;
 
       var filters = [
         { key: 'all', label: 'All Students (' + total + ')' },
         { key: 'pending', label: 'Pending (' + pending + ')' },
-        { key: 'passed', label: 'Passing (≥8/20)' },
-        { key: 'failed', label: 'Needs Attention (<8/20)' },
+        { key: 'passed', label: 'Passing (≥40%)' },
+        { key: 'failed', label: 'Needs Attention (<40%)' },
       ];
 
       filters.forEach(function (f) {
@@ -233,12 +253,20 @@
         return;
       }
 
+      var fields = componentFields(current.course);
+      var totalMax = Number(current.course.total_max);
+      if (!fields.length || !Number.isFinite(totalMax) || totalMax <= 0) {
+        tablePanel.appendChild(el('div', 'No examination scheme is configured for this course.', 'empty'));
+        save.disabled = true;
+        return;
+      }
+
       var table = el('table');
       var head = el('thead');
       var header = el('tr');
-      var fields = componentFields(current.course);
-
-      ['Roll', 'Student Number', 'Student Name', 'Internal Marks (/20)', 'Total (/20)', 'Performance / Grade'].forEach(function (label) {
+      ['Roll', 'Student Number', 'Student Name'].concat(fields.map(function (field) {
+        return field.label + ' (/' + field.max + ')';
+      }), ['Total (/' + totalMax + ')', 'Performance / Grade']).forEach(function (label) {
         header.appendChild(el('th', label));
       });
       head.appendChild(header);
@@ -252,27 +280,39 @@
         row.appendChild(el('td', student.student_number, 'code'));
         row.appendChild(el('td', student.name));
 
-        // Teachers only enter internal marks out of 20
-        var cell = el('td');
-        var input = el('input');
-        input.type = 'number';
-        input.min = '0';
-        input.max = '20';
-        input.step = '0.1';
-        input.value = student.internal_marks === null ? '' : student.internal_marks;
-        input.dataset.component = 'internal_marks';
-        input.dataset.max = '20';
-        input.setAttribute('aria-label', 'Internal marks for ' + student.name);
-        var error = el('span', '', 'field-error');
-        error.dataset.errorFor = 'internal_marks';
-        error.setAttribute('aria-live', 'polite');
-        cell.append(input, error);
-        row.appendChild(cell);
+        fields.forEach(function (field) {
+          var cell = el('td');
+          var input = el('input');
+          input.type = 'number';
+          input.min = '0';
+          input.max = String(field.max);
+          input.step = '0.1';
+          input.value = student[field.key] === null || student[field.key] === undefined
+            ? ''
+            : student[field.key];
+          input.dataset.component = field.key;
+          input.dataset.max = String(field.max);
+          input.setAttribute('aria-label', field.label + ' marks for ' + student.name);
+          var error = el('span', '', 'field-error');
+          error.dataset.errorFor = field.key;
+          error.id = 'mark-error-' + student.student_id + '-' + field.key;
+          error.setAttribute('aria-live', 'polite');
+          input.setAttribute('aria-describedby', error.id);
+          input.setAttribute('aria-invalid', 'false');
+          cell.append(input, error);
+          row.appendChild(cell);
 
-        input.addEventListener('input', function () {
-          updateRow(row, fields, 20);
-          renderSummary();
-          renderFilterButtons();
+          input.addEventListener('input', function () {
+            if (updateRow(row, fields, totalMax)) {
+              fields.forEach(function (item) {
+                var currentInput = row.querySelector('input[data-component="' + item.key + '"]');
+                student[item.key] = currentInput.value === '' ? null : Number(currentInput.value);
+              });
+            }
+            renderSummary();
+            renderFilterButtons();
+            applyRowFilters();
+          });
         });
 
         var total = el('td', '', 'faculty-exam-total');
@@ -283,7 +323,7 @@
         gradeCell.dataset.gradeCell = 'true';
         row.appendChild(gradeCell);
 
-        updateRow(row, fields, 20);
+        updateRow(row, fields, totalMax);
         body.appendChild(row);
       });
 
@@ -296,10 +336,19 @@
     }
 
     function componentFields(course) {
-      // Teachers only evaluate internal assessment out of 20 (no practical, no external)
       return [
-        { key: 'internal_marks', label: 'Internal Marks', max: 20 },
-      ];
+        { key: 'internal_marks', label: 'Internal', max: course.internal_max },
+        { key: 'midsem_marks', label: 'Midsem', max: course.midsem_max },
+        {
+          key: 'endsem_marks',
+          label: course.course_type === 'LAB' ? 'Practical' : 'EndSem',
+          max: course.endsem_max,
+        },
+      ].filter(function (field) {
+        return Number.isFinite(Number(field.max)) && Number(field.max) > 0;
+      }).map(function (field) {
+        return { key: field.key, label: field.label, max: Number(field.max) };
+      });
     }
 
     function updateRow(row, fields, totalMax) {
@@ -307,39 +356,44 @@
       var total = 0;
       var anyEntered = false;
 
-      var input = row.querySelector('input[data-component="internal_marks"]');
-      var error = row.querySelector('[data-error-for="internal_marks"]');
-      var value = input.value === '' ? null : Number(input.value);
-      var invalid = value !== null && (!Number.isFinite(value) || value < 0
-        || value > 20 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-8);
+      fields.forEach(function (field) {
+        var input = row.querySelector('input[data-component="' + field.key + '"]');
+        var error = row.querySelector('[data-error-for="' + field.key + '"]');
+        var empty = input.value === '' && !input.validity.badInput;
+        var value = empty ? null : Number(input.value);
+        var invalid = input.validity.badInput || (value !== null && (!Number.isFinite(value) || value < 0
+          || value > field.max || Math.abs(value * 10 - Math.round(value * 10)) > 1e-8));
 
-      input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
-      error.textContent = invalid ? 'Enter 0–20 (max 1 decimal place).' : '';
+        input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+        error.textContent = invalid
+          ? 'Enter 0–' + field.max + ' (max 1 decimal place).'
+          : '';
 
-      if (invalid) {
-        valid = false;
-      } else if (value !== null) {
-        total = value;
-        anyEntered = true;
-      }
+        if (invalid) {
+          valid = false;
+        } else if (value !== null) {
+          total += value;
+          anyEntered = true;
+        }
+      });
 
       var totalCell = row.querySelector('[data-total]');
       var gradeCell = row.querySelector('[data-grade-cell]');
       var roundedTotal = Math.round(total * 10) / 10;
-      var pct = (total / 20) * 100;
+      var pct = totalMax > 0 ? (total / totalMax) * 100 : 0;
 
-      row.dataset.hasMarks = anyEntered ? 'true' : 'false';
-      row.dataset.pct = pct;
+      row.dataset.hasMarks = valid && anyEntered ? 'true' : 'false';
+      row.dataset.pct = valid ? pct : 0;
 
-      totalCell.textContent = valid ? (anyEntered ? roundedTotal + ' / 20' : '—') : 'Invalid';
-      totalCell.setAttribute('aria-label', valid ? 'Total ' + roundedTotal + ' out of 20' : 'Invalid marks');
+      totalCell.textContent = valid ? (anyEntered ? formatMark(roundedTotal) + ' / ' + totalMax : '—') : 'Invalid';
+      totalCell.setAttribute('aria-label', valid ? 'Total ' + roundedTotal + ' out of ' + totalMax : 'Invalid marks');
 
       if (gradeCell) {
         if (!valid) {
           gradeCell.replaceChildren(el('span', 'Invalid score', 'pill r'));
         } else if (anyEntered) {
           var info = getGradeInfo(pct);
-          var pill = el('span', info.grade + ' (' + roundedTotal + '/20)', 'pill' + (info.cls ? ' ' + info.cls : ''));
+          var pill = el('span', info.grade + ' (' + formatMark(roundedTotal) + '/' + totalMax + ')', 'pill' + (info.cls ? ' ' + info.cls : ''));
           pill.title = info.label;
           gradeCell.replaceChildren(pill);
         } else {
@@ -358,34 +412,41 @@
     // CSV Export functionality
     exportBtn.addEventListener('click', function () {
       if (!current || !current.students.length) return;
-      var csvRows = [
-        ['Roll No', 'Student Number', 'Student Name', 'Internal Marks (/20)', 'Percentage', 'Grade Status']
-      ];
+      var fields = componentFields(current.course);
+      var totalMax = Number(current.course.total_max);
+      var csvRows = [[
+        'Roll No',
+        'Student Number',
+        'Student Name',
+      ].concat(fields.map(function (field) {
+        return field.label + ' (/' + field.max + ')';
+      }), ['Total (/' + totalMax + ')', 'Percentage', 'Grade Status'])];
 
       var rows = tablePanel.querySelectorAll('tbody tr');
       rows.forEach(function (row, idx) {
         var s = current.students[idx];
         if (!s) return;
-        var inp = row.querySelector('input[data-component="internal_marks"]');
-        var val = inp ? (inp.value || '') : '';
-        var totalCell = row.querySelector('[data-total]');
         var pct = Number(row.dataset.pct || 0);
-        var gradeInfo = row.dataset.hasMarks === 'true' ? getGradeInfo(pct).grade : '';
+        var total = row.querySelector('[data-total]').textContent;
         csvRows.push([
           s.roll_no || '',
           s.student_number,
           '"' + s.name.replace(/"/g, '""') + '"',
-          val,
-          val !== '' ? Math.round(pct) + '%' : '',
-          gradeInfo
-        ]);
+        ].concat(fields.map(function (field) {
+          var input = row.querySelector('input[data-component="' + field.key + '"]');
+          return input ? input.value : '';
+        }), [
+          total === '—' ? '' : total,
+          row.dataset.hasMarks === 'true' ? Math.round(pct) + '%' : '',
+          row.dataset.hasMarks === 'true' ? getGradeInfo(pct).grade : '',
+        ]));
       });
 
       var csvContent = 'data:text/csv;charset=utf-8,' + csvRows.map(function (e) { return e.join(','); }).join('\n');
       var encodedUri = encodeURI(csvContent);
       var link = document.createElement('a');
       link.setAttribute('href', encodedUri);
-      link.setAttribute('download', (current.course.course_code || 'Course') + '_Internal_Marks_Sheet.csv');
+      link.setAttribute('download', (current.course.course_code || 'Course') + '_Marks_Sheet.csv');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -396,40 +457,43 @@
 
     save.addEventListener('click', function () {
       if (!current || !current.selected_cycle) return;
+      var fields = componentFields(current.course);
+      var totalMax = Number(current.course.total_max);
       var entries = [];
       var invalidRows = [];
 
       Array.prototype.forEach.call(tablePanel.querySelectorAll('tbody tr'), function (row) {
-        if (!updateRow(row, componentFields(current.course), 20)) {
+        if (!updateRow(row, fields, totalMax)) {
           invalidRows.push(row);
-          return;
         }
-        var input = row.querySelector('input[data-component="internal_marks"]');
-        var val = input.value === '' ? null : Number(input.value);
-
-        if (invalidRows.length) {
-          notice.textContent = 'Correct the highlighted marks before saving.';
-          invalidRows[0].querySelector('input[aria-invalid="true"]').focus();
-          return;
-        }
-
-        if (row.dataset.existing === 'true' || val !== null) {
-          entries.push({
-            student_id: Number(row.dataset.studentId),
-            internal_marks: val,
-            midsem_marks: null,
-            endsem_marks: null,
-          });
-        }
+        var entry = {
+          student_id: Number(row.dataset.studentId),
+          internal_marks: null,
+          midsem_marks: null,
+          endsem_marks: null,
+        };
+        var anyEntered = false;
+        fields.forEach(function (field) {
+          var input = row.querySelector('input[data-component="' + field.key + '"]');
+          entry[field.key] = input.value === '' ? null : Number(input.value);
+          if (entry[field.key] !== null) anyEntered = true;
+        });
+        if (row.dataset.existing === 'true' || anyEntered) entries.push(entry);
       });
 
+      if (invalidRows.length) {
+        notice.textContent = 'Correct the highlighted marks before saving.';
+        invalidRows[0].querySelector('input[aria-invalid="true"]').focus();
+        return;
+      }
+
       if (!entries.length) {
-        notice.textContent = 'Enter at least one internal score before saving.';
+        notice.textContent = 'Enter at least one mark before saving.';
         return;
       }
 
       save.disabled = true;
-      notice.textContent = 'Saving internal marks and updating course records…';
+      notice.textContent = 'Saving marks and updating course records…';
       var body = new URLSearchParams({
         _csrf: csrfToken,
         exam_cycle_id: String(current.selected_cycle.exam_cycle_id),

@@ -2,8 +2,8 @@
 import { withClient } from './client.js';
 
 const url = new URL(process.env.DATABASE_URL ?? '');
-if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.port !== '54329' || url.pathname !== '/erp') {
-  throw new Error('Placement demo seed is restricted to localhost:54329/erp.');
+if (!['localhost', '127.0.0.1'].includes(url.hostname) || !['5432', '54329', ''].includes(url.port) || url.pathname !== '/erp') {
+  throw new Error('Placement demo seed is restricted to localhost/erp.');
 }
 
 const companies = Array.from({ length: 40 }, (_, i) => ({
