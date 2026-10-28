@@ -474,6 +474,7 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     const overview = await getAdminPlacementOverview(db as unknown as Db, branch.dept_id);
     const packages = await getAcceptedFullTimePackageDistribution(db as unknown as Db, branch.dept_id);
     const companies = await getCompanyPlacementOffers(branch.dept_id, db as unknown as Db);
+    const availableYears = await getAdminExpectedGraduationYears(branch.dept_id, db as unknown as Db);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       active_students: 0,
@@ -498,5 +499,6 @@ describe.skipIf(!hasDatabase)('T7 placement database rules', () => {
     });
     expect(packages.reduce((sum, band) => sum + band.offer_count, 0)).toBe(0);
     expect(companies).toEqual([]);
+    expect(availableYears).toEqual([]);
   }));
 });

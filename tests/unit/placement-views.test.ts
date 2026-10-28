@@ -306,6 +306,8 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
         linkedin_url: 'https://linkedin.com/in/janedoe',
         github_url: 'https://github.com/janedoe',
         portfolio_url: 'https://janedoe.dev',
+        submitted_expected_graduation_year: 2029,
+        expected_graduation_year: null,
       },
       errors: null,
     });
@@ -313,6 +315,35 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
     expect(html).toContain('Placement profile');
     expect(html).toContain('Technical Skills');
     expect(html).toContain('https://github.com/janedoe');
+    expect(html).toContain('Expected passing-out year (optional)');
+    expect(html).toContain('will not be used in batch statistics until an administrator reviews it');
+    expect(html).toContain('value="2029"');
+  });
+
+  it('renders the admin expected graduation year submission queue', async () => {
+    const html = await renderFile(path.join(views, 'admin/expected-graduation-year-submissions.ejs'), {
+      ...baseData,
+      title: 'Expected passing-out year submissions',
+      nav: 'students',
+      user: adminUser,
+      submissions: [{
+        student_id: 42,
+        student_number: 'STU202600042',
+        student_name: 'Jane Doe',
+        dept_name: 'Computer Science & Engineering',
+        submitted_expected_graduation_year: 2029,
+        expected_graduation_year: null,
+      }],
+    });
+
+    expect(html).toContain('Student-entered years remain outside placement cohort statistics until verified.');
+    expect(html).toContain('STU202600042');
+    expect(html).toContain('2029');
+    expect(html).toContain('/verify-expected-graduation-year');
+    expect(html).toContain('name="verification_source"');
+    expect(html).toContain('type="text" maxlength="200" required');
+    expect(html).toContain('do not upload documents or sensitive details');
+    expect(html).toContain('/reject-expected-graduation-year');
   });
 
   it('renders student placement drives listing', async () => {

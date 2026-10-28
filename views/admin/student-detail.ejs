@@ -25,7 +25,7 @@
       <div class="field"><label for="am">Alternate mobile</label><input id="am" type="text" name="alternate_mobile" value="<%= p.alternate_mobile || '' %>" maxlength="10"></div>
       <div class="field"><label for="ds">District</label><input id="ds" type="text" name="district_name" value="<%= p.district_name || '' %>"></div>
       <div class="field"><label for="pc">PIN code</label><input id="pc" type="text" name="pincode" value="<%= p.pincode || '' %>" maxlength="6"></div>
-      <div class="field"><label for="eg">Expected passing-out year</label><input id="eg" type="number" name="expected_graduation_year" value="<%= p.expected_graduation_year ?? '' %>" min="2000" max="2100" step="1"><small>Enter a verified expected graduation year, or leave blank when unknown. This is separate from graduation status.</small></div>
+      <div class="field"><strong>Verified expected passing-out year</strong><div><%= p.expected_graduation_year ?? 'Unknown / unverified' %></div><small>Verified cohort years can only be updated by reviewing a student submission and recording its institutional source.</small></div>
     </div>
     <div class="field"><label for="ad">Address</label><input id="ad" type="text" name="address" value="<%= p.address || '' %>"></div>
     <div class="actions"><button class="btn primary" type="submit">Save record</button><a class="btn" href="/admin/students/<%= p.student_id %>">Cancel</a></div>
