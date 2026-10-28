@@ -58,6 +58,27 @@ export interface CourseTeacher {
   session_type: string;
 }
 
+export interface FacultySuggestion {
+  faculty_id: number;
+  faculty_code: string;
+  faculty_name: string;
+  designation: string;
+  dept_id: string;
+  dept_name: string;
+  relationship_group: 'Course Faculty' | 'HOD';
+  relationship: string;
+  relationship_reason: string;
+}
+
+export interface FacultyFallback {
+  faculty_id: number;
+  faculty_code: string;
+  faculty_name: string;
+  designation: string;
+  dept_id: string;
+  dept_name: string;
+}
+
 /** Tell the database triggers who is acting, for the rest of this transaction. */
 export async function actAs(db: pg.PoolClient, userId: number): Promise<void> {
   await db.query(`SELECT set_config('erp.user_id', $1, true)`, [String(userId)]);
@@ -109,6 +130,63 @@ export function getCourseTeachers(studentId: number): Promise<CourseTeacher[]> {
     .then((rows) => rows.sort((a, b) => (a.course_code ?? '').localeCompare(b.course_code ?? '')
       || Number(a.session_type !== 'Lecture') - Number(b.session_type !== 'Lecture')
       || (a.faculty_name ?? '').localeCompare(b.faculty_name ?? '')));
+}
+
+/** Active, sign-in-capable faculty connected to a student in the current term. */
+export function getFacultySuggestions(raisedBy: number, courseId: number | null = null): Promise<FacultySuggestion[]> {
+  return query<FacultySuggestion>(`
+    WITH related AS (
+      SELECT f.faculty_id, f.faculty_code, f.first_name || ' ' || f.last_name AS faculty_name,
+             f.designation::text AS designation, f.dept_id, d.dept_name,
+             'Course Faculty'::text AS relationship_group, 'Course Faculty'::text AS relationship,
+             'Teaches ' || string_agg(DISTINCT c.course_code, ', ' ORDER BY c.course_code) AS relationship_reason
+      FROM v_user_profile student_profile
+      JOIN v_assignment_roster roster ON roster.student_id = student_profile.student_id
+      JOIN teaching_assignment ta ON ta.assignment_id = roster.assignment_id
+       AND ta.academic_session_id = current_session_id()
+       AND ($2::int IS NULL OR ta.course_id = $2)
+      JOIN course c ON c.course_id = ta.course_id
+      JOIN faculty f ON f.faculty_id = ta.faculty_id AND f.status = 'Active'
+      JOIN department d ON d.dept_id = f.dept_id
+      JOIN app_user faculty_user ON faculty_user.faculty_id = f.faculty_id
+       AND faculty_user.role = 'faculty' AND faculty_user.is_active
+      WHERE student_profile.user_id = $1 AND student_profile.role = 'student'
+      GROUP BY f.faculty_id, f.faculty_code, f.first_name, f.last_name, f.designation, f.dept_id, d.dept_name
+      UNION ALL
+      SELECT f.faculty_id, f.faculty_code, f.first_name || ' ' || f.last_name,
+             f.designation::text, f.dept_id, d.dept_name,
+             'HOD'::text, 'HOD'::text, 'Heads the student''s department'::text
+      FROM v_user_profile student_profile
+      JOIN department student_department ON student_department.dept_id = student_profile.dept_id
+      JOIN faculty f ON f.faculty_id = student_department.hod_faculty_id AND f.status = 'Active'
+      JOIN department d ON d.dept_id = f.dept_id
+      JOIN app_user faculty_user ON faculty_user.faculty_id = f.faculty_id
+       AND faculty_user.role = 'faculty' AND faculty_user.is_active
+      WHERE student_profile.user_id = $1 AND student_profile.role = 'student' AND $2::int IS NULL
+    )
+    SELECT faculty_id, faculty_code, faculty_name, designation, dept_id, dept_name,
+           CASE WHEN bool_or(relationship_group = 'Course Faculty') THEN 'Course Faculty' ELSE 'HOD' END AS relationship_group,
+           string_agg(DISTINCT relationship, ' · ') AS relationship,
+           string_agg(DISTINCT relationship_reason, '; ') AS relationship_reason
+    FROM related
+    GROUP BY faculty_id, faculty_code, faculty_name, designation, dept_id, dept_name
+    ORDER BY CASE WHEN bool_or(relationship_group = 'Course Faculty') THEN 1 ELSE 2 END, faculty_name`, [raisedBy, courseId]);
+}
+
+/** Explicitly searched fallback list; callers present it separately from recommendations. */
+export function searchFacultyFallback(search: string, excludeFacultyIds: number[], limit = 40): Promise<FacultyFallback[]> {
+  return query<FacultyFallback>(`
+    SELECT f.faculty_id, f.faculty_code, f.first_name || ' ' || f.last_name AS faculty_name,
+           f.designation::text AS designation, f.dept_id, d.dept_name
+    FROM faculty f
+    JOIN department d ON d.dept_id = f.dept_id
+    JOIN app_user u ON u.faculty_id = f.faculty_id AND u.role = 'faculty' AND u.is_active
+    WHERE f.status = 'Active'
+      AND NOT (f.faculty_id = ANY($2::int[]))
+      AND ($1::text <> '' AND (f.faculty_code ILIKE '%' || $1::text || '%'
+                            OR (f.first_name || ' ' || f.last_name) ILIKE '%' || $1::text || '%'))
+    ORDER BY f.first_name, f.last_name, f.faculty_code
+    LIMIT $3`, [search, excludeFacultyIds, limit]);
 }
 
 export const isClosed = (status: GrievanceStatus): boolean => status === 'Resolved' || status === 'Rejected';

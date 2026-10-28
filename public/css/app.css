@@ -417,6 +417,23 @@ fieldset.field legend { padding: 0; margin-bottom: 5px; font-size: 12.5px; font-
 .notice-title a { overflow-wrap: anywhere; }
 .notice.unread .title { font-weight: 600; }
 .notice-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.faculty-assignment-form select { height: auto; min-height: 42px; padding-top: 8px; padding-bottom: 8px; }
+.faculty-assignment-form optgroup { color: var(--navy); font-weight: 600; }
+.faculty-assignment-form option { color: var(--text); font-weight: 400; }
+.faculty-fallback-search { display: grid; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-2); }
+.faculty-fallback-search label { color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+.faculty-fallback-search-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.faculty-fallback-search-row input { flex: 1 1 180px; min-width: 0; }
+.faculty-fallback-search .hint { color: var(--faint); font-size: 12px; line-height: 1.4; }
+@media (max-width: 640px) {
+  .notices-board, .attention-card { padding-left: 16px; padding-right: 16px; }
+  .notices-board-heading { display: block; }
+  .notices-board-heading form { margin-top: 12px; }
+  .attention-item, .notice-row { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+  .notice-icon { width: 36px; height: 36px; }
+  .attention-item .notice-action, .notice-row .notice-action { grid-column: 2; justify-self: start; margin-top: 2px; }
+  .notice-row.unread { padding-left: 9px; }
+}
 /* audience picker: show only the fields of the chosen audience (no script needed) */
 .audience .when { display: none; }
 .audience:has(input[value=role]:checked) .when-role,

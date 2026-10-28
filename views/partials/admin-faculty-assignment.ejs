@@ -1,0 +1,41 @@
+<%# Locals: formAction, submitLabel, allowEmpty, showFallbackSearch, faculty, fallbackFaculty, facultySearch, selectedCode, hint %>
+<form method="post" action="<%= formAction %>" class="stack faculty-assignment-form" style="gap:10px">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="field">
+    <label for="<%= allowEmpty ? 'fa' : 'fr' %>">Faculty assignment</label>
+    <select id="<%= allowEmpty ? 'fa' : 'fr' %>" name="faculty_code"<%= allowEmpty ? '' : ' required' %>>
+      <% if (allowEmpty) { %><option value="">Leave unassigned</option><% } %>
+      <% for (const groupName of ['Course Faculty', 'HOD']) { %>
+        <% const group = faculty.filter((f) => f.relationship_group === groupName); %>
+        <% if (group.length) { %>
+        <optgroup label="Recommended · <%= groupName %>">
+          <% for (const f of group) { %>
+          <option value="<%= f.faculty_code %>"<%= selectedCode === f.faculty_code ? ' selected' : '' %>><%= f.faculty_name %> · <%= f.faculty_code %> · <%= f.designation %> · <%= f.dept_name %> — <%= f.relationship_reason %></option>
+          <% } %>
+        </optgroup>
+        <% } %>
+      <% } %>
+      <% if (fallbackFaculty.length) { %>
+      <optgroup label="Fallback · searched active faculty">
+        <% for (const f of fallbackFaculty) { %>
+        <option value="<%= f.faculty_code %>"<%= selectedCode === f.faculty_code ? ' selected' : '' %>><%= f.faculty_name %> · <%= f.faculty_code %> · <%= f.designation %> · <%= f.dept_name %></option>
+        <% } %>
+      </optgroup>
+      <% } %>
+    </select>
+    <span class="hint"><%= hint %></span>
+  </div>
+  <div class="actions"><button class="btn" type="submit"><%= submitLabel %></button></div>
+</form>
+
+<% if (showFallbackSearch) { %>
+<form method="get" action="<%= formAction.replace(/\/assign$/, '') %>" class="faculty-fallback-search">
+  <label for="faculty-search">Search fallback faculty by name or code</label>
+  <div class="faculty-fallback-search-row">
+    <input id="faculty-search" type="search" name="faculty_search" value="<%= facultySearch %>" maxlength="60" placeholder="e.g. FAC-CSE-014 or surname">
+    <button class="btn small" type="submit">Search</button>
+    <% if (facultySearch) { %><a class="btn link small" href="<%= formAction.replace(/\/assign$/, '') %>">Clear</a><% } %>
+  </div>
+  <span class="hint">Fallback results are active faculty with active portal accounts and are shown separately from student-related recommendations.</span>
+</form>
+<% } %>
