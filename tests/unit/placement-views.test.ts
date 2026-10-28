@@ -216,13 +216,27 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
           total_offers: 410,
           accepted_fulltime_offers: 380,
           accepted_internships: 20,
-          verified_cohort_students: 0,
           unverified_cohort_students: 400,
           bar_pct: 95.0,
         },
       ],
       departments: [{ dept_id: 'COMP', dept_name: 'Computer Engineering' }],
       selectedDepartment: 'COMP',
+      years: [{ expected_graduation_year: 2028 }],
+      selectedYear: 2028,
+      batchStats: [{
+        expected_graduation_year: 2028,
+        active_students: 400,
+        placed_students: 380,
+        placed_pct: 95,
+        total_offers: 410,
+        accepted_fulltime_offers: 380,
+        accepted_internships: 20,
+        highest_package_lpa: 48,
+        average_package_lpa: 14.8,
+        median_package_lpa: 13.5,
+      }],
+      unassignedStudents: 20,
       reportingScope: 'Computer Engineering',
       packageDistribution: [
         { label: '20+ LPA', offer_count: 85, bar_pct: 100 },
@@ -242,8 +256,10 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
     expect(html).toContain('Highest package');
     expect(html).toContain('Company-wise offers');
     expect(html).toContain('Computer Engineering');
-    expect(html).toContain('Expected graduation year is not stored authoritatively');
-    expect(html).toContain('Active Students — Cohort Unverified');
+    expect(html).toContain('Only explicitly maintained expected graduation years are treated as verified');
+    expect(html).toContain('Placement statistics by passing-out batch');
+    expect(html).toContain('Batch 2028');
+    expect(html).toContain('Active students without a verified expected passing-out year in this branch scope');
     expect(html).toContain('Placement metrics and reporting limitations.');
   });
 

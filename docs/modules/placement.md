@@ -4,7 +4,7 @@ The placement module provides student placement profiles, drive eligibility, app
 
 ## Setup and routes
 
-Apply the forward-only migrations against a verified local database with `npm run db:migrate`. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Migration `090` enforces drive and recruitment-round state transitions and prevents newly scheduled or rescheduled rounds from being placed in the past. Migration `091` fixes row assignment in the drive notification procedure. Migration `092` adds the drive/application/offer summary view. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Do not use production credentials for local setup.
+Apply the forward-only migrations against a verified local database with `npm run db:migrate`. Placement migrations `084`–`086` add the module, correct internship eligibility after an accepted full-time offer, and notify eligible students when a drive opens. Migration `090` enforces drive and recruitment-round state transitions and prevents newly scheduled or rescheduled rounds from being placed in the past. Migration `091` fixes row assignment in the drive notification procedure. Migration `092` adds the drive/application/offer summary view. Migration `099` adds a nullable, explicitly maintained expected graduation year; it deliberately does not backfill existing students. Optional local-only demo data can be added with `npm run db:seed-placement`; the script refuses any target other than `localhost:54329/erp`. Do not use production credentials for local setup.
 
 | User | Route | Capabilities |
 | --- | --- | --- |
@@ -17,7 +17,8 @@ Apply the forward-only migrations against a verified local database with `npm ru
 | Admin | `/admin/placement/drives/new` | Create drives |
 | Admin | `/admin/placement/drives/:id` | Manage status, round schedules and states, applicants, results, and offers |
 | Admin | `/admin/placement/drives/:id/edit` | Edit Draft drives before publication |
-| Admin | `/admin/placement/statistics` | Aggregate statistics by department |
+| Admin | `/admin/placement/statistics` | Branch- and verified passing-out-batch statistics with combined filters |
+| Admin | `/admin/students/:id?edit=1` | Maintain a student's verified expected passing-out year |
 | Department HOD | `/faculty/placement` | Read-only report for their department |
 
 All mutating endpoints use POST, the shared CSRF middleware, a transaction, and the existing audit log. No file uploads are supported; profile documents are links only. CSV exports quote cells and escape formula-leading content.
@@ -36,7 +37,17 @@ Eligibility uses current student program and current `student_section`/`division
 
 The examination module defines `student_cgpa` from final course results, but the verified local database currently has not applied `084-group3-examination.sql`, `085-group3-exam-logic.sql`, `086-attendance-extra-sessions.sql`, `087-attendance-unlocks.sql`, `088-course-marks-scheme.sql`, or `089-refresh-exam-results.sql`; `erp.student_cgpa` is absent there. Placement therefore does not treat unseen academic data as zero or as a pass: CGPA/backlog requirements return an unavailable-assessment reason and fail closed. Connect these criteria only after the examination source and refresh migrations are applied and verified. Attendance is assessed only when a minimum is set; unavailable attendance is also reported rather than assumed to pass.
 
-`v_student_placement_status.applications` excludes withdrawn applications. `offers` counts every recorded offer regardless of response. `best_offer_lpa` uses accepted full-time offers only. `is_placed` is true when at least one full-time offer is accepted. Statistics count distinct students and offers to avoid round/application join inflation; the placement percentage uses active students as its denominator. The admin report shows highest, median and average accepted full-time package, accepted full-time/internship totals, department placement rates, and company offer totals with accepted offer breakdowns.
+`v_student_placement_status.applications` excludes withdrawn applications. `offers` counts every recorded offer regardless of response. `best_offer_lpa` uses accepted full-time offers only. `is_placed` is true when at least one full-time offer is accepted. Statistics count distinct students and offers to avoid round/application join inflation; the placement percentage uses active students as its denominator. The admin report shows highest, median and average accepted full-time package, accepted full-time/internship totals, branch placement rates, batch placement rates, and company offer totals with accepted offer breakdowns.
+
+### Expected passing-out year and batch statistics
+
+A batch is the student's expected graduation/passing-out year explicitly recorded in `student.expected_graduation_year`, not admission year, current academic session, program duration, or actual graduation status. Migration `099-student-expected-graduation-year.sql` adds the nullable `smallint` field with a 2000–2100 constraint. Existing values remain `NULL`; no year is inferred or backfilled. Admins maintain the field through the existing student detail edit form only after verifying the expected year from an authoritative academic record. Leave it blank when unverified. Every change is included in the existing student-update audit event.
+
+The statistics page's branch and passing-out-year filters can be used independently or together. An empty filter means all branches or all batches. A requested branch or year that is malformed or unavailable returns HTTP 400 rather than widening the report. The batch dropdown lists years currently held by active students in the selected branch scope.
+
+Batch denominators include active students with that recorded year only. Placed students are distinct active students with at least one accepted full-time offer; accepted internships do not qualify. Total recorded offers count every offer status for students in the selected branch/year scope. Accepted full-time and internship offers are counted separately. Highest, average, median, and package bands use accepted full-time offers with a recorded package; missing package values are omitted from package calculations, but accepted-offer counts still include them. Active students without a recorded expected year are reported separately at branch/institution scope and are never assigned to a batch.
+
+Cohort completeness depends on administrators maintaining verified values. Until records are reviewed and entered, batch statistics represent only the known-year subset and must not be interpreted as a complete graduating class.
 
 ## Dependencies and limitations
 
@@ -57,4 +68,4 @@ The examination module defines `student_cgpa` from final course results, but the
 
 Database tests are in `tests/db/placement.test.ts`. Run `npm run typecheck` and `npm test` after the migration is applied to a local development database.
 
-The admin statistics page defines overall and department placement percentage as active students with an accepted full-time offer divided by active students; a zero denominator displays 0%. Branch figures follow `student.program_id` to `program.dept_id`. Offer totals count offers separately from distinct placed students. Package averages and distribution use accepted full-time offers with a nonmissing package; chart bands are `<5`, `5–<10`, `10–<15`, `15–<20`, and `20+` LPA. `student` has no authoritative expected graduation year, so students are reported as unverified and are not assigned to passing-out batches; year-wise trends remain unavailable.
+The admin statistics page defines overall and branch placement percentage as active students with an accepted full-time offer divided by active students in the selected scope; a zero denominator displays 0%. Branch figures follow `student.program_id` to `program.dept_id`. Offer totals count offers separately from distinct placed students. Package averages and distribution use accepted full-time offers with a nonmissing package; chart bands are `<5`, `5–<10`, `10–<15`, `15–<20`, and `20+` LPA. Batch figures include only students with an explicitly maintained expected graduation year; unknown-year students are reported separately and excluded from batch denominators.

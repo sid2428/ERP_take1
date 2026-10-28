@@ -15,6 +15,20 @@ import { handleForm, idParam, nullIfEmpty } from './helpers.js';
 export const peopleRouter = Router();
 
 const DEPT_IDS = ['AIDS', 'CIVIL', 'CSE', 'EE', 'ENTC', 'IT', 'MECH'];
+const expectedGraduationYearSchema = z.string({ error: 'Provide an expected passing-out year or leave it blank if unknown.' })
+  .transform((value, ctx) => {
+    if (value === '') return null;
+    if (!/^\d{4}$/.test(value)) {
+      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be a four-digit year.' });
+      return z.NEVER;
+    }
+    const year = Number(value);
+    if (year < 2000 || year > 2100) {
+      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be between 2000 and 2100.' });
+      return z.NEVER;
+    }
+    return year;
+  });
 
 interface AccountRow {
   user_id: number; login_id: string; is_active: boolean; must_change_password: boolean; failed_logins: number;
@@ -78,6 +92,7 @@ const studentSchema = z.object({
   address: z.string().trim().max(200),
   district_name: z.string().trim().max(60),
   pincode: z.union([z.literal(''), z.string().regex(/^[1-9]\d{5}$/, 'PIN code must be 6 digits')]),
+  expected_graduation_year: expectedGraduationYearSchema,
 });
 
 peopleRouter.post('/students/:id', (req, res) => handleForm(req, res, studentSchema, `/admin/students/${req.params.id}?edit=1`, async (v) => {
@@ -87,11 +102,11 @@ peopleRouter.post('/students/:id', (req, res) => handleForm(req, res, studentSch
     if (!before) throw notFound('Student');
     await db.query(`UPDATE student SET first_name = $2, middle_name = $3, last_name = $4, date_of_birth = $5, gender = $6,
                       blood_group = $7, category = $8, status = $9, email = $10, personal_email = $11, mobile_number = $12,
-                      alternate_mobile = $13, address = $14, district_name = $15, pincode = $16
+      alternate_mobile = $13, address = $14, district_name = $15, pincode = $16, expected_graduation_year = $17
                     WHERE student_id = $1`,
       [id, v.first_name, nullIfEmpty(v.middle_name), v.last_name, v.date_of_birth, v.gender, nullIfEmpty(v.blood_group),
         v.category, v.status, v.email, nullIfEmpty(v.personal_email), v.mobile_number, nullIfEmpty(v.alternate_mobile),
-        nullIfEmpty(v.address), nullIfEmpty(v.district_name), nullIfEmpty(v.pincode)]);
+        nullIfEmpty(v.address), nullIfEmpty(v.district_name), nullIfEmpty(v.pincode), v.expected_graduation_year]);
     await audit(req, { action: 'STUDENT_UPDATE', entity: 'student', entityId: id, details: { before, after: v } }, db);
   });
   return { message: 'Student record updated.', redirect: `/admin/students/${id}` };

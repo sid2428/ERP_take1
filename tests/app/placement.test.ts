@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { hasAdminEnv, signIn } from './helpers.js';
+import { csrfFrom, hasAdminEnv, signIn } from './helpers.js';
 
 const DEMO=process.env.DEMO_PASSWORD??'';
 const ADMIN=process.env.ADMIN_PASSWORD??'';
@@ -31,9 +31,9 @@ describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
     expect(response.status).toBe(200);
     expect(response.text).toContain('Highest package');
     expect(response.text).toContain('Company-wise offers');
-    expect(response.text).toContain('Active Students — Cohort Unverified');
+    expect(response.text).toContain('Unknown Expected Year (Branch)');
     expect(response.text).toContain('Placement metrics and reporting limitations.');
-    expect(response.text).toContain('Reporting scope: <strong>All branches (institution-wide)</strong>');
+    expect(response.text).toContain('Reporting scope: <strong>All branches (institution-wide) · All batches</strong>');
   });
   it('filters placement statistics by branch without changing route authorization',async()=>{
     const departments=await query!<{dept_id:string;dept_name:string}>(`SELECT dept_id,dept_name FROM department ORDER BY dept_id LIMIT 1`);
@@ -41,13 +41,67 @@ describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
     expect(response.status).toBe(200);
     expect(response.text).toContain(`<option value="${departments[0]!.dept_id}" selected>`);
     const escapedDepartmentName=departments[0]!.dept_name.replace(/&/g,'&amp;');
-    expect(response.text).toContain(`Reporting scope: <strong>${escapedDepartmentName}</strong>`);
+    expect(response.text).toContain(`Reporting scope: <strong>${escapedDepartmentName} · All batches</strong>`);
     expect((await student.get(`/admin/placement/statistics?dept_id=${encodeURIComponent(departments[0]!.dept_id)}`)).status).toBe(403);
   });
   it('rejects invalid branch filters instead of showing institution-wide statistics',async()=>{
     const invalidBranch=await admin.get('/admin/placement/statistics?dept_id=not-a-branch');
     expect(invalidBranch.status).toBe(400);
     expect(invalidBranch.text).toContain('Choose a valid branch.');
+  });
+  it('lets admins maintain only validated expected graduation years',async()=>{
+    const [record]=await query!<{
+      student_id:number;first_name:string;middle_name:string|null;last_name:string;date_of_birth:string;gender:string;
+      blood_group:string|null;category:string;status:string;email:string;personal_email:string|null;mobile_number:string;
+      alternate_mobile:string|null;address:string|null;district_name:string|null;pincode:string|null;
+      dept_id:string;expected_graduation_year:number|null;
+    }>(`SELECT s.student_id,s.first_name,s.middle_name,s.last_name,s.date_of_birth,s.gender,s.blood_group,s.category,s.status,s.email,
+      s.personal_email,s.mobile_number,s.alternate_mobile,s.address,s.district_name,s.pincode,s.expected_graduation_year,p.dept_id
+      FROM student s JOIN program p USING(program_id) WHERE s.student_number='STU202600004'`);
+    if(!record)throw new Error('Expected the placement test student record.');
+    const page=await admin.get(`/admin/students/${record.student_id}?edit=1`);
+    const csrf=csrfFrom(page.text);
+    const form={
+      first_name:record.first_name,middle_name:record.middle_name??'',last_name:record.last_name,
+      date_of_birth:record.date_of_birth,gender:record.gender,blood_group:record.blood_group??'',
+      category:record.category,status:record.status,email:record.email,personal_email:record.personal_email??'',
+      mobile_number:record.mobile_number,alternate_mobile:record.alternate_mobile??'',address:record.address??'',
+      district_name:record.district_name??'',pincode:record.pincode?.trim()??'',
+    };
+    const save=(fields:Record<string,string>)=>admin.post(`/admin/students/${record.student_id}`)
+      .type('form').send({_csrf:csrf,...fields});
+    try{
+      expect((await save({...form,expected_graduation_year:'2099'})).status).toBe(302);
+      expect((await query!<{expected_graduation_year:number}>(`SELECT expected_graduation_year FROM student WHERE student_id=$1`,[record.student_id]))[0]?.expected_graduation_year).toBe(2099);
+      const batchReport=await admin.get('/admin/placement/statistics?expected_graduation_year=2099');
+      expect(batchReport.status).toBe(200);
+      expect(batchReport.text).toContain('Batch 2099 (recorded expected graduation year)');
+      const combinedReport=await admin.get(`/admin/placement/statistics?dept_id=${encodeURIComponent(record.dept_id)}&expected_graduation_year=2099`);
+      expect(combinedReport.status).toBe(200);
+      expect(combinedReport.text).toContain('Batch 2099 (recorded expected graduation year)');
+      expect((await admin.get('/admin/placement/statistics?expected_graduation_year=1900')).status).toBe(400);
+
+      const invalidYear=await save({...form,expected_graduation_year:'1999'});
+      expect(invalidYear.status).toBe(302);
+      expect((await admin.get(invalidYear.headers.location!)).text).toContain('Expected passing-out year must be between 2000 and 2100.');
+      expect((await query!<{expected_graduation_year:number}>(`SELECT expected_graduation_year FROM student WHERE student_id=$1`,[record.student_id]))[0]?.expected_graduation_year).toBe(2099);
+
+      const missingYear=await save(form);
+      expect(missingYear.status).toBe(302);
+      expect((await admin.get(missingYear.headers.location!)).text).toContain('Provide an expected passing-out year or leave it blank if unknown.');
+      expect((await query!<{expected_graduation_year:number}>(`SELECT expected_graduation_year FROM student WHERE student_id=$1`,[record.student_id]))[0]?.expected_graduation_year).toBe(2099);
+
+      expect((await save({...form,expected_graduation_year:''})).status).toBe(302);
+      expect((await query!<{expected_graduation_year:number|null}>(`SELECT expected_graduation_year FROM student WHERE student_id=$1`,[record.student_id]))[0]?.expected_graduation_year).toBeNull();
+
+      const studentPage=await student.get('/student/placement');
+      const denied=await student.post(`/admin/students/${record.student_id}`).type('form')
+        .send({_csrf:csrfFrom(studentPage.text),...form,expected_graduation_year:'2099'});
+      expect(denied.status).toBe(403);
+    }finally{
+      await query!(`UPDATE student SET expected_graduation_year=$2 WHERE student_id=$1`,
+        [record.student_id,record.expected_graduation_year]);
+    }
   });
   it('requires a session for student placement pages',async()=>{
     const {default:request}=await import('supertest');
