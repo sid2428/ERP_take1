@@ -213,9 +213,17 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
           placed_students: 380,
           placed_pct: 95.0,
           highest_package_lpa: 48.0,
+          total_offers: 410,
+          accepted_fulltime_offers: 380,
+          accepted_internships: 20,
+          verified_cohort_students: 0,
+          unverified_cohort_students: 400,
           bar_pct: 95.0,
         },
       ],
+      departments: [{ dept_id: 'COMP', dept_name: 'Computer Engineering' }],
+      selectedDepartment: 'COMP',
+      reportingScope: 'Computer Engineering',
       packageDistribution: [
         { label: '20+ LPA', offer_count: 85, bar_pct: 100 },
         { label: '15–<20 LPA', offer_count: 120, bar_pct: 80 },
@@ -234,6 +242,9 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
     expect(html).toContain('Highest package');
     expect(html).toContain('Company-wise offers');
     expect(html).toContain('Computer Engineering');
+    expect(html).toContain('Expected graduation year is not stored authoritatively');
+    expect(html).toContain('Active Students — Cohort Unverified');
+    expect(html).toContain('Placement metrics and reporting limitations.');
   });
 
   it('renders student placement dashboard', async () => {
@@ -418,4 +429,3 @@ describe('TNP Redesigned EJS Templates Compilation and Rendering', () => {
     expect(html).toContain('44 LPA');
   });
 });
-

@@ -326,7 +326,7 @@ describe.skipIf(!enabled)('T7 placement workflows',()=>{
       const company=await pool!.query(`SELECT company_name FROM company WHERE company_id=$1`,[f.companyId]);
       const statistics=await admin.get('/admin/placement/statistics');
       expect(statistics.text).toContain(company.rows[0].company_name);
-      expect(statistics.text).toMatch(new RegExp(`<td>${company.rows[0].company_name}</td>\\s*<td>1</td>\\s*<td>0</td>\\s*<td>0</td>`));
+      expect(statistics.text).toMatch(new RegExp(`<tr>\\s*<td>\\s*<div[^>]*>${company.rows[0].company_name}</div>\\s*</td>\\s*<td[^>]*>\\s*<span[^>]*>1</span>\\s*</td>\\s*<td[^>]*>0</td>\\s*<td[^>]*>0</td>`));
     }finally{await dispose(f);}
   });
 

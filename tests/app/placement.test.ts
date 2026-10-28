@@ -4,6 +4,7 @@ import { hasAdminEnv, signIn } from './helpers.js';
 const DEMO=process.env.DEMO_PASSWORD??'';
 const ADMIN=process.env.ADMIN_PASSWORD??'';
 const {createApp}=hasAdminEnv?await import('../../src/app.js'):{createApp:null};
+const {query}=hasAdminEnv?await import('../../src/db.js'):{query:null};
 
 describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
   const app=hasAdminEnv?createApp!():null;
@@ -30,6 +31,23 @@ describe.skipIf(!hasAdminEnv)('T7 placement pages and permissions',()=>{
     expect(response.status).toBe(200);
     expect(response.text).toContain('Highest package');
     expect(response.text).toContain('Company-wise offers');
+    expect(response.text).toContain('Active Students — Cohort Unverified');
+    expect(response.text).toContain('Placement metrics and reporting limitations.');
+    expect(response.text).toContain('Reporting scope: <strong>All branches (institution-wide)</strong>');
+  });
+  it('filters placement statistics by branch without changing route authorization',async()=>{
+    const departments=await query!<{dept_id:string;dept_name:string}>(`SELECT dept_id,dept_name FROM department ORDER BY dept_id LIMIT 1`);
+    const response=await admin.get(`/admin/placement/statistics?dept_id=${encodeURIComponent(departments[0]!.dept_id)}`);
+    expect(response.status).toBe(200);
+    expect(response.text).toContain(`<option value="${departments[0]!.dept_id}" selected>`);
+    const escapedDepartmentName=departments[0]!.dept_name.replace(/&/g,'&amp;');
+    expect(response.text).toContain(`Reporting scope: <strong>${escapedDepartmentName}</strong>`);
+    expect((await student.get(`/admin/placement/statistics?dept_id=${encodeURIComponent(departments[0]!.dept_id)}`)).status).toBe(403);
+  });
+  it('rejects invalid branch filters instead of showing institution-wide statistics',async()=>{
+    const invalidBranch=await admin.get('/admin/placement/statistics?dept_id=not-a-branch');
+    expect(invalidBranch.status).toBe(400);
+    expect(invalidBranch.text).toContain('Choose a valid branch.');
   });
   it('requires a session for student placement pages',async()=>{
     const {default:request}=await import('supertest');
