@@ -1,13 +1,136 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Placement profile</h1><span class="sub">Add skills and links for recruiters. Do not upload files here.</span></div>
-<% if (errors?.length) { %><div class="flash error"><ul><% errors.forEach(e=>{ %><li><%= e %></li><% }) %></ul></div><% } %>
-<form class="card form-grid" method="post" action="/student/placement/profile">
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/student">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/student/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current">Profile</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'profile' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Placement profile</h1>
+    <span class="sub">Maintain your technical competencies and professional portfolio links for campus recruiters.</span>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="/student/placement">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>Back to Placement</span>
+    </a>
+  </div>
+</div>
+
+<% if (errors?.length) { %>
+  <div class="flash error" role="alert">
+    <strong>Please correct the following:</strong>
+    <ul class="errors" style="margin-top:6px;">
+      <% errors.forEach(e => { %>
+        <li><%= e %></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<%
+  const hasSkills = Boolean(profile?.skills?.trim());
+  const hasResume = Boolean(profile?.resume_url);
+  const hasLinkedin = Boolean(profile?.linkedin_url);
+  const hasGithub = Boolean(profile?.github_url);
+  const hasPortfolio = Boolean(profile?.portfolio_url);
+  let score = 0;
+  if (hasSkills) score += 20;
+  if (hasResume) score += 40;
+  if (hasLinkedin) score += 20;
+  if (hasGithub || hasPortfolio) score += 20;
+%>
+
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:12px;">
+    <h2>Profile Readiness Status</h2>
+    <span class="tnp-count-pill" style="font-weight:700;"><%= score %>% Complete</span>
+  </div>
+  <div class="tnp-meter">
+    <div class="tnp-meter-fill" style="width:<%= score %>%;"></div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:12px 24px;margin-top:12px;font-size:12.5px;">
+    <span style="display:inline-flex;align-items:center;gap:5px;color:<%= hasSkills ? 'var(--green-text)' : 'var(--muted)' %>;">
+      <%- include('../partials/icon', { name: hasSkills ? 'check' : 'clock', size: 13 }) %>
+      <span>Skills (20%)</span>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;color:<%= hasResume ? 'var(--green-text)' : 'var(--muted)' %>;">
+      <%- include('../partials/icon', { name: hasResume ? 'check' : 'clock', size: 13 }) %>
+      <span>Resume URL (40%)</span>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;color:<%= hasLinkedin ? 'var(--green-text)' : 'var(--muted)' %>;">
+      <%- include('../partials/icon', { name: hasLinkedin ? 'check' : 'clock', size: 13 }) %>
+      <span>LinkedIn (20%)</span>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;color:<%= (hasGithub || hasPortfolio) ? 'var(--green-text)' : 'var(--muted)' %>;">
+      <%- include('../partials/icon', { name: (hasGithub || hasPortfolio) ? 'check' : 'clock', size: 13 }) %>
+      <span>GitHub / Portfolio (20%)</span>
+    </span>
+  </div>
+</section>
+
+<form class="tnp-form-card" method="post" action="/student/placement/profile">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-  <label class="wide">Skills<textarea name="skills" maxlength="2000" rows="5"><%= profile?.skills ?? '' %></textarea><small>Separate skills with commas.</small></label>
-  <label>Resume URL<input type="url" name="resume_url" value="<%= profile?.resume_url ?? '' %>" placeholder="https://..."></label>
-  <label>LinkedIn URL<input type="url" name="linkedin_url" value="<%= profile?.linkedin_url ?? '' %>" placeholder="https://..."></label>
-  <label>GitHub URL<input type="url" name="github_url" value="<%= profile?.github_url ?? '' %>" placeholder="https://..."></label>
-  <label>Portfolio URL<input type="url" name="portfolio_url" value="<%= profile?.portfolio_url ?? '' %>" placeholder="https://..."></label>
-  <div class="wide"><button class="btn" type="submit">Save profile</button></div>
+
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'award', size: 16 }) %>
+      <span>Technical Skills &amp; Competencies</span>
+    </h2>
+    <p class="tnp-form-section-desc">Key programming languages, frameworks, developer tools, and domains.</p>
+    <div class="field">
+      <label for="skills">Key Skills (Comma-separated)</label>
+      <textarea id="skills" name="skills" maxlength="2000" rows="4" placeholder="e.g. C++, Java, Python, PostgreSQL, Node.js, React, Docker, Distributed Systems, Data Structures & Algorithms"><%= profile?.skills ?? '' %></textarea>
+      <span class="hint">Recruiters and selection committees inspect this when reviewing shortlisted applications.</span>
+    </div>
+  </div>
+
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'external-link', size: 16 }) %>
+      <span>Professional Links &amp; Resume Document</span>
+    </h2>
+    <p class="tnp-form-section-desc">
+      In accordance with institution security standards, file uploads are disabled. Host your documents on Google Drive, OneDrive, or Overleaf and provide publicly accessible URLs.
+    </p>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="resume_url">Resume / CV URL</label>
+        <input id="resume_url" type="url" name="resume_url" value="<%= profile?.resume_url ?? '' %>" placeholder="https://drive.google.com/file/d/...">
+        <span class="hint">Ensure link access permissions are set to "Anyone with the link can view".</span>
+      </div>
+
+      <div class="field">
+        <label for="linkedin_url">LinkedIn Profile</label>
+        <input id="linkedin_url" type="url" name="linkedin_url" value="<%= profile?.linkedin_url ?? '' %>" placeholder="https://www.linkedin.com/in/username">
+      </div>
+
+      <div class="field">
+        <label for="github_url">GitHub Profile</label>
+        <input id="github_url" type="url" name="github_url" value="<%= profile?.github_url ?? '' %>" placeholder="https://github.com/username">
+      </div>
+
+      <div class="field">
+        <label for="portfolio_url">Personal Website / Portfolio</label>
+        <input id="portfolio_url" type="url" name="portfolio_url" value="<%= profile?.portfolio_url ?? '' %>" placeholder="https://myportfolio.dev">
+      </div>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:6px;">
+    <button class="btn primary" type="submit">
+      <%- include('../partials/icon', { name: 'check', size: 15 }) %>
+      <span>Save Profile</span>
+    </button>
+    <a class="btn secondary" href="/student/placement">Cancel</a>
+  </div>
 </form>
+
 <%- include('../partials/layout-end') %>

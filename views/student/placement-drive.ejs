@@ -1,5 +1,165 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1><%= drive.title %></h1><span class="sub"><%= drive.company_name %> · <%= drive.role_title %></span></div>
-<section class="card"><p><%= drive.description %></p><p><strong>Type:</strong> <%= drive.drive_type==='FullTime'?'Full-time':'Internship' %> · <strong>Compensation:</strong> <%= drive.drive_type==='FullTime'?`${drive.package_lpa} LPA`:`₹${fmt.num(drive.stipend_monthly)} / month` %></p><p><strong>Location:</strong> <%= drive.job_location || 'Not specified' %> · <strong>Deadline:</strong> <%= new Date(drive.deadline).toLocaleString() %></p><p><strong>Minimum year:</strong> <%= drive.min_year %> · <strong>Minimum CGPA:</strong> <%= drive.min_cgpa ?? 'Not required' %> · <strong>Maximum backlogs:</strong> <%= drive.max_active_backlogs ?? 'Not required' %></p><p><strong>Programs:</strong> <%= drive.programs.length?drive.programs.join(', '):'All programs' %></p>
-<% if (application) { %><span class="pill">Application submitted</span><% } else if (drive.eligible) { %><form method="post" action="/student/placement/drives/<%= drive.drive_id %>/apply"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn">Apply</button></form><% } else { %><p class="flash info"><%= (drive.reasons||[]).join(' · ') %></p><% } %></section>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/student">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/student/placement">Placement</a>
+  <span class="sep">/</span>
+  <a href="/student/placement/drives">Drives</a>
+  <span class="sep">/</span>
+  <span class="current"><%= drive.title %></span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'drives' }) %>
+
+<div class="page-head">
+  <div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span class="tnp-badge <%= drive.drive_type === 'FullTime' ? 'tnp-badge-fulltime' : 'tnp-badge-internship' %>">
+        <%= drive.drive_type === 'FullTime' ? 'Full-Time Recruitment' : 'Internship Opportunity' %>
+      </span>
+      <% if (drive.status) { %>
+        <span class="tnp-badge tnp-badge-<%= drive.status.toLowerCase() %>">
+          <%= drive.status %>
+        </span>
+      <% } %>
+      <% if (application) { %>
+        <span class="tnp-badge tnp-badge-applied">Application Submitted</span>
+      <% } %>
+    </div>
+    <h1 style="margin:0;"><%= drive.title %></h1>
+    <span class="sub"><%= drive.company_name %> · <%= drive.role_title %></span>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="/student/placement/drives">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>Back to Drives</span>
+    </a>
+  </div>
+</div>
+
+<!-- Application Action / Eligibility Banner -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
+    <div>
+      <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--muted);letter-spacing:.04em;">Offered Compensation</div>
+      <div style="font-size:24px;font-weight:700;color:var(--green-text);margin-top:2px;">
+        <% if (drive.drive_type === 'FullTime') { %>
+          <%= drive.package_lpa != null ? `${drive.package_lpa} LPA` : 'Commensurate with experience' %>
+        <% } else { %>
+          <%= drive.stipend_monthly != null ? `₹${fmt.num(drive.stipend_monthly)} / month` : 'Stipend provided' %>
+        <% } %>
+      </div>
+    </div>
+
+    <div>
+      <% if (application) { %>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="tnp-badge tnp-badge-applied" style="padding:6px 14px;font-size:13px;">
+            ✓ Application Submitted
+          </span>
+          <a class="btn secondary" href="/student/placement/applications">Track Application</a>
+        </div>
+      <% } else if (drive.eligible) { %>
+        <form method="post" action="/student/placement/drives/<%= drive.drive_id %>/apply" data-confirm="Are you sure you want to apply for <%= drive.title %>?">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="btn primary" type="submit" style="height:42px;padding:0 22px;font-size:14px;">
+            <%- include('../partials/icon', { name: 'check', size: 16 }) %>
+            <span>Apply Now</span>
+          </button>
+        </form>
+      <% } else { %>
+        <div class="tnp-badge tnp-badge-ineligible" style="padding:6px 12px;font-size:13px;">
+          Not Eligible to Apply
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (!application && !drive.eligible) { %>
+    <div class="tnp-eligibility-box ineligible" style="margin-top:16px;">
+      <div class="tnp-eligibility-header">
+        <%- include('../partials/icon', { name: 'alert', size: 16 }) %>
+        <span>Eligibility Restrictions</span>
+      </div>
+      <div style="font-size:13px;line-height:1.5;">
+        <%= (drive.reasons || []).length ? drive.reasons.join(' · ') : 'Your academic standing does not meet the criteria specified for this drive.' %>
+      </div>
+    </div>
+  <% } else if (drive.eligible && !application) { %>
+    <div class="tnp-eligibility-box eligible" style="margin-top:16px;">
+      <div class="tnp-eligibility-header">
+        <%- include('../partials/icon', { name: 'check-circle', size: 16 }) %>
+        <span>You are eligible for this recruitment drive</span>
+      </div>
+      <div style="font-size:12.5px;">
+        Your academic record, current attendance percentage, and placement status fulfill all criteria set by the recruiting company.
+      </div>
+    </div>
+  <% } %>
+</section>
+
+<!-- Specifications Grid -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:14px;">
+    <h2>Drive Parameters &amp; Eligibility Criteria</h2>
+  </div>
+
+  <div class="tnp-detail-grid">
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Application Deadline</span>
+      <span class="tnp-detail-value"><%= fmt.dateTime(drive.deadline) %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Assessment / Drive Date</span>
+      <span class="tnp-detail-value"><%= drive.drive_date ? fmt.date(drive.drive_date) : 'To be confirmed' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Work Location</span>
+      <span class="tnp-detail-value"><%= drive.job_location || 'Pune / Specified in offer' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum Year of Study</span>
+      <span class="tnp-detail-value">Year <%= drive.min_year %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum CGPA Required</span>
+      <span class="tnp-detail-value"><%= drive.min_cgpa != null ? drive.min_cgpa : 'No minimum CGPA' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Max Active Backlogs</span>
+      <span class="tnp-detail-value"><%= drive.max_active_backlogs != null ? drive.max_active_backlogs : 'Not assessed' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum Attendance</span>
+      <span class="tnp-detail-value"><%= drive.min_attendance_pct != null ? `${drive.min_attendance_pct}%` : 'Not required' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Eligible Academic Programs</span>
+      <span class="tnp-detail-value">
+        <%= drive.programs && drive.programs.length ? drive.programs.join(', ') : 'All Engineering Programs' %>
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- Job Description -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:14px;">
+    <h2>Job Description &amp; Candidate Expectations</h2>
+  </div>
+  <% if (drive.description) { %>
+    <p style="margin:0;font-size:14px;line-height:1.65;color:var(--text-2);white-space:pre-wrap;"><%= drive.description %></p>
+  <% } else { %>
+    <p class="empty">No additional job description provided.</p>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>

@@ -1,9 +1,200 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Placement drives</h1><span class="sub">Eligibility is calculated from current academic data; missing GPA or backlog data is not assumed to pass.</span></div>
-<form class="filters" method="get"><input name="q" value="<%= filters.q %>" placeholder="Search company or role"><select name="type"><option value="">All types</option><option value="FullTime" <%= filters.type==='FullTime'?'selected':'' %>>Full-time</option><option value="Internship" <%= filters.type==='Internship'?'selected':'' %>>Internship</option></select><select name="eligible"><option value="">Any eligibility</option><option value="yes" <%= filters.eligible==='yes'?'selected':'' %>>Eligible</option><option value="no" <%= filters.eligible==='no'?'selected':'' %>>Not eligible</option></select><button class="btn secondary">Filter</button></form>
-<form class="filters" method="get"><input type="hidden" name="q" value="<%= filters.q %>"><input type="hidden" name="type" value="<%= filters.type %>"><input type="hidden" name="eligible" value="<%= filters.eligible %>"><label>Drives per page<select name="page_size"><% [10,20,50].forEach(size=>{ %><option value="<%= size %>" <%= pageSize===size?'selected':'' %>><%= size %></option><% }) %></select></label><button class="btn secondary">Update</button></form>
-<p class="sub"><%= total %> matching drive<%= total===1?'':'s' %><% if (totalPages) { %> · Page <%= page %> of <%= totalPages %><% } %></p>
-<% if (!drives.length) { %><div class="empty">No matching drives are available.</div><% } %>
-<div class="stack"><% drives.forEach(d=>{ %><article class="card"><div class="row"><div><h2><a href="/student/placement/drives/<%= d.drive_id %>"><%= d.title %></a></h2><p><%= d.company_name %> · <%= d.role_title %> · <%= d.drive_type==='FullTime'?'Full-time':'Internship' %></p></div><span class="pill <%= d.eligible?'ok':'warn' %>"><%= d.eligible?'Eligible':'Not eligible' %></span></div><p><%= d.drive_type==='FullTime'?`${d.package_lpa} LPA`:`₹${fmt.num(d.stipend_monthly)} / month` %> · deadline <%= new Date(d.deadline).toLocaleString() %></p><% if (!d.eligible) { %><p class="note"><%= (d.reasons||[]).join(' · ') %></p><% } %><% if (d.applied) { %><span class="pill">Applied</span><% } %></article><% }) %></div>
-<% if (totalPages>1) { const pageLink=(target)=>`?q=${encodeURIComponent(filters.q)}&type=${encodeURIComponent(filters.type)}&eligible=${encodeURIComponent(filters.eligible)}&page_size=${pageSize}&page=${target}`; %><nav class="actions" aria-label="Placement drive pages"><% if (page>1) { %><a class="btn secondary" rel="prev" href="<%= pageLink(page-1) %>">Previous</a><% } %><span>Page <%= page %> of <%= totalPages %></span><% if (page<totalPages) { %><a class="btn secondary" rel="next" href="<%= pageLink(page+1) %>">Next</a><% } %></nav><% } %>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/student">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/student/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current">Browse Drives</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'drives' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Campus Recruitment Drives</h1>
+    <span class="sub">Browse open placement drives. Eligibility is dynamically verified against your academic year, program, attendance, and offer status.</span>
+  </div>
+</div>
+
+<!-- Unified Filter Toolbar -->
+<form class="card" method="get" action="/student/placement/drives" style="padding:16px 20px;box-shadow:var(--shadow-xs);">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;">
+    <div style="flex:1 1 240px;position:relative;">
+      <label for="search-input" class="sr-only">Search company or role</label>
+      <input id="search-input" name="q" value="<%= filters.q %>" placeholder="Search by company or role..." style="height:36px;padding-left:12px;">
+    </div>
+
+    <div style="flex:0 1 auto;">
+      <label for="type-select" class="sr-only">Drive Type</label>
+      <select id="type-select" name="type" style="height:36px;width:auto;">
+        <option value="">All Drive Types</option>
+        <option value="FullTime" <%= filters.type === 'FullTime' ? 'selected' : '' %>>Full-Time Only</option>
+        <option value="Internship" <%= filters.type === 'Internship' ? 'selected' : '' %>>Internship Only</option>
+      </select>
+    </div>
+
+    <div style="flex:0 1 auto;">
+      <label for="eligible-select" class="sr-only">Eligibility</label>
+      <select id="eligible-select" name="eligible" style="height:36px;width:auto;">
+        <option value="">Any Eligibility</option>
+        <option value="yes" <%= filters.eligible === 'yes' ? 'selected' : '' %>>Eligible Drives</option>
+        <option value="no" <%= filters.eligible === 'no' ? 'selected' : '' %>>Not Eligible</option>
+      </select>
+    </div>
+
+    <div style="flex:0 1 auto;">
+      <label for="page-size-select" class="sr-only">Drives per page</label>
+      <select id="page-size-select" name="page_size" style="height:36px;width:auto;">
+        <% [10, 20, 50].forEach(size => { %>
+          <option value="<%= size %>" <%= pageSize === size ? 'selected' : '' %>><%= size %> per page</option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px;">
+      <button class="btn primary small" style="height:36px;padding:0 16px;" type="submit">
+        <%- include('../partials/icon', { name: 'filter', size: 14 }) %>
+        <span>Apply Filters</span>
+      </button>
+      <% if (filters.q || filters.type || filters.eligible || pageSize !== 20) { %>
+        <a class="btn secondary small" style="height:36px;display:inline-flex;align-items:center;" href="/student/placement/drives">Clear</a>
+      <% } %>
+    </div>
+  </div>
+</form>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 2px;">
+  <span style="font-size:13px;font-weight:600;color:var(--text-2);">
+    <%= fmt.num(total) %> drive<%= total === 1 ? '' : 's' %> available
+    <% if (totalPages > 1) { %>
+      <span class="muted" style="font-weight:400;">(Page <%= page %> of <%= totalPages %>)</span>
+    <% } %>
+  </span>
+</div>
+
+<% if (!drives.length) { %>
+  <div class="tnp-empty-state">
+    <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'search', size: 24 }) %></div>
+    <h3 class="tnp-empty-title">No Matching Recruitment Drives</h3>
+    <p class="tnp-empty-desc">No drives matched your filter criteria. Try clearing filters or searching with different keywords.</p>
+    <a href="/student/placement/drives" class="btn secondary">Reset Filters</a>
+  </div>
+<% } else { %>
+  <div class="stack" style="gap:16px;">
+    <% drives.forEach(d => { %>
+      <article class="tnp-drive-card">
+        <div class="tnp-drive-top">
+          <div>
+            <div class="tnp-drive-company-badge">
+              <%- include('../partials/icon', { name: 'building', size: 13 }) %>
+              <span><%= d.company_name %></span>
+            </div>
+            <h2 class="tnp-drive-title">
+              <a href="/student/placement/drives/<%= d.drive_id %>"><%= d.title %></a>
+            </h2>
+            <div class="tnp-drive-role"><%= d.role_title %></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            <div class="tnp-drive-package">
+              <% if (d.drive_type === 'FullTime') { %>
+                <%= d.package_lpa != null ? `${d.package_lpa} LPA` : 'Best in Industry' %>
+              <% } else { %>
+                <%= d.stipend_monthly != null ? `₹${fmt.num(d.stipend_monthly)} / month` : 'Stipend details in drive' %>
+              <% } %>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <span class="tnp-badge <%= d.drive_type === 'FullTime' ? 'tnp-badge-fulltime' : 'tnp-badge-internship' %>">
+                <%= d.drive_type === 'FullTime' ? 'Full-Time' : 'Internship' %>
+              </span>
+              <span class="tnp-badge <%= d.eligible ? 'tnp-badge-eligible' : 'tnp-badge-ineligible' %>">
+                <%= d.eligible ? 'Eligible' : 'Not Eligible' %>
+              </span>
+              <% if (d.applied) { %>
+                <span class="tnp-badge tnp-badge-applied">Applied</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="tnp-drive-details-grid">
+          <div class="tnp-drive-details-item">
+            <small>Application Deadline</small>
+            <span><%= fmt.dateTime(d.deadline) %></span>
+          </div>
+          <div class="tnp-drive-details-item">
+            <small>Recruitment Date</small>
+            <span><%= d.drive_date ? fmt.date(d.drive_date) : 'TBA' %></span>
+          </div>
+          <div class="tnp-drive-details-item">
+            <small>Location</small>
+            <span><%= d.job_location || 'Pune / Specified in Offer' %></span>
+          </div>
+          <div class="tnp-drive-details-item">
+            <small>Minimum Year</small>
+            <span>Year <%= d.min_year %></span>
+          </div>
+        </div>
+
+        <% if (!d.eligible && d.reasons && d.reasons.length) { %>
+          <div class="tnp-eligibility-box ineligible">
+            <div class="tnp-eligibility-header">
+              <%- include('../partials/icon', { name: 'alert', size: 14 }) %>
+              <span>Eligibility Restrictions:</span>
+            </div>
+            <div style="font-size:12.5px;">
+              <%= d.reasons.join(' · ') %>
+            </div>
+          </div>
+        <% } %>
+
+        <div class="tnp-drive-footer">
+          <div style="font-size:12.5px;color:var(--muted);">
+            <% if (d.applied) { %>
+              <span style="color:var(--link);font-weight:600;">✓ Application submitted</span>
+            <% } else if (d.eligible) { %>
+              <span style="color:var(--green-text);font-weight:600;">✓ You meet all criteria for this drive</span>
+            <% } else { %>
+              <span>Review requirements before deadline</span>
+            <% } %>
+          </div>
+
+          <a class="btn small primary" href="/student/placement/drives/<%= d.drive_id %>">
+            <span>View Details &amp; Apply</span>
+            <%- include('../partials/icon', { name: 'arrow-right', size: 12 }) %>
+          </a>
+        </div>
+      </article>
+    <% }) %>
+  </div>
+<% } %>
+
+<!-- Pagination -->
+<% if (totalPages > 1) { 
+  const pageLink = (target) => `?q=${encodeURIComponent(filters.q)}&type=${encodeURIComponent(filters.type)}&eligible=${encodeURIComponent(filters.eligible)}&page_size=${pageSize}&page=${target}`;
+%>
+  <nav class="pager" aria-label="Placement drive pages" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-top:16px;">
+    <% if (page > 1) { %>
+      <a class="btn secondary small" rel="prev" href="<%= pageLink(page - 1) %>">
+        <%- include('../partials/icon', { name: 'arrow-left', size: 12 }) %>
+        <span>Previous</span>
+      </a>
+    <% } else { %>
+      <div></div>
+    <% } %>
+
+    <span style="font-weight:500;">Page <%= page %> of <%= totalPages %></span>
+
+    <% if (page < totalPages) { %>
+      <a class="btn secondary small" rel="next" href="<%= pageLink(page + 1) %>">
+        <span>Next</span>
+        <%- include('../partials/icon', { name: 'arrow-right', size: 12 }) %>
+      </a>
+    <% } else { %>
+      <div></div>
+    <% } %>
+  </nav>
+<% } %>
+
 <%- include('../partials/layout-end') %>

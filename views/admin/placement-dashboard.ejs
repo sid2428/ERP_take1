@@ -1,6 +1,201 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Training &amp; Placement</h1><span class="sub">Management is available to Admin accounts in this version.</span></div>
-<div class="cards"><div class="card"><div class="s">Active students</div><div class="kpi"><%= overview?.active_students ?? 0 %></div></div><div class="card"><div class="s">Placed students</div><div class="kpi"><%= overview?.placed_students ?? 0 %></div></div><div class="card"><div class="s">Accepted full-time offers</div><div class="kpi"><%= overview?.accepted_fulltime_offers ?? 0 %></div></div><div class="card"><div class="s">Highest accepted package</div><div class="kpi"><%= overview?.highest_package_lpa ?? '—' %><small> LPA</small></div></div></div>
-<div class="actions"><a class="btn" href="/admin/placement/companies">Manage companies</a><a class="btn" href="/admin/placement/drives/new">Create drive</a><a class="btn secondary" href="/admin/placement/statistics">Statistics</a></div>
-<section class="card"><h2>Recent drives</h2><% if (!drives.length) { %><p class="empty">No drives created yet.</p><% } else { %><div class="table-wrap"><table><thead><tr><th>Drive</th><th>Company</th><th>Status</th><th>Deadline</th><th>Applicants</th></tr></thead><tbody><% drives.forEach(d=>{ %><tr><td><a href="/admin/placement/drives/<%= d.drive_id %>"><%= d.title %></a></td><td><%= d.company_name %></td><td><%= d.status %></td><td><%= new Date(d.deadline).toLocaleDateString() %></td><td><%= d.applicants %></td></tr><% }) %></tbody></table></div><% } %></section>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <span class="current">Placement Overview</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'overview' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Training &amp; Placement</h1>
+    <span class="sub">Institutional placement operations, company relations, recruitment drives, and student outcomes.</span>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="/admin/placement/drives/new">
+      <%- include('../partials/icon', { name: 'plus', size: 15 }) %>
+      <span>Create Drive</span>
+    </a>
+    <a class="btn secondary" href="/admin/placement/companies">
+      <%- include('../partials/icon', { name: 'building', size: 15 }) %>
+      <span>Manage Companies</span>
+    </a>
+    <a class="btn secondary" href="/admin/placement/statistics">
+      <%- include('../partials/icon', { name: 'trending-up', size: 15 }) %>
+      <span>Analytics</span>
+    </a>
+  </div>
+</div>
+
+<%
+  const activeStudents = overview?.active_students ?? 0;
+  const placedStudents = overview?.placed_students ?? 0;
+  const placementRate = activeStudents > 0 ? ((placedStudents / activeStudents) * 100).toFixed(1) : '0.0';
+  const totalOffers = overview?.total_offers ?? 0;
+  const ftOffers = overview?.accepted_fulltime_offers ?? 0;
+  const intOffers = overview?.accepted_internships ?? 0;
+%>
+
+<section class="tnp-hero">
+  <div class="tnp-hero-content">
+    <div class="tnp-hero-top">
+      <div>
+        <span class="tnp-hero-badge">Academic Console · Corporate Relations</span>
+        <div class="tnp-hero-title">PICT Training &amp; Placement Cell</div>
+        <div class="tnp-hero-desc">Centrally manage company accreditation, campus recruitment drives, student assessment stages, and formal offer acceptance records.</div>
+      </div>
+      <div class="tags">
+        <span class="tag ok"><%= placementRate %>% Institutional Placement</span>
+        <span class="tag"><%= fmt.num(activeStudents) %> Active Students</span>
+        <span class="tag"><%= drives.length %> Active Drives</span>
+      </div>
+    </div>
+    <div class="tnp-hero-stats">
+      <div>
+        <div class="tnp-hero-stat-label">Placed Students</div>
+        <div class="tnp-hero-stat-value"><%= fmt.num(placedStudents) %> <small style="font-size:12px;color:#C0CEE8;">/ <%= fmt.num(activeStudents) %></small></div>
+      </div>
+      <div>
+        <div class="tnp-hero-stat-label">Full-Time Offers</div>
+        <div class="tnp-hero-stat-value"><%= fmt.num(ftOffers) %></div>
+      </div>
+      <div>
+        <div class="tnp-hero-stat-label">Internship Offers</div>
+        <div class="tnp-hero-stat-value"><%= fmt.num(intOffers) %></div>
+      </div>
+      <div>
+        <div class="tnp-hero-stat-label">Highest Package</div>
+        <div class="tnp-hero-stat-value"><%= overview?.highest_package_lpa != null ? fmt.num(overview.highest_package_lpa) + ' LPA' : '—' %></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Active Students</span>
+      <div class="tnp-kpi-icon navy"><%- include('../partials/icon', { name: 'users', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(activeStudents) %></div>
+    <p class="tnp-kpi-subtext">Currently enrolled eligible cohort pool across all engineering branches.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Placed Students</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'award', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(placedStudents) %><small style="color:var(--green);font-weight:600;"> (<%= placementRate %>%)</small></div>
+    <p class="tnp-kpi-subtext">Students with at least one verified accepted full-time offer.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Offers Recorded</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'briefcase', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(totalOffers) %></div>
+    <p class="tnp-kpi-subtext"><%= fmt.num(ftOffers) %> full-time accepted · <%= fmt.num(intOffers) %> internships.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Highest Accepted</span>
+      <div class="tnp-kpi-icon warning"><%- include('../partials/icon', { name: 'trending-up', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.highest_package_lpa != null ? fmt.num(overview.highest_package_lpa) : '—' %><small> LPA</small></div>
+    <p class="tnp-kpi-subtext"><%= overview?.median_package_lpa != null ? `Median: ${fmt.num(overview.median_package_lpa)} LPA` : 'Verified database statistics' %></p>
+  </div>
+</div>
+
+<section class="tnp-table-card">
+  <div class="tnp-table-header">
+    <div class="tnp-table-title-wrap">
+      <h2 class="tnp-table-title">Recent Placement Drives</h2>
+      <span class="tnp-count-pill"><%= drives.length %> total</span>
+    </div>
+    <div class="tnp-table-toolbar">
+      <a href="/admin/placement/drives/new" class="btn small primary">
+        <%- include('../partials/icon', { name: 'plus', size: 13 }) %>
+        <span>New Drive</span>
+      </a>
+      <a href="/admin/placement/statistics" class="btn small secondary">
+        <%- include('../partials/icon', { name: 'trending-up', size: 13 }) %>
+        <span>Full Analytics</span>
+      </a>
+    </div>
+  </div>
+
+  <% if (!drives.length) { %>
+    <div class="tnp-empty-state">
+      <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'briefcase', size: 24 }) %></div>
+      <h3 class="tnp-empty-title">No Recruitment Drives Created</h3>
+      <p class="tnp-empty-desc">Create your first campus recruitment drive to configure eligibility criteria and allow students to apply.</p>
+      <a href="/admin/placement/drives/new" class="btn primary">Create Drive</a>
+    </div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Drive &amp; Role</th>
+            <th>Company</th>
+            <th>Type</th>
+            <th>Compensation</th>
+            <th>Status</th>
+            <th>Application Deadline</th>
+            <th class="num">Applicants</th>
+            <th style="text-align:right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% drives.forEach(d => { %>
+            <tr>
+              <td>
+                <div class="tnp-table-primary">
+                  <a href="/admin/placement/drives/<%= d.drive_id %>"><%= d.title %></a>
+                </div>
+                <div class="tnp-table-secondary"><%= d.role_title %></div>
+              </td>
+              <td>
+                <strong><%= d.company_name %></strong>
+              </td>
+              <td>
+                <span class="tnp-badge <%= d.drive_type === 'FullTime' ? 'tnp-badge-fulltime' : 'tnp-badge-internship' %>">
+                  <%= d.drive_type === 'FullTime' ? 'Full-Time' : 'Internship' %>
+                </span>
+              </td>
+              <td>
+                <% if (d.drive_type === 'FullTime') { %>
+                  <strong><%= d.package_lpa != null ? `${d.package_lpa} LPA` : '—' %></strong>
+                <% } else { %>
+                  <strong><%= d.stipend_monthly != null ? `₹${fmt.num(d.stipend_monthly)} / mo` : '—' %></strong>
+                <% } %>
+              </td>
+              <td>
+                <span class="tnp-badge tnp-badge-<%= d.status.toLowerCase() %>"><%= d.status %></span>
+              </td>
+              <td class="nw">
+                <%= fmt.dateTime(d.deadline) %>
+              </td>
+              <td class="num">
+                <span class="tnp-count-pill" style="font-weight:700;"><%= d.applicants %></span>
+              </td>
+              <td style="text-align:right;">
+                <a class="btn small secondary" href="/admin/placement/drives/<%= d.drive_id %>">
+                  <span>Manage</span>
+                  <%- include('../partials/icon', { name: 'arrow-right', size: 12 }) %>
+                </a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>
