@@ -1,6 +1,220 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Placement companies</h1><span class="sub">Companies with historical drives are deactivated, never deleted.</span></div>
-<form class="card form-grid" method="post" action="/admin/placement/companies"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<label>Company name<input name="company_name" required maxlength="140"></label><label>Industry<input name="industry" maxlength="80"></label><label>Website<input name="website_url" type="url"></label><label>Contact name<input name="contact_name" maxlength="100"></label><label>Contact email<input name="contact_email" type="email"></label><label>Contact phone<input name="contact_phone" maxlength="30"></label><label>Headquarters<input name="headquarters" maxlength="100"></label><label class="wide">Description<textarea name="description" maxlength="3000"></textarea></label><div class="wide"><button class="btn">Add company</button></div></form>
-<section class="card"><h2>Companies</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Industry</th><th>Drives</th><th>Status</th><th></th></tr></thead><tbody><% companies.forEach(c=>{ %><tr><td><%= c.company_name %></td><td><%= c.industry||'—' %></td><td><%= c.drive_count %></td><td><%= c.is_active?'Active':'Inactive' %></td><td><div class="actions"><a class="btn secondary" href="/admin/placement/companies/<%= c.company_id %>">Edit</a><form method="post" action="/admin/placement/companies/<%= c.company_id %>/toggle"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn secondary"><%= c.is_active?'Deactivate':'Activate' %></button></form></div></td></tr><% }) %></tbody></table></div></section>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current">Companies</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'companies' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>Recruiting Companies &amp; Corporate Partners</h1>
+    <span class="sub">Registered recruiting organizations. In compliance with DBMS referential integrity, companies with placement history are deactivated, not deleted.</span>
+  </div>
+</div>
+
+<%
+  const totalCompanies = companies.length;
+  const activeCompanies = companies.filter(c => c.is_active).length;
+  const inactiveCompanies = totalCompanies - activeCompanies;
+  const totalDrives = companies.reduce((acc, c) => acc + (c.drive_count || 0), 0);
+%>
+
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Total Organizations</span>
+      <div class="tnp-kpi-icon navy"><%- include('../partials/icon', { name: 'building', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(totalCompanies) %></div>
+    <p class="tnp-kpi-subtext">Corporate recruiters in institutional registry.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Active Recruiters</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(activeCompanies) %></div>
+    <p class="tnp-kpi-subtext">Eligible to schedule active placement drives.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Archived / Inactive</span>
+      <div class="tnp-kpi-icon warning"><%- include('../partials/icon', { name: 'clock', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(inactiveCompanies) %></div>
+    <p class="tnp-kpi-subtext">Historical records retained for audit integrity.</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Campus Drives Hosted</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'briefcase', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(totalDrives) %></div>
+    <p class="tnp-kpi-subtext">Cumulative recruitment drives conducted.</p>
+  </div>
+</div>
+
+<details class="card" style="padding: 20px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-xs);">
+  <summary style="font-weight:600; font-size:15px; cursor:pointer; color:var(--navy); display:flex; align-items:center; gap:8px;">
+    <%- include('../partials/icon', { name: 'plus', size: 16 }) %>
+    <span>Register New Corporate Partner</span>
+  </summary>
+  <form class="tnp-form-card" style="margin-top:16px; padding:0; border:0; box-shadow:none;" method="post" action="/admin/placement/companies">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <div class="tnp-form-section">
+      <h3 class="tnp-form-section-title">
+        <%- include('../partials/icon', { name: 'building', size: 16 }) %>
+        <span>Company Details</span>
+      </h3>
+      <div class="form-grid">
+        <div class="field">
+          <label for="company_name">Company Name<span class="required-star">*</span></label>
+          <input id="company_name" name="company_name" required maxlength="140" placeholder="e.g. Acme Technologies Ltd.">
+        </div>
+        <div class="field">
+          <label for="industry">Industry Sector</label>
+          <input id="industry" name="industry" maxlength="80" placeholder="e.g. Information Technology, FinTech">
+        </div>
+        <div class="field">
+          <label for="website_url">Official Website</label>
+          <input id="website_url" name="website_url" type="url" placeholder="https://www.example.com">
+        </div>
+        <div class="field">
+          <label for="headquarters">Headquarters Location</label>
+          <input id="headquarters" name="headquarters" maxlength="100" placeholder="e.g. Pune, Maharashtra / Bengaluru">
+        </div>
+      </div>
+    </div>
+
+    <div class="tnp-form-section">
+      <h3 class="tnp-form-section-title">
+        <%- include('../partials/icon', { name: 'user', size: 16 }) %>
+        <span>Contact Person / Liaison SPOC</span>
+      </h3>
+      <div class="form-grid">
+        <div class="field">
+          <label for="contact_name">Contact Representative</label>
+          <input id="contact_name" name="contact_name" maxlength="100" placeholder="Full name of HR / Talent Lead">
+        </div>
+        <div class="field">
+          <label for="contact_email">Official Email</label>
+          <input id="contact_email" name="contact_email" type="email" maxlength="120" placeholder="recruiter@example.com">
+        </div>
+        <div class="field">
+          <label for="contact_phone">Contact Phone</label>
+          <input id="contact_phone" name="contact_phone" maxlength="30" placeholder="+91 98765 43210">
+        </div>
+      </div>
+    </div>
+
+    <div class="tnp-form-section">
+      <h3 class="tnp-form-section-title">
+        <%- include('../partials/icon', { name: 'file-text', size: 16 }) %>
+        <span>Corporate Description</span>
+      </h3>
+      <div class="field">
+        <label for="description">Company Profile &amp; Overview</label>
+        <textarea id="description" name="description" maxlength="3000" rows="3" placeholder="Brief background, domain specialization, and institutional notes..."></textarea>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:4px;">
+      <button class="btn primary" type="submit">
+        <%- include('../partials/icon', { name: 'plus', size: 15 }) %>
+        <span>Add Company</span>
+      </button>
+    </div>
+  </form>
+</details>
+
+<section class="tnp-table-card">
+  <div class="tnp-table-header">
+    <div class="tnp-table-title-wrap">
+      <h2 class="tnp-table-title">Company Directory</h2>
+      <span class="tnp-count-pill"><%= companies.length %> records</span>
+    </div>
+    <div class="tnp-table-toolbar">
+      <div class="tnp-table-search">
+        <%- include('../partials/icon', { name: 'search', size: 14 }) %>
+        <input type="search" placeholder="Filter company or industry..." oninput="const q = this.value.toLowerCase(); document.querySelectorAll('.company-row').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');" aria-label="Filter companies table">
+      </div>
+    </div>
+  </div>
+
+  <% if (!companies.length) { %>
+    <div class="tnp-empty-state">
+      <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'building', size: 24 }) %></div>
+      <h3 class="tnp-empty-title">No Companies Registered</h3>
+      <p class="tnp-empty-desc">Register your first recruiting partner above to begin hosting campus placement drives.</p>
+    </div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Company &amp; Industry</th>
+            <th>Headquarters</th>
+            <th>Website</th>
+            <th class="num">Drives</th>
+            <th>Status</th>
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% companies.forEach(c => { %>
+            <tr class="company-row">
+              <td>
+                <div class="tnp-table-primary"><%= c.company_name %></div>
+                <div class="tnp-table-secondary"><%= c.industry || 'General Engineering / Tech' %></div>
+              </td>
+              <td><%= c.headquarters || '—' %></td>
+              <td>
+                <% if (c.website_url) { %>
+                  <a href="<%= c.website_url %>" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;">
+                    <span>Visit</span>
+                    <%- include('../partials/icon', { name: 'external-link', size: 12 }) %>
+                  </a>
+                <% } else { %>
+                  <span class="muted">—</span>
+                <% } %>
+              </td>
+              <td class="num">
+                <span class="tnp-count-pill"><%= c.drive_count %></span>
+              </td>
+              <td>
+                <span class="tnp-badge <%= c.is_active ? 'tnp-badge-open' : 'tnp-badge-draft' %>">
+                  <%= c.is_active ? 'Active' : 'Inactive' %>
+                </span>
+              </td>
+              <td style="text-align:right;">
+                <div class="actions" style="justify-content:flex-end;">
+                  <a class="btn small secondary" href="/admin/placement/companies/<%= c.company_id %>">
+                    <%- include('../partials/icon', { name: 'edit', size: 12 }) %>
+                    <span>Edit</span>
+                  </a>
+                  <form method="post" action="/admin/placement/companies/<%= c.company_id %>/toggle" data-confirm="Are you sure you want to <%= c.is_active ? 'deactivate' : 'activate' %> <%= c.company_name %>?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn small <%= c.is_active ? 'danger' : 'success' %>" type="submit">
+                      <%= c.is_active ? 'Deactivate' : 'Activate' %>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>

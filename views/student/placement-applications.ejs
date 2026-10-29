@@ -1,8 +1,144 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>My placement applications</h1><span class="sub">Round remarks are private to placement administrators.</span></div>
-<% if (!applications.length) { %><div class="empty">You have not applied to any drives.</div><% } %>
-<div class="stack"><% applications.forEach(a=>{ %><article class="card"><h2><%= a.title %> · <%= a.company_name %></h2><p><%= a.role_title %> · <%= a.drive_type %> · applied <%= new Date(a.applied_at).toLocaleDateString() %></p><p>Status: <span class="pill"><%= a.status %></span></p><% if (a.rounds.length) { %><h3>Rounds</h3><ol><% a.rounds.forEach(r=>{ %><li><%= r.name %> — <%= r.status||'Result pending' %></li><% }) %></ol><% } %>
-<% if (a.status==='Applied'||a.status==='Shortlisted') { %><form method="post" action="/student/placement/applications/<%= a.application_id %>/withdraw"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn secondary">Withdraw</button></form><% } %>
-<% if (a.offer_id) { %><p>Offer: <%= a.package_lpa!=null?`${a.package_lpa} LPA`:`₹${fmt.num(a.stipend_monthly)} / month` %> · response by <%= new Date(a.response_deadline).toLocaleString() %> · <%= a.offer_status %></p><% if (a.offer_status==='Pending') { %><form class="actions" method="post" action="/student/placement/offers/<%= a.offer_id %>/respond"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn" name="response" value="accept">Accept offer</button><button class="btn secondary" name="response" value="decline">Decline</button></form><% } %><% } %>
-</article><% }) %></div>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/student">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/student/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current">My Applications</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'applications' }) %>
+
+<div class="page-head">
+  <div>
+    <h1>My placement applications</h1>
+    <span class="sub">Track candidate evaluation stages, round outcomes, and response deadlines. Detailed interviewer remarks are confidential to placement administrators.</span>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="/student/placement/drives">
+      <%- include('../partials/icon', { name: 'plus', size: 14 }) %>
+      <span>Browse More Drives</span>
+    </a>
+  </div>
+</div>
+
+<% if (!applications.length) { %>
+  <div class="tnp-empty-state">
+    <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'file-text', size: 24 }) %></div>
+    <h3 class="tnp-empty-title">You have not applied to any drives</h3>
+    <p class="tnp-empty-desc">Explore available recruitment drives and submit applications to begin your campus placement journey.</p>
+    <a href="/student/placement/drives" class="btn primary">Browse Open Drives</a>
+  </div>
+<% } else { %>
+  <div class="stack" style="gap:18px;">
+    <% applications.forEach(a => { %>
+      <article class="card" style="box-shadow:var(--shadow-xs);border-left:4px solid <%= a.status === 'Selected' ? 'var(--green)' : a.status === 'Rejected' ? 'var(--red)' : a.status === 'Shortlisted' ? 'var(--violet)' : 'var(--link)' %>;">
+        <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:14px;">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:6px;">
+              <%- include('../partials/icon', { name: 'building', size: 13 }) %>
+              <span><%= a.company_name %></span>
+            </div>
+            <h2 style="font-size:18px;margin:3px 0 2px;">
+              <a href="/student/placement/drives/<%= a.drive_id %>" style="color:var(--navy);"><%= a.title %></a>
+            </h2>
+            <div style="font-size:13px;color:var(--text-2);">
+              <%= a.role_title %> · <%= a.drive_type === 'FullTime' ? 'Full-Time Recruitment' : 'Internship' %>
+              · Applied on <%= fmt.date(a.applied_at) %>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="tnp-badge tnp-badge-<%= a.status.toLowerCase() %>" style="font-size:13px;padding:5px 12px;">
+              <%= a.status %>
+            </span>
+          </div>
+        </div>
+
+        <!-- Evaluation Rounds Pipeline -->
+        <% if (a.rounds && a.rounds.length) { %>
+          <div style="margin:14px 0;">
+            <h3 style="font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+              <%- include('../partials/icon', { name: 'list', size: 14 }) %>
+              <span>Recruitment Assessment Rounds</span>
+            </h3>
+            <div class="tnp-stepper" style="margin:8px 0;">
+              <% a.rounds.forEach((r, idx) => { %>
+                <div class="tnp-step-item" style="padding:10px 14px;">
+                  <div class="tnp-step-num <%= r.status === 'Passed' ? 'completed' : '' %>" style="width:24px;height:24px;font-size:11px;">
+                    <%= idx + 1 %>
+                  </div>
+                  <div class="tnp-step-content">
+                    <div class="tnp-step-head">
+                      <strong style="font-size:13.5px;"><%= r.name %></strong>
+                      <span class="tnp-badge <%= r.status === 'Passed' ? 'tnp-badge-passed' : r.status === 'Failed' ? 'tnp-badge-failed' : r.status === 'OnHold' ? 'tnp-badge-onhold' : 'tnp-badge-pending' %>">
+                        <%= r.status || 'Pending' %>
+                      </span>
+                    </div>
+                    <% if (r.date) { %>
+                      <div class="tnp-step-meta"><%= fmt.dateTime(r.date) %></div>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+
+        <!-- Formal Job Offer Box -->
+        <% if (a.offer_id) { %>
+          <div class="tnp-offer-box" style="margin-top:14px;">
+            <div class="tnp-offer-header">
+              <div>
+                <span class="tnp-badge <%= a.offer_status === 'Accepted' ? 'tnp-badge-accepted' : a.offer_status === 'Declined' ? 'tnp-badge-declined' : 'tnp-badge-pending' %>">
+                  Offer <%= a.offer_status %>
+                </span>
+                <div class="tnp-offer-amount" style="margin-top:4px;">
+                  <%= a.package_lpa != null ? `${a.package_lpa} LPA` : `₹${fmt.num(a.stipend_monthly)} / month` %>
+                </div>
+              </div>
+              <div class="tnp-offer-deadline">
+                <%- include('../partials/icon', { name: 'clock', size: 14 }) %>
+                <span>Response deadline: <strong><%= fmt.dateTime(a.response_deadline) %></strong></span>
+              </div>
+            </div>
+
+            <% if (a.offer_status === 'Pending') { %>
+              <div style="border-top:1px solid #BBF7D0;padding-top:12px;margin-top:4px;">
+                <p style="font-size:13px;color:#14532D;margin:0 0 10px;">
+                  Please review the offer parameters. Accepting this full-time offer will activate the institutional 1.5× compensation threshold.
+                </p>
+                <form class="actions" method="post" action="/student/placement/offers/<%= a.offer_id %>/respond">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn success small" name="response" value="accept" data-confirm="Are you sure you want to ACCEPT this placement offer? Once accepted, this will be recorded as your institutional placement.">
+                    <%- include('../partials/icon', { name: 'check', size: 13 }) %>
+                    <span>Accept Offer</span>
+                  </button>
+                  <button class="btn danger small" name="response" value="decline" data-confirm="Are you sure you want to DECLINE this offer? This decision is final.">
+                    <%- include('../partials/icon', { name: 'x-circle', size: 13 }) %>
+                    <span>Decline</span>
+                  </button>
+                </form>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+
+        <!-- Actions footer (Withdraw if Applied or Shortlisted) -->
+        <% if (a.status === 'Applied' || a.status === 'Shortlisted') { %>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line-2);display:flex;justify-content:flex-end;">
+            <form method="post" action="/student/placement/applications/<%= a.application_id %>/withdraw" data-confirm="Withdraw application from <%= a.title %>? You will not be able to reapply if the deadline passes.">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn danger small" type="submit">
+                <span>Withdraw Application</span>
+              </button>
+            </form>
+          </div>
+        <% } %>
+      </article>
+    <% }) %>
+  </div>
+<% } %>
+
 <%- include('../partials/layout-end') %>

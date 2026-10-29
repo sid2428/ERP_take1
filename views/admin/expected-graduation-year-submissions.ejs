@@ -1,0 +1,44 @@
+<%- include('../partials/layout-start') %>
+<div class="page-head">
+  <h1>Expected passing-out year submissions</h1>
+  <div class="actions"><a class="btn secondary" href="/admin/students">Back to students</a></div>
+</div>
+<p class="note">Student-entered years remain outside placement cohort statistics until verified. Verify only against authoritative institutional records; reject submissions that cannot be confirmed.</p>
+
+<section class="card t">
+  <div class="sc"><table>
+    <thead><tr><th>Student no.</th><th>Name</th><th>Branch</th><th class="num">Submitted year</th><th class="num">Current verified year</th><th>Review</th></tr></thead>
+    <tbody>
+      <% if (!submissions.length) { %><tr><td colspan="6" class="empty">No expected-year submissions are awaiting review.</td></tr><% } %>
+      <% submissions.forEach(student => { %>
+        <tr>
+          <td class="code"><a href="/admin/students/<%= student.student_id %>"><%= student.student_number %></a></td>
+          <td><%= student.student_name %></td>
+          <td><%= student.dept_name %></td>
+          <td class="num"><strong><%= student.submitted_expected_graduation_year %></strong></td>
+          <td class="num"><%= student.expected_graduation_year ?? 'None' %></td>
+          <td>
+            <div class="actions">
+              <form method="post" action="/admin/students/<%= student.student_id %>/verify-expected-graduation-year"
+                data-confirm="Verify this year against an authoritative institutional record?">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label for="verification-source-<%= student.student_id %>">Record / source used</label>
+                <input id="verification-source-<%= student.student_id %>" name="verification_source"
+                  type="text" maxlength="200" required
+                  placeholder="e.g. Registrar cohort confirmation">
+                <small>Enter a short institutional reference; do not upload documents or sensitive details.</small>
+                <button class="btn primary small" type="submit">Verify</button>
+              </form>
+              <form method="post" action="/admin/students/<%= student.student_id %>/reject-expected-graduation-year"
+                data-confirm="Reject this unverified year submission?">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn secondary small" type="submit">Reject</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table></div>
+</section>
+<%- include('../partials/layout-end') %>

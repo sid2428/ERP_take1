@@ -1,11 +1,399 @@
 <%- include('../partials/layout-start') %>
-<% if(drive.status==='Draft'&&!applicants.length){ %><p><a class="btn secondary" href="/admin/placement/drives/<%= drive.drive_id %>/edit">Edit drive</a></p><% } %>
-<div class="page-head"><h1><%= drive.title %></h1><span class="sub"><%= drive.company_name %> · <%= drive.role_title %></span></div>
-<section class="card"><p><%= drive.drive_type %> · <%= drive.status %> · deadline <%= new Date(drive.deadline).toLocaleString() %></p><a class="btn secondary" href="/admin/placement/drives/<%= drive.drive_id %>/applicants.csv">Download applicants CSV</a>
-<% const nextDriveStatuses=drive.status==='Draft'?['Open','Cancelled']:drive.status==='Open'?['Closed','Cancelled']:[]; if(nextDriveStatuses.length){ %><form class="actions" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/status"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><select name="status"><% nextDriveStatuses.forEach(s=>{ %><option value="<%= s %>"><%= s %></option><% }) %></select><button class="btn secondary">Update status</button></form><% } %></section>
-<section class="card"><h2>Rounds</h2><% rounds.forEach(r=>{ %><p><%= r.sequence_no %>. <%= r.round_name %> — <%= r.status %> <%= r.scheduled_at?`(${new Date(r.scheduled_at).toLocaleString()})`:'' %></p><% }) %><form class="form-grid" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Sequence<input type="number" name="sequence_no" min="1" required></label><label>Round name<input name="round_name" required></label><label>Description<input name="description"></label><label>Date/time<input type="datetime-local" name="scheduled_at"></label><div class="wide"><button class="btn">Add round</button></div></form></section>
-<section class="card"><h2>Manage round schedules and status</h2><% rounds.forEach(r=>{ %><article class="card"><h3><%= r.sequence_no %>. <%= r.round_name %> - <%= r.status %></h3><% if(['Planned','InProgress'].includes(r.status)){ %><form class="form-grid" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds/<%= r.round_id %>/edit"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Round name<input name="round_name" value="<%= r.round_name %>" required maxlength="100"></label><label>Description<input name="description" value="<%= r.description||'' %>" maxlength="1000"></label><label>Schedule<input type="datetime-local" name="scheduled_at" value="<%= r.scheduled_local %>"></label><div><button class="btn secondary">Save schedule</button></div></form><form class="actions" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds/<%= r.round_id %>/status"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><select name="status"><% (r.status==='Planned'?['InProgress','Cancelled']:['Completed','Cancelled']).forEach(s=>{ %><option value="<%= s %>"><%= s %></option><% }) %></select><button class="btn secondary">Update status</button></form><% } %></article><% }) %></section><section class="card"><h2>Applicants (<%= applicants.length %>)</h2><% if(!applicants.length){ %><div class="empty">No applications yet.</div><% } %><% applicants.forEach(a=>{ %><article class="card"><h3><%= a.student_number %> · <%= a.first_name %> <%= a.last_name %></h3><p><%= a.program_name %> · Year <%= a.year_of_study||'unknown' %> · <%= a.status %></p>
-<% if(a.next_statuses.length){ %><form class="actions" method="post" action="/admin/placement/applications/<%= a.application_id %>/status"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><select name="status"><% a.next_statuses.forEach(s=>{ %><option value="<%= s %>"><%= s %></option><% }) %></select><button class="btn secondary">Update stage</button></form><% } %>
-<form class="form-grid" method="post" action="/admin/placement/applications/<%= a.application_id %>/results"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Round<select name="round_id"><% rounds.forEach(r=>{ %><option value="<%= r.round_id %>"><%= r.sequence_no %>. <%= r.round_name %></option><% }) %></select></label><label>Result<select name="result"><option>Pending</option><option>Passed</option><option>Failed</option><option>OnHold</option></select></label><label>Private remarks<input name="private_remarks" maxlength="1000"></label><div><button class="btn secondary">Save result</button></div></form>
-<% if(a.status==='Selected'&&!a.offer_id){ %><form class="form-grid" method="post" action="/admin/placement/applications/<%= a.application_id %>/offers"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Full-time package LPA<input type="number" name="package_lpa" step="0.01" min="0"></label><label>Internship monthly stipend<input type="number" name="stipend_monthly" step="0.01" min="0"></label><label>Response deadline<input type="datetime-local" name="response_deadline" required></label><label>Joining date<input type="date" name="joining_date"></label><div><button class="btn">Record offer</button></div></form><% } else if(a.offer_id) { %><p>Offer <%= a.offer_status %> · <%= a.package_lpa!=null?`${a.package_lpa} LPA`:`₹${fmt.num(a.stipend_monthly)} monthly` %></p><% } %></article><% }) %></section>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current"><%= drive.title %></span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: '' }) %>
+
+<%
+  const nextDriveStatuses = drive.status === 'Draft' ? ['Open', 'Cancelled'] : drive.status === 'Open' ? ['Closed', 'Cancelled'] : [];
+%>
+
+<div class="page-head">
+  <div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span class="tnp-badge <%= drive.drive_type === 'FullTime' ? 'tnp-badge-fulltime' : 'tnp-badge-internship' %>">
+        <%= drive.drive_type === 'FullTime' ? 'Full-Time Recruitment' : 'Internship Drive' %>
+      </span>
+      <span class="tnp-badge tnp-badge-<%= drive.status.toLowerCase() %>">
+        <%= drive.status %>
+      </span>
+    </div>
+    <h1 style="margin:2px 0;"><%= drive.title %></h1>
+    <span class="sub"><%= drive.company_name %> · <%= drive.role_title %></span>
+  </div>
+  <div class="actions">
+    <% if (drive.status === 'Draft' && !applicants.length) { %>
+      <a class="btn secondary" href="/admin/placement/drives/<%= drive.drive_id %>/edit">
+        <%- include('../partials/icon', { name: 'edit', size: 14 }) %>
+        <span>Edit Drive</span>
+      </a>
+    <% } %>
+    <a class="btn secondary" href="/admin/placement/drives/<%= drive.drive_id %>/applicants.csv">
+      <%- include('../partials/icon', { name: 'download', size: 14 }) %>
+      <span>Export CSV</span>
+    </a>
+    <a class="btn secondary" href="/admin/placement">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>All Drives</span>
+    </a>
+  </div>
+</div>
+
+<!-- Drive Key Specifications Card -->
+<div class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:14px;">
+    <h2>Drive Parameters &amp; Eligibility Framework</h2>
+    <% if (nextDriveStatuses.length) { %>
+      <form class="actions" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/status" data-confirm="Transition drive status to selected state?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label for="drive-status-select" class="sr-only">Drive Status</label>
+        <select id="drive-status-select" name="status" style="height:32px;padding:0 8px;font-size:13px;width:auto;">
+          <% nextDriveStatuses.forEach(s => { %>
+            <option value="<%= s %>">Move to <%= s %></option>
+          <% }) %>
+        </select>
+        <button class="btn small primary" type="submit">Update Status</button>
+      </form>
+    <% } %>
+  </div>
+
+  <div class="tnp-detail-grid">
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Compensation</span>
+      <span class="tnp-detail-value" style="color:var(--green-text);">
+        <% if (drive.drive_type === 'FullTime') { %>
+          <%= drive.package_lpa != null ? `${drive.package_lpa} LPA` : 'Not specified' %>
+        <% } else { %>
+          <%= drive.stipend_monthly != null ? `₹${fmt.num(drive.stipend_monthly)} / month` : 'Not specified' %>
+        <% } %>
+      </span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Application Window</span>
+      <span class="tnp-detail-value">
+        <%= fmt.dateTime(drive.opens_at) %> &rarr; <%= fmt.dateTime(drive.deadline) %>
+      </span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Recruitment Date</span>
+      <span class="tnp-detail-value"><%= drive.drive_date ? fmt.date(drive.drive_date) : 'To be announced' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Work Location</span>
+      <span class="tnp-detail-value"><%= drive.job_location || 'Not specified' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum Year</span>
+      <span class="tnp-detail-value">Year <%= drive.min_year %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum CGPA</span>
+      <span class="tnp-detail-value"><%= drive.min_cgpa != null ? drive.min_cgpa : 'No CGPA cut-off' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Max Active Backlogs</span>
+      <span class="tnp-detail-value"><%= drive.max_active_backlogs != null ? drive.max_active_backlogs : 'Any' %></span>
+    </div>
+
+    <div class="tnp-detail-item">
+      <span class="tnp-detail-label">Minimum Attendance</span>
+      <span class="tnp-detail-value"><%= drive.min_attendance_pct != null ? `${drive.min_attendance_pct}%` : 'Not assessed' %></span>
+    </div>
+  </div>
+
+  <% if (drive.description) { %>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);">
+      <span class="tnp-detail-label" style="display:block;margin-bottom:6px;">Job Description &amp; Requirements</span>
+      <p style="margin:0;font-size:13.5px;color:var(--text-2);line-height:1.55;white-space:pre-wrap;"><%= drive.description %></p>
+    </div>
+  <% } %>
+</div>
+
+<!-- Recruitment Rounds Pipeline Management -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd" style="border-bottom:1px solid var(--line-2);padding-bottom:12px;margin-bottom:14px;">
+    <div>
+      <h2>Recruitment Rounds &amp; Assessment Pipeline</h2>
+      <p class="note" style="margin:2px 0 0;">Manage sequential evaluation stages: Planned &rarr; In Progress &rarr; Completed or Cancelled.</p>
+    </div>
+    <span class="tnp-count-pill"><%= rounds.length %> rounds</span>
+  </div>
+
+  <% if (!rounds.length) { %>
+    <p class="empty">No assessment rounds configured yet. Add rounds below to evaluate candidates.</p>
+  <% } else { %>
+    <div class="tnp-stepper">
+      <% rounds.forEach(r => { %>
+        <div class="tnp-step-item">
+          <div class="tnp-step-num <%= r.status === 'Completed' ? 'completed' : '' %>">
+            <%= r.sequence_no %>
+          </div>
+          <div class="tnp-step-content">
+            <div class="tnp-step-head">
+              <h3 class="tnp-step-title"><%= r.round_name %></h3>
+              <span class="tnp-badge <%= r.status === 'Completed' ? 'tnp-badge-passed' : r.status === 'InProgress' ? 'tnp-badge-pending' : r.status === 'Cancelled' ? 'tnp-badge-failed' : 'tnp-badge-draft' %>">
+                <%= r.status %>
+              </span>
+            </div>
+            <% if (r.description) { %>
+              <p style="margin:4px 0 0;font-size:13px;color:var(--text-2);"><%= r.description %></p>
+            <% } %>
+            <div class="tnp-step-meta">
+              <span><strong>Scheduled:</strong> <%= r.scheduled_at ? fmt.dateTime(r.scheduled_at) : 'Not scheduled' %></span>
+            </div>
+
+            <% if (['Planned', 'InProgress'].includes(r.status)) { %>
+              <details style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);">
+                <summary style="font-size:12.5px;font-weight:600;color:var(--link);cursor:pointer;">
+                  Update round details or change status
+                </summary>
+                <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
+                  <form class="form-grid" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds/<%= r.round_id %>/edit">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <div class="field">
+                      <label>Round Name</label>
+                      <input name="round_name" value="<%= r.round_name %>" required maxlength="100">
+                    </div>
+                    <div class="field">
+                      <label>Schedule (IST)</label>
+                      <input type="datetime-local" name="scheduled_at" value="<%= r.scheduled_local %>">
+                    </div>
+                    <div class="field" style="grid-column:1 / -1;">
+                      <label>Description</label>
+                      <input name="description" value="<%= r.description || '' %>" maxlength="1000">
+                    </div>
+                    <div>
+                      <button class="btn small secondary" type="submit">Save Changes</button>
+                    </div>
+                  </form>
+
+                  <form class="actions" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds/<%= r.round_id %>/status" data-confirm="Transition round status?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <label class="sr-only" for="status-<%= r.round_id %>">Update Status</label>
+                    <select id="status-<%= r.round_id %>" name="status" style="height:32px;font-size:13px;width:auto;">
+                      <% (r.status === 'Planned' ? ['InProgress', 'Cancelled'] : ['Completed', 'Cancelled']).forEach(s => { %>
+                        <option value="<%= s %>"><%= s %></option>
+                      <% }) %>
+                    </select>
+                    <button class="btn small primary" type="submit">Update Status</button>
+                  </form>
+                </div>
+              </details>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <!-- Add Round Form -->
+  <details style="margin-top:16px;padding:14px 16px;background:var(--surface-2);border:1px dashed var(--line);border-radius:var(--radius-sm);">
+    <summary style="font-size:13.5px;font-weight:600;color:var(--navy);cursor:pointer;display:flex;align-items:center;gap:6px;">
+      <%- include('../partials/icon', { name: 'plus', size: 15 }) %>
+      <span>Add New Recruitment Round</span>
+    </summary>
+    <form class="form-grid" style="margin-top:14px;" method="post" action="/admin/placement/drives/<%= drive.drive_id %>/rounds">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="field">
+        <label for="round_sequence">Sequence Number<span class="required-star">*</span></label>
+        <input id="round_sequence" type="number" name="sequence_no" min="1" max="20" value="<%= rounds.length + 1 %>" required>
+      </div>
+      <div class="field">
+        <label for="round_name">Round Title<span class="required-star">*</span></label>
+        <input id="round_name" name="round_name" required placeholder="e.g. Online Assessment / Tech Interview">
+      </div>
+      <div class="field">
+        <label for="round_schedule">Scheduled Date &amp; Time (IST)</label>
+        <input id="round_schedule" type="datetime-local" name="scheduled_at">
+      </div>
+      <div class="field" style="grid-column:1 / -1;">
+        <label for="round_desc">Description / Instructions</label>
+        <input id="round_desc" name="description" placeholder="e.g. Platform links, duration, evaluation criteria">
+      </div>
+      <div class="wide">
+        <button class="btn primary small" type="submit">Add Round</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<!-- Candidate Applications & Management Table -->
+<section class="tnp-table-card">
+  <div class="tnp-table-header">
+    <div class="tnp-table-title-wrap">
+      <h2 class="tnp-table-title">Applicants &amp; Selection Records</h2>
+      <span class="tnp-count-pill"><%= applicants.length %> candidates</span>
+    </div>
+    <div class="tnp-table-toolbar">
+      <div class="tnp-table-search">
+        <%- include('../partials/icon', { name: 'search', size: 14 }) %>
+        <input type="search" placeholder="Search applicant..." oninput="const q = this.value.toLowerCase(); document.querySelectorAll('.applicant-row').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');" aria-label="Search applicants">
+      </div>
+    </div>
+  </div>
+
+  <% if (!applicants.length) { %>
+    <div class="tnp-empty-state">
+      <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'users', size: 24 }) %></div>
+      <h3 class="tnp-empty-title">No Applications Received</h3>
+      <p class="tnp-empty-desc">When eligible students submit applications for this recruitment drive, their profiles and round evaluations will appear here.</p>
+    </div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Program &amp; Year</th>
+            <th>Applied At</th>
+            <th>Current Stage</th>
+            <th>Round Outcomes</th>
+            <th>Offer Status</th>
+            <th style="text-align:right;">Candidate Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% applicants.forEach(a => { %>
+            <tr class="applicant-row">
+              <td>
+                <div class="tnp-table-primary"><%= a.first_name %> <%= a.last_name %></div>
+                <div class="tnp-table-secondary"><code><%= a.student_number %></code></div>
+              </td>
+              <td>
+                <div><%= a.program_name %></div>
+                <div class="tnp-table-secondary">Year <%= a.year_of_study || '—' %></div>
+              </td>
+              <td class="nw">
+                <%= fmt.dateTime(a.applied_at) %>
+              </td>
+              <td>
+                <span class="tnp-badge tnp-badge-<%= a.status.toLowerCase() %>">
+                  <%= a.status %>
+                </span>
+              </td>
+              <td>
+                <% if (!a.rounds || !a.rounds.length) { %>
+                  <span class="muted" style="font-size:12px;">No results recorded</span>
+                <% } else { %>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <% a.rounds.forEach(ar => { %>
+                      <div style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                        <span><%= ar.round %>:</span>
+                        <span class="tnp-badge <%= ar.result === 'Passed' ? 'tnp-badge-passed' : ar.result === 'Failed' ? 'tnp-badge-failed' : ar.result === 'OnHold' ? 'tnp-badge-onhold' : 'tnp-badge-pending' %>" style="font-size:10.5px;padding:1px 6px;">
+                          <%= ar.result || 'Pending' %>
+                        </span>
+                        <% if (ar.remarks) { %>
+                          <span class="muted" title="<%= ar.remarks %>">ℹ</span>
+                        <% } %>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </td>
+              <td>
+                <% if (a.offer_id) { %>
+                  <div>
+                    <span class="tnp-badge <%= a.offer_status === 'Accepted' ? 'tnp-badge-accepted' : a.offer_status === 'Declined' ? 'tnp-badge-declined' : 'tnp-badge-pending' %>">
+                      Offer <%= a.offer_status %>
+                    </span>
+                    <div style="font-size:12px;font-weight:600;margin-top:2px;color:var(--green-text);">
+                      <%= a.package_lpa != null ? `${a.package_lpa} LPA` : `₹${fmt.num(a.stipend_monthly)} / mo` %>
+                    </div>
+                  </div>
+                <% } else if (a.status === 'Selected') { %>
+                  <span class="muted" style="font-size:12px;color:var(--org-text);font-weight:600;">Pending Offer Record</span>
+                <% } else { %>
+                  <span class="muted" style="font-size:12px;">—</span>
+                <% } %>
+              </td>
+              <td style="text-align:right;">
+                <details style="position:relative;display:inline-block;">
+                  <summary class="btn small secondary" style="cursor:pointer;">Manage &darr;</summary>
+                  <div style="position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:280px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:14px;text-align:left;">
+
+                    <!-- Advance Stage -->
+                    <% if (a.next_statuses && a.next_statuses.length) { %>
+                      <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line-2);">
+                        <strong style="display:block;font-size:12px;margin-bottom:6px;color:var(--navy);">Progress Stage:</strong>
+                        <form class="actions" method="post" action="/admin/placement/applications/<%= a.application_id %>/status" data-confirm="Advance application stage?">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <label for="applicant-status-<%= a.application_id %>" class="sr-only">New Stage</label>
+                          <select id="applicant-status-<%= a.application_id %>" name="status" style="height:30px;font-size:12px;width:auto;">
+                            <% a.next_statuses.forEach(s => { %>
+                              <option value="<%= s %>"><%= s %></option>
+                            <% }) %>
+                          </select>
+                          <button class="btn small primary" type="submit">Update</button>
+                        </form>
+                      </div>
+                    <% } %>
+
+                    <!-- Record Round Result -->
+                    <% if (rounds.length) { %>
+                      <div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line-2);">
+                        <strong style="display:block;font-size:12px;margin-bottom:6px;color:var(--navy);">Record Round Evaluation:</strong>
+                        <form method="post" action="/admin/placement/applications/<%= a.application_id %>/results" style="display:flex;flex-direction:column;gap:6px;">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <label for="eval-round-<%= a.application_id %>" class="sr-only">Round</label>
+                          <select id="eval-round-<%= a.application_id %>" name="round_id" style="height:30px;font-size:12px;">
+                            <% rounds.forEach(r => { %>
+                              <option value="<%= r.round_id %>"><%= r.sequence_no %>. <%= r.round_name %></option>
+                            <% }) %>
+                          </select>
+                          <label for="eval-result-<%= a.application_id %>" class="sr-only">Result</label>
+                          <select id="eval-result-<%= a.application_id %>" name="result" style="height:30px;font-size:12px;">
+                            <option value="Passed">Passed</option>
+                            <option value="Failed">Failed</option>
+                            <option value="Pending">Pending</option>
+                            <option value="OnHold">OnHold</option>
+                          </select>
+                          <label for="eval-remarks-<%= a.application_id %>" class="sr-only">Private Remarks</label>
+                          <input id="eval-remarks-<%= a.application_id %>" name="private_remarks" placeholder="Internal remarks (optional)" maxlength="1000" style="height:30px;font-size:12px;">
+                          <button class="btn small secondary" type="submit">Save Result</button>
+                        </form>
+                      </div>
+                    <% } %>
+
+                    <!-- Record Offer -->
+                    <% if (a.status === 'Selected' && !a.offer_id) { %>
+                      <div>
+                        <strong style="display:block;font-size:12px;margin-bottom:6px;color:var(--green-text);">Record Job Offer:</strong>
+                        <form method="post" action="/admin/placement/applications/<%= a.application_id %>/offers" style="display:flex;flex-direction:column;gap:6px;">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <label for="offer-pkg-<%= a.application_id %>" class="sr-only">Full-time Package (LPA)</label>
+                          <input id="offer-pkg-<%= a.application_id %>" type="number" name="package_lpa" step="0.01" min="0" placeholder="Package (LPA)" style="height:30px;font-size:12px;">
+                          <label for="offer-stipend-<%= a.application_id %>" class="sr-only">Internship Monthly Stipend</label>
+                          <input id="offer-stipend-<%= a.application_id %>" type="number" name="stipend_monthly" step="0.01" min="0" placeholder="Monthly Stipend (₹)" style="height:30px;font-size:12px;">
+                          <label for="offer-deadline-<%= a.application_id %>" style="font-size:11px;color:var(--muted);">Response Deadline*</label>
+                          <input id="offer-deadline-<%= a.application_id %>" type="datetime-local" name="response_deadline" required style="height:30px;font-size:12px;">
+                          <label for="offer-joining-<%= a.application_id %>" style="font-size:11px;color:var(--muted);">Tentative Joining Date</label>
+                          <input id="offer-joining-<%= a.application_id %>" type="date" name="joining_date" style="height:30px;font-size:12px;">
+                          <button class="btn small primary" type="submit">Record Offer</button>
+                        </form>
+                      </div>
+                    <% } %>
+
+                  </div>
+                </details>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>
