@@ -13,10 +13,24 @@
       <h2>Generate Monthly Payroll</h2>
       <span class="pill">Database Stored Procedure</span>
     </div>
-    <div class="note">Computes basic salary, allowances, and automatic loss-of-pay deductions for all active faculty.</div>
+    <div class="note">Computes basic salary, allowances, and automatic loss-of-pay deductions.</div>
     
     <form method="post" action="/admin/payroll/generate" style="margin-top:14px">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      
+      <div class="field" style="margin-bottom:12px">
+        <label for="genFacultyId">Target Faculty Member</label>
+        <select name="faculty_id" id="genFacultyId">
+          <option value="">All Active Faculty Members (Complete Rollout)</option>
+          <% for (const f of facultyList) { %>
+            <option value="<%= f.faculty_id %>" <%= (typeof filterFacultyId !== 'undefined' && filterFacultyId === f.faculty_id) ? 'selected' : '' %>>
+              <%= f.faculty_code %> · <%= f.faculty_name %> (<%= f.dept_id %>)
+            </option>
+          <% } %>
+        </select>
+        <small class="muted" style="display:block;margin-top:4px">Select an individual faculty member to generate/recompute only their payroll, or leave as All.</small>
+      </div>
+
       <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
         <div class="field" style="margin:0;flex:1 1 120px">
           <label for="genMonth">Month</label>
@@ -38,10 +52,15 @@
 
   <div class="card">
     <div class="hd">
-      <h2>Payroll Filter</h2>
+      <h2>Payroll Filter &amp; Search</h2>
     </div>
-    <div class="note">Filter payroll records by period and disbursement status</div>
+    <div class="note">Search by faculty name or code, and filter by period and status</div>
     <form method="get" action="/admin/payroll" style="margin-top:14px">
+      <div class="field" style="margin-bottom:12px">
+        <label for="filSearch">Search Faculty</label>
+        <input type="search" name="q" id="filSearch" placeholder="Search by name, code (e.g. FAC-CSE-074), or department" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>">
+      </div>
+
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
         <div class="field" style="margin:0;flex:1 1 100px">
           <label for="filMonth">Month</label>
@@ -52,11 +71,11 @@
             <% }) %>
           </select>
         </div>
-        <div class="field" style="margin:0;flex:1 1 90px">
+        <div class="field" style="margin:0;flex:1 1 80px">
           <label for="filYear">Year</label>
           <input type="number" name="year" id="filYear" value="<%= filterYear %>">
         </div>
-        <div class="field" style="margin:0;flex:1 1 100px">
+        <div class="field" style="margin:0;flex:1 1 90px">
           <label for="filStatus">Status</label>
           <select name="status" id="filStatus">
             <option value="ALL" <%= filterStatus === 'ALL' ? 'selected' : '' %>>All</option>
@@ -65,7 +84,12 @@
             <option value="PAID" <%= filterStatus === 'PAID' ? 'selected' : '' %>>Paid</option>
           </select>
         </div>
-        <button type="submit" class="btn" style="height:38px">Filter</button>
+        <div style="display:flex;gap:6px">
+          <button type="submit" class="btn primary" style="height:38px">Filter</button>
+          <% if (searchQuery || filterStatus !== 'ALL') { %>
+            <a href="/admin/payroll" class="btn" style="height:38px;line-height:36px">Reset</a>
+          <% } %>
+        </div>
       </div>
     </form>
   </div>
@@ -74,6 +98,9 @@
 <section class="card t">
   <div class="hd">
     <h2>Payroll Records (<%= payrolls.length %>)</h2>
+    <% if (searchQuery) { %>
+      <span class="note">Filtered by: "<%= searchQuery %>"</span>
+    <% } %>
   </div>
   <div class="sc">
     <table>
@@ -88,12 +115,12 @@
           <th class="num">Deductions</th>
           <th class="num">Net Pay</th>
           <th>Status</th>
-          <th style="min-width:160px">Actions</th>
+          <th style="min-width:200px">Actions</th>
         </tr>
       </thead>
       <tbody>
         <% if (!payrolls.length) { %>
-          <tr><td colspan="10" class="empty">No payroll records found for the selected filter. Click "Run Payroll Rollout" above to generate.</td></tr>
+          <tr><td colspan="10" class="empty">No payroll records found for the selected filter. Click "Run Payroll Rollout" above or adjust your search filter.</td></tr>
         <% } %>
         <% for (const p of payrolls) { %>
           <tr>
@@ -124,13 +151,28 @@
                   <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="hidden" name="status" value="APPROVED">
-                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px">Approve</button>
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small" style="padding:4px 8px;font-size:12px" title="Approve salary computation without marking as disbursed">Approve</button>
+                  </form>
+                  <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="status" value="PAID">
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)" title="Approve and disburse salary (shows as Paid to faculty)">Mark Paid</button>
+                  </form>
+                  <form method="post" action="/admin/payroll/generate" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="month" value="<%= p.payroll_month %>">
+                    <input type="hidden" name="year" value="<%= p.payroll_year %>">
+                    <input type="hidden" name="faculty_id" value="<%= p.faculty_id %>">
+                    <button type="submit" class="btn small" title="Recompute draft salary and deductions for this faculty" style="padding:4px 8px;font-size:12px;background:#F1F3F6">Recalculate</button>
                   </form>
                 <% } else if (p.status === 'APPROVED') { %>
                   <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="hidden" name="status" value="PAID">
-                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)">Mark Paid</button>
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)" title="Confirm disbursement to faculty">Mark Paid</button>
                   </form>
                 <% } %>
               </div>

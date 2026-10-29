@@ -263,21 +263,36 @@ export async function rejectLeaveRequest(leaveRequestId: number, adminUserId: nu
   await query('CALL reject_faculty_leave($1, $2, $3)', [leaveRequestId, adminUserId, remarks]);
 }
 
-export function generateMonthlyPayroll(month: number, year: number) {
+export function generateMonthlyPayroll(month: number, year: number, facultyId?: number) {
   return query<{
     result_month: number;
     result_year: number;
     rows_generated: number;
     rows_skipped_locked: number;
     rows_skipped_no_structure: number;
-  }>('SELECT * FROM generate_monthly_payroll($1, $2)', [month, year]);
+  }>('SELECT * FROM generate_monthly_payroll($1, $2, $3)', [month, year, facultyId ?? null]);
+}
+
+export function getActiveFacultyList(): Promise<Array<{ faculty_id: number; faculty_code: string; faculty_name: string; dept_id: string }>> {
+  return query(
+    `SELECT f.faculty_id, f.faculty_code, (f.first_name || ' ' || f.last_name) AS faculty_name, f.dept_id
+     FROM faculty f
+     WHERE f.status = 'Active'
+     ORDER BY f.dept_id, f.faculty_code ASC`
+  );
 }
 
 export async function updatePayrollStatus(payrollId: number, status: 'APPROVED' | 'PAID', adminUserId: number): Promise<void> {
   await query('CALL update_payroll_status($1, $2, $3)', [payrollId, status, adminUserId]);
 }
 
-export function getAllPayrolls(month?: number, year?: number, status?: string): Promise<FacultyPayslip[]> {
+export function getAllPayrolls(
+  month?: number,
+  year?: number,
+  status?: string,
+  searchQuery?: string,
+  facultyId?: number
+): Promise<FacultyPayslip[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
   if (month) {
@@ -291,6 +306,14 @@ export function getAllPayrolls(month?: number, year?: number, status?: string): 
   if (status) {
     params.push(status);
     conditions.push(`p.status = $${params.length}`);
+  }
+  if (facultyId) {
+    params.push(facultyId);
+    conditions.push(`p.faculty_id = $${params.length}`);
+  }
+  if (searchQuery && searchQuery.trim()) {
+    params.push(`%${searchQuery.trim()}%`);
+    conditions.push(`(f.faculty_code ILIKE $${params.length} OR (f.first_name || ' ' || f.last_name) ILIKE $${params.length} OR d.dept_name ILIKE $${params.length})`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   return query<FacultyPayslip>(`

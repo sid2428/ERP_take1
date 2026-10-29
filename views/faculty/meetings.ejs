@@ -1,0 +1,217 @@
+<%- include('../partials/layout-start') %>
+
+<div class="page-head">
+  <h1>Department Meetings</h1>
+  <span class="sub"><%= isHod ? 'Schedule, coordinate and review departmental meetings for ' + (deptName || deptId) : 'Departmental meetings scheduled by your Head of Department (' + (deptName || deptId) + ')' %></span>
+</div>
+
+<% const nowIso = new Date().toISOString().slice(0, 10); %>
+<% const upcomingCount = meetings.filter(m => m.meeting_date >= nowIso && m.status === 'SCHEDULED').length; %>
+<% const facultyOnlyCount = meetings.filter(m => m.target_audience === 'faculty').length; %>
+<% const studentOnlyCount = meetings.filter(m => m.target_audience === 'student').length; %>
+
+<section class="cards">
+  <div class="card">
+    <div class="hd"><h2>Total Meetings</h2><span class="pill"><%= meetings.length %></span></div>
+    <div class="kpi"><%= meetings.length %> <small>recorded</small></div>
+    <div class="sm">Department <%= deptId %> meeting history</div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Upcoming Meetings</h2><span class="pill g"><%= upcomingCount %> active</span></div>
+    <div class="kpi"><%= upcomingCount %> <small>scheduled</small></div>
+    <div class="sm">Scheduled on or after today</div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Faculty Audiences</h2><span class="pill"><%= facultyOnlyCount %></span></div>
+    <div class="kpi"><%= facultyOnlyCount %> <small>meetings</small></div>
+    <div class="sm">Department faculty specific</div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>Student Audiences</h2><span class="pill"><%= studentOnlyCount %></span></div>
+    <div class="kpi"><%= studentOnlyCount %> <small>meetings</small></div>
+    <div class="sm">Department student specific</div>
+  </div>
+</section>
+
+<% if (isHod) { %>
+<div class="card" style="margin-top:20px;">
+  <div class="hd">
+    <h2>Schedule Department Meeting</h2>
+    <span class="note">Automatically sends notifications and invitations to all matching members in <%= deptId %></span>
+  </div>
+
+  <form method="post" action="/faculty/meetings/schedule" id="scheduleMeetingForm">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="targetAudience">Target Audience *</label>
+        <select name="target_audience" id="targetAudience" required>
+          <option value="faculty">All Department Faculty (<%= deptId %>)</option>
+          <option value="student">All Department Students (<%= deptId %>)</option>
+          <option value="all">Both Faculty & Students (<%= deptId %>)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="meetingTitle">Meeting Title *</label>
+        <input type="text" name="title" id="meetingTitle" placeholder="e.g. Academic Review & Syllabus Progress" minlength="3" maxlength="150" required>
+      </div>
+
+      <div class="field">
+        <label for="meetingDate">Meeting Date *</label>
+        <input type="date" name="meeting_date" id="meetingDate" min="<%= nowIso %>" value="<%= nowIso %>" required>
+      </div>
+
+      <div class="field">
+        <label for="startTime">Start Time *</label>
+        <input type="time" name="start_time" id="startTime" value="10:00" required>
+      </div>
+
+      <div class="field">
+        <label for="endTime">End Time *</label>
+        <input type="time" name="end_time" id="endTime" value="11:00" required>
+      </div>
+
+      <div class="field">
+        <label for="venue">Venue / Location *</label>
+        <input type="text" name="venue" id="venue" placeholder="e.g. Department Conference Room A-201 or Online" required>
+      </div>
+
+      <div class="field full">
+        <label for="meetingLink">Online Meeting Link (optional)</label>
+        <input type="url" name="meeting_link" id="meetingLink" placeholder="https://meet.google.com/xyz-abcd-efg">
+      </div>
+
+      <div class="field full">
+        <label for="agenda">Meeting Agenda & Instructions *</label>
+        <textarea name="agenda" id="agenda" rows="3" placeholder="Specify meeting objectives, discussion points, and materials to bring..." minlength="5" required></textarea>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+      <button type="submit" class="btn" style="background:var(--navy); color:#fff; border:none; padding:9px 18px; border-radius:6px; cursor:pointer; font-weight:600;">
+        Schedule & Send Meeting Invitations
+      </button>
+    </div>
+  </form>
+</div>
+<% } %>
+
+<section class="card t" style="margin-top:20px;">
+  <div class="hd">
+    <h2><%= isHod ? 'All Department Meetings' : 'Your Department Meeting Invitations' %></h2>
+    <span class="note"><%= meetings.length %> total meeting(s) recorded</span>
+  </div>
+
+  <% if (meetings.length === 0) { %>
+    <div style="padding:28px 20px; text-align:center; color:var(--muted);">
+      <p>No department meetings scheduled yet.</p>
+    </div>
+  <% } else { %>
+    <div class="sc">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Meeting Details</th>
+            <th>Venue / Link</th>
+            <th>Audience</th>
+            <th>Status</th>
+            <% if (isHod) { %>
+              <th>RSVP Responses</th>
+              <th>Actions</th>
+            <% } else { %>
+              <th>My RSVP</th>
+              <th>Action</th>
+            <% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const m of meetings) { %>
+            <tr>
+              <td>
+                <strong><%= m.meeting_date %></strong><br>
+                <small class="muted"><%= m.start_time %> - <%= m.end_time %></small>
+              </td>
+              <td>
+                <strong><%= m.title %></strong>
+                <p style="margin:4px 0 0; font-size:12px; color:var(--muted); max-width:340px;"><%= m.agenda %></p>
+                <small class="muted">Called by: <%= m.created_by_name || 'HOD' %></small>
+              </td>
+              <td>
+                <%= m.venue %>
+                <% if (m.meeting_link) { %>
+                  <br><a href="<%= m.meeting_link %>" target="_blank" rel="noopener noreferrer" style="font-size:12px; color:var(--navy);">Join Online</a>
+                <% } %>
+              </td>
+              <td>
+                <span class="pill <%= m.target_audience === 'faculty' ? 'v' : (m.target_audience === 'student' ? 't' : '') %>">
+                  <%= m.target_audience === 'faculty' ? 'Faculty' : (m.target_audience === 'student' ? 'Students' : 'Faculty & Students') %>
+                </span>
+              </td>
+              <td>
+                <span class="pill <%= m.status === 'SCHEDULED' ? 'g' : (m.status === 'COMPLETED' ? 'n' : 'r') %>">
+                  <%= m.status %>
+                </span>
+                <% if (m.cancel_reason) { %>
+                  <br><small class="muted"><%= m.cancel_reason %></small>
+                <% } %>
+              </td>
+              <% if (isHod) { %>
+                <td>
+                  <span title="Total Invited"><%= m.total_invited || 0 %> invited</span><br>
+                  <small style="color:var(--green);"><%= m.accepted_count || 0 %> accepted</small> · 
+                  <small style="color:var(--red-text);"><%= m.declined_count || 0 %> declined</small>
+                </td>
+                <td>
+                  <% if (m.status === 'SCHEDULED') { %>
+                    <form method="post" action="/faculty/meetings/<%= m.meeting_id %>/cancel" style="display:inline;">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="hidden" name="cancel_reason" value="Cancelled by HOD">
+                      <button type="submit" style="background:#FBE7E5; color:#8E1B14; border:1px solid #F1C3C0; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">
+                        Cancel
+                      </button>
+                    </form>
+                  <% } else { %>
+                    <span class="muted">—</span>
+                  <% } %>
+                </td>
+              <% } else { %>
+                <td>
+                  <span class="pill <%= m.my_status === 'ACCEPTED' ? 'g' : (m.my_status === 'DECLINED' ? 'r' : 'o') %>">
+                    <%= m.my_status || 'INVITED' %>
+                  </span>
+                </td>
+                <td>
+                  <% if (m.status === 'SCHEDULED') { %>
+                    <div style="display:flex; gap:4px;">
+                      <form method="post" action="/faculty/meetings/<%= m.meeting_id %>/rsvp">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="status" value="ACCEPTED">
+                        <button type="submit" style="background:#E3F4EC; color:#1D6B4A; border:1px solid #B8E4D0; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">
+                          Accept
+                        </button>
+                      </form>
+                      <form method="post" action="/faculty/meetings/<%= m.meeting_id %>/rsvp">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="status" value="DECLINED">
+                        <button type="submit" style="background:#FBE7E5; color:#8E1B14; border:1px solid #F1C3C0; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">
+                          Decline
+                        </button>
+                      </form>
+                    </div>
+                  <% } else { %>
+                    <span class="muted">—</span>
+                  <% } %>
+                </td>
+              <% } %>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<%- include('../partials/layout-end') %>

@@ -7,6 +7,7 @@ import {
   rejectLeaveRequest,
   getAllPayrolls,
   generateMonthlyPayroll,
+  getActiveFacultyList,
   updatePayrollStatus,
   getPayslipDetail,
 } from '../../queries/faculty-queries.js';
@@ -74,22 +75,31 @@ hrAdminRouter.get('/payroll', async (req, res) => {
   const statusParam = typeof req.query.status === 'string' && ['DRAFT', 'APPROVED', 'PAID'].includes(req.query.status.toUpperCase())
     ? req.query.status.toUpperCase()
     : undefined;
+  const facultyIdParam = req.query.faculty_id ? Number(req.query.faculty_id) : undefined;
+  const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
-  const payrolls = await getAllPayrolls(monthParam, yearParam, statusParam);
+  const [payrolls, facultyList] = await Promise.all([
+    getAllPayrolls(monthParam, yearParam, statusParam, searchQuery, facultyIdParam),
+    getActiveFacultyList(),
+  ]);
 
   res.render('admin/payroll', {
     title: 'Faculty Payroll Administration',
     nav: 'payroll',
     payrolls,
+    facultyList,
     filterMonth: monthParam || currentMonth,
     filterYear: yearParam || currentYear,
     filterStatus: statusParam || 'ALL',
+    filterFacultyId: facultyIdParam || null,
+    searchQuery,
   });
 });
 
 hrAdminRouter.post('/payroll/generate', async (req, res) => {
   const month = Number(req.body.month);
   const year = Number(req.body.year);
+  const facultyId = req.body.faculty_id ? Number(req.body.faculty_id) : undefined;
 
   if (!month || !year || month < 1 || month > 12) {
     flash(req, 'error', 'Please provide a valid month (1-12) and year.');
@@ -97,22 +107,38 @@ hrAdminRouter.post('/payroll/generate', async (req, res) => {
   }
 
   try {
-    const result = await generateMonthlyPayroll(month, year);
+    const result = await generateMonthlyPayroll(month, year, facultyId);
     const summary = result[0] || { rows_generated: 0, rows_skipped_locked: 0, rows_skipped_no_structure: 0 };
-    flash(req, 'success', `Generated payroll for ${summary.rows_generated} faculty member(s) (${summary.rows_skipped_locked} already finalized, ${summary.rows_skipped_no_structure} skipped without active pay scale).`);
+    if (facultyId) {
+      if (summary.rows_generated > 0) {
+        flash(req, 'success', `Successfully generated/recalculated payroll for selected faculty member for ${month}/${year}.`);
+      } else if (summary.rows_skipped_locked > 0) {
+        flash(req, 'error', `Payroll for this faculty member is already finalized (${summary.rows_skipped_locked} locked) and cannot be recalculated in Draft.`);
+      } else if (summary.rows_skipped_no_structure > 0) {
+        flash(req, 'error', `Selected faculty member does not have an active salary structure.`);
+      } else {
+        flash(req, 'error', `Could not generate payroll for selected faculty member.`);
+      }
+    } else {
+      flash(req, 'success', `Generated payroll for ${summary.rows_generated} faculty member(s) (${summary.rows_skipped_locked} already finalized, ${summary.rows_skipped_no_structure} skipped without active pay scale).`);
+    }
   } catch (err: any) {
     flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not generate payroll.'));
   }
-  res.redirect(`/admin/payroll?month=${month}&year=${year}`);
+  const queryParam = facultyId ? `&faculty_id=${facultyId}` : '';
+  res.redirect(`/admin/payroll?month=${month}&year=${year}${queryParam}`);
 });
 
 hrAdminRouter.post('/payroll/:id/status', async (req, res) => {
   const payrollId = idParam(req.params.id);
   const status = String(req.body.status || '').toUpperCase();
+  const back = typeof req.body.back === 'string' && req.body.back.startsWith('/admin/payroll')
+    ? req.body.back
+    : '/admin/payroll';
 
   if (!['APPROVED', 'PAID'].includes(status)) {
     flash(req, 'error', 'Invalid status. Can only set to APPROVED or PAID.');
-    return res.redirect('/admin/payroll');
+    return res.redirect(back);
   }
 
   try {
@@ -121,7 +147,7 @@ hrAdminRouter.post('/payroll/:id/status', async (req, res) => {
   } catch (err: any) {
     flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not update payroll status.'));
   }
-  res.redirect('/admin/payroll');
+  res.redirect(back);
 });
 
 hrAdminRouter.get('/payroll/:id', async (req, res) => {

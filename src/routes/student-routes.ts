@@ -12,6 +12,7 @@ import { getStudentElectiveOfferings, getStudentElectiveResult, getStudentElecti
 import { grievanceRouter } from './grievance-routes.js';
 import { noticeRouter } from './notice-routes.js';
 import { noticeSummary } from '../queries/notice-queries.js';
+import { getStudentMeetings, rsvpDepartmentMeeting } from '../queries/meeting-queries.js';
 import { placementStudentRouter } from './placement-routes.js';
 import { studentApiRouter } from './student-api-routes.js';
 
@@ -373,4 +374,37 @@ studentRouter.post('/electives/:windowId', async (req, res) => {
     client.release();
   }
   res.redirect('/student/electives');
+});
+
+// T9: Department Meetings
+studentRouter.get('/meetings', async (req, res) => {
+  const deptId = req.user!.deptId;
+  if (!deptId) throw notFound('Department');
+  const meetings = await getStudentMeetings(req.user!.userId, deptId);
+
+  res.render('student/meetings', {
+    title: 'Department Meetings',
+    nav: 'meetings',
+    deptId,
+    deptName: meetings[0]?.dept_name || deptId,
+    meetings,
+  });
+});
+
+studentRouter.post('/meetings/:id/rsvp', async (req, res) => {
+  const meetingId = Number(req.params.id);
+  if (!Number.isInteger(meetingId) || meetingId <= 0) throw notFound('Meeting');
+  const status = req.body.status === 'ACCEPTED' ? 'ACCEPTED' : (req.body.status === 'DECLINED' ? 'DECLINED' : null);
+  if (!status) {
+    flash(req, 'error', 'Invalid RSVP response.');
+    return res.redirect('/student/meetings');
+  }
+
+  try {
+    await rsvpDepartmentMeeting(meetingId, req.user!.userId, status);
+    flash(req, 'success', `RSVP updated to ${status}.`);
+  } catch (err: any) {
+    flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not record RSVP.'));
+  }
+  res.redirect('/student/meetings');
 });
