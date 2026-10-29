@@ -20,21 +20,17 @@ const dateTimeInput = z.preprocess((v) => {
   const normalized = v.length === 16 ? `${v}:00` : v;
   return `${normalized}+05:30`;
 }, z.iso.datetime({ offset: true }));
-const submittedExpectedGraduationYearSchema = z.union([
-  z.literal('').transform(() => null),
-  z.string().transform((value, ctx) => {
-    if (!/^\d{4}$/.test(value)) {
-      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be a four-digit year.' });
-      return z.NEVER;
-    }
-    const year = Number(value);
-    if (year < 2000 || year > 2100) {
-      ctx.addIssue({ code: 'custom', message: 'Expected passing-out year must be between 2000 and 2100.' });
-      return z.NEVER;
-    }
-    return year;
-  }),
-]);
+const submittedExpectedGraduationYearSchema = z.preprocess(
+  (value) => value === '' ? null : value,
+  z.union([
+    z.null(),
+    z.string()
+      .regex(/^\d{4}$/, 'Expected passing-out year must be a four-digit year.')
+      .transform(Number)
+      .refine((year) => year >= 2000 && year <= 2100,
+        'Expected passing-out year must be between 2000 and 2100.'),
+  ]),
+);
 const profileSchema = z.object({
   skills: z.string().trim().max(2000), resume_url: emptyToNull,
   linkedin_url: emptyToNull, github_url: emptyToNull, portfolio_url: emptyToNull,
