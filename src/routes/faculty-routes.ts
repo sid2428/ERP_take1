@@ -15,6 +15,10 @@ import { facultyAttendanceRouter } from './faculty-attendance-routes.js';
 import { facultyExaminationRouter } from './faculty-examination-routes.js';
 import { flash } from '../middleware/auth.js';
 import { friendlyDbError } from '../db.js';
+import {
+  getDepartmentMeetings, getFacultyMeetings, createDepartmentMeeting,
+  cancelDepartmentMeeting, rsvpDepartmentMeeting,
+} from '../queries/meeting-queries.js';
 
 export const facultyRouter = Router();
 facultyRouter.use('/attendance', facultyAttendanceRouter);
@@ -203,4 +207,93 @@ facultyRouter.get('/payroll/:id', async (req, res) => {
     nav: 'payroll',
     payslip,
   });
+});
+
+// T9: HOD Department Meetings
+facultyRouter.get('/meetings', async (req, res) => {
+  const deptId = req.user!.deptId;
+  if (!deptId) throw notFound('Department');
+  const isHod = !!req.user!.isHod;
+  const meetings = isHod
+    ? await getDepartmentMeetings(deptId)
+    : await getFacultyMeetings(req.user!.userId, deptId);
+
+  res.render('faculty/meetings', {
+    title: 'Department Meetings',
+    nav: 'meetings',
+    isHod,
+    deptId,
+    deptName: meetings[0]?.dept_name || deptId,
+    meetings,
+  });
+});
+
+facultyRouter.post('/meetings/schedule', async (req, res) => {
+  if (!req.user!.isHod) throw forbidden();
+  const deptId = req.user!.deptId;
+  if (!deptId) throw notFound('Department');
+
+  const title = String(req.body.title || '').trim();
+  const agenda = String(req.body.agenda || '').trim();
+  const meeting_date = String(req.body.meeting_date || '').trim();
+  const start_time = String(req.body.start_time || '').trim();
+  const end_time = String(req.body.end_time || '').trim();
+  const venue = String(req.body.venue || '').trim();
+  const meeting_link = req.body.meeting_link ? String(req.body.meeting_link).trim() : undefined;
+  const target_audience = req.body.target_audience;
+
+  if (!['faculty', 'student', 'all'].includes(target_audience)) {
+    flash(req, 'error', 'Invalid target audience selection.');
+    return res.redirect('/faculty/meetings');
+  }
+
+  if (!title || !agenda || !meeting_date || !start_time || !end_time || !venue) {
+    flash(req, 'error', 'Please fill in all required meeting details.');
+    return res.redirect('/faculty/meetings');
+  }
+
+  try {
+    const meetingId = await createDepartmentMeeting(deptId, req.user!.facultyId!, {
+      title, agenda, meeting_date, start_time, end_time, venue, meeting_link, target_audience,
+    });
+    const audienceLabel = target_audience === 'faculty' ? 'faculty members' : (target_audience === 'student' ? 'students' : 'faculty and students');
+    flash(req, 'success', `Department meeting #${meetingId} scheduled successfully. Invitations sent to ${audienceLabel} of ${deptId}.`);
+  } catch (err: any) {
+    flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not schedule department meeting.'));
+  }
+
+  res.redirect('/faculty/meetings');
+});
+
+facultyRouter.post('/meetings/:id/cancel', async (req, res) => {
+  if (!req.user!.isHod) throw forbidden();
+  const deptId = req.user!.deptId;
+  if (!deptId) throw notFound('Department');
+  const meetingId = idParam(req.params.id);
+  const cancelReason = String(req.body.cancel_reason || 'Cancelled by HOD').trim();
+
+  try {
+    await cancelDepartmentMeeting(meetingId, req.user!.facultyId!, deptId, cancelReason);
+    flash(req, 'success', `Meeting #${meetingId} was cancelled.`);
+  } catch (err: any) {
+    flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not cancel meeting.'));
+  }
+  res.redirect('/faculty/meetings');
+});
+
+facultyRouter.post('/meetings/:id/rsvp', async (req, res) => {
+  const meetingId = idParam(req.params.id);
+  const status = req.body.status === 'ACCEPTED' ? 'ACCEPTED' : (req.body.status === 'DECLINED' ? 'DECLINED' : null);
+  if (!status) {
+    flash(req, 'error', 'Invalid RSVP response.');
+    return res.redirect('/faculty/meetings');
+  }
+
+  try {
+    await rsvpDepartmentMeeting(meetingId, req.user!.userId, status);
+    flash(req, 'success', `RSVP updated to ${status}.`);
+  } catch (err: any) {
+    flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not record RSVP.'));
+  }
+  res.redirect('/faculty/meetings');
 });
