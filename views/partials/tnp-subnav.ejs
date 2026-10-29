@@ -1,0 +1,44 @@
+<%
+  const currentRole = (typeof user !== 'undefined' && user?.role) || 'student';
+  const currentTab = typeof activeTab !== 'undefined' ? activeTab : '';
+%>
+<nav class="tnp-subnav" aria-label="Placement navigation">
+  <div class="tnp-subnav-items">
+    <% if (currentRole === 'admin') { %>
+      <a href="/admin/placement" class="tnp-subnav-link<%= currentTab === 'overview' ? ' active' : '' %>" <%- currentTab === 'overview' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'briefcase', size: 15 }) %>
+        <span>Overview</span>
+      </a>
+      <a href="/admin/placement/companies" class="tnp-subnav-link<%= currentTab === 'companies' ? ' active' : '' %>" <%- currentTab === 'companies' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'building', size: 15 }) %>
+        <span>Companies</span>
+      </a>
+      <a href="/admin/placement/drives/new" class="tnp-subnav-link<%= currentTab === 'create-drive' ? ' active' : '' %>" <%- currentTab === 'create-drive' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'plus', size: 15 }) %>
+        <span>Create Drive</span>
+      </a>
+      <a href="/admin/placement/statistics" class="tnp-subnav-link<%= currentTab === 'statistics' ? ' active' : '' %>" <%- currentTab === 'statistics' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'trending-up', size: 15 }) %>
+        <span>Statistics &amp; Reports</span>
+      </a>
+    <% } else if (currentRole === 'student') { %>
+      <a href="/student/placement" class="tnp-subnav-link<%= currentTab === 'overview' ? ' active' : '' %>" <%- currentTab === 'overview' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'home', size: 15 }) %>
+        <span>Overview</span>
+      </a>
+      <a href="/student/placement/profile" class="tnp-subnav-link<%= currentTab === 'profile' ? ' active' : '' %>" <%- currentTab === 'profile' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'user', size: 15 }) %>
+        <span>Placement Profile</span>
+      </a>
+      <a href="/student/placement/drives" class="tnp-subnav-link<%= currentTab === 'drives' ? ' active' : '' %>" <%- currentTab === 'drives' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'briefcase', size: 15 }) %>
+        <span>Browse Drives</span>
+      </a>
+      <a href="/student/placement/applications" class="tnp-subnav-link<%= currentTab === 'applications' ? ' active' : '' %>" <%- currentTab === 'applications' ? 'aria-current="page"' : '' %>>
+        <%- include('icon', { name: 'file-text', size: 15 }) %>
+        <span>My Applications</span>
+      </a>
+    <% } %>
+  </div>
+</nav>
+

@@ -5,6 +5,7 @@ describe('placement statistics calculations', () => {
   it('defines a zero active-student denominator as 0%', () => {
     expect(placementPercentage(0, 0)).toBe(0);
     expect(placementPercentage(3, 0)).toBe(0);
+    expect(placementPercentage(0, 4)).toBe(0);
   });
 
   it('rounds the active-student placement rate to two decimals', () => {
@@ -18,5 +19,10 @@ describe('placement statistics calculations', () => {
     expect(chartBarPercent(Number.NaN, 5)).toBe(0);
     expect(chartBarPercent(2, 4)).toBe(50);
     expect(chartBarPercent(5, 4)).toBe(100);
+  });
+
+  it('treats malformed branch counts as zero rather than exposing invalid percentages', () => {
+    expect(placementPercentage(Number.NaN, 4)).toBe(0);
+    expect(placementPercentage(2, Number.POSITIVE_INFINITY)).toBe(0);
   });
 });

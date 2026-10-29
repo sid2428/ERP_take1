@@ -1,60 +1,134 @@
 <%- include('../partials/layout-start') %>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current">Statistics &amp; Reports</span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: 'statistics' }) %>
+
 <div class="page-head">
-  <h1>Placement statistics</h1>
-  <span class="sub">Placed means an active student with an accepted full-time offer. Internships are reported separately.</span>
-</div>
-
-<div class="cards">
-  <div class="card">
-    <div class="s">Overall placement</div>
-    <div class="kpi"><%= fmt.num(overview?.overall_placement_pct ?? 0) %>%</div>
-    <p class="note"><%= overview?.placed_students ?? 0 %> placed / <%= overview?.active_students ?? 0 %> active students</p>
+  <div>
+    <h1>Placement Statistics &amp; Analytics</h1>
+    <span class="sub">Placement metrics and reporting limitations. Placed indicates an active student with an accepted full-time offer; internships are tracked separately.</span>
+    <p class="note" role="status">Reporting scope: <strong><%= reportingScope ?? 'All branches (institution-wide) · All batches' %></strong>. Headline, branch, batch, company, and package statistics below use this scope.</p>
   </div>
-  <div class="card">
-    <div class="s">Total offers recorded</div>
-    <div class="kpi"><%= overview?.total_offers ?? 0 %></div>
-    <p class="note">All response statuses; each offer counted once</p>
+  <div class="actions">
+    <a class="btn secondary" href="/admin/placement">
+      <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+      <span>Back to Overview</span>
+    </a>
   </div>
 </div>
 
-<div class="cards">
-  <div class="card">
-    <div class="s">Highest package (LPA)</div>
-    <div class="kpi"><%= overview?.highest_package_lpa != null ? fmt.num(overview.highest_package_lpa) : '–' %></div>
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Overall Placement</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'award', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= fmt.num(overview?.overall_placement_pct ?? 0) %>%</div>
+    <p class="tnp-kpi-subtext"><%= overview?.placed_students ?? 0 %> placed / <%= overview?.active_students ?? 0 %> active students</p>
   </div>
-  <div class="card">
-    <div class="s">Average package (LPA)</div>
-    <div class="kpi"><%= overview?.average_package_lpa != null ? fmt.num(overview.average_package_lpa) : '–' %></div>
-    <p class="note">Accepted full-time offers only</p>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Total Offers Recorded</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'briefcase', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.total_offers ?? 0 %></div>
+    <p class="tnp-kpi-subtext">Recorded offers for students in the selected scope</p>
   </div>
-  <div class="card">
-    <div class="s">Median package (LPA)</div>
-    <div class="kpi"><%= overview?.median_package_lpa != null ? fmt.num(overview.median_package_lpa) : '–' %></div>
-    <p class="note">Accepted full-time offers only</p>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Highest package</span>
+      <div class="tnp-kpi-icon warning"><%- include('../partials/icon', { name: 'trending-up', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.highest_package_lpa != null ? fmt.num(overview.highest_package_lpa) : '–' %><small> LPA</small></div>
+    <p class="tnp-kpi-subtext">Peak CTC offered and accepted</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Average package</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.average_package_lpa != null ? fmt.num(overview.average_package_lpa) : '–' %><small> LPA</small></div>
+    <p class="tnp-kpi-subtext">Mean accepted full-time package</p>
   </div>
 </div>
 
-<div class="cards">
-  <div class="card">
-    <div class="s">Accepted full-time offers</div>
-    <div class="kpi"><%= overview?.accepted_fulltime_offers ?? 0 %></div>
+<div class="tnp-kpi-grid">
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Median package</span>
+      <div class="tnp-kpi-icon navy"><%- include('../partials/icon', { name: 'wallet', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.median_package_lpa != null ? fmt.num(overview.median_package_lpa) : '–' %><small> LPA</small></div>
+    <p class="tnp-kpi-subtext">Accepted full-time offers only</p>
   </div>
-  <div class="card">
-    <div class="s">Accepted internships</div>
-    <div class="kpi"><%= overview?.accepted_internships ?? 0 %></div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Accepted Full-Time</span>
+      <div class="tnp-kpi-icon success"><%- include('../partials/icon', { name: 'check-circle', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.accepted_fulltime_offers ?? 0 %></div>
+    <p class="tnp-kpi-subtext">Regular full-time graduate appointments</p>
+  </div>
+
+  <div class="tnp-kpi-card">
+    <div class="tnp-kpi-header">
+      <span class="tnp-kpi-label">Accepted Internships</span>
+      <div class="tnp-kpi-icon"><%- include('../partials/icon', { name: 'clock', size: 16 }) %></div>
+    </div>
+    <div class="tnp-kpi-value"><%= overview?.accepted_internships ?? 0 %></div>
+    <p class="tnp-kpi-subtext">Semester / summer industrial internships</p>
   </div>
 </div>
 
-<section class="card">
-  <h2>Placement percentage by department</h2>
-  <p class="note">Active students with accepted full-time offers ÷ active students.</p>
+<!-- Branch and cohort placement rates -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd">
+    <div>
+      <h2>Placement percentage by branch</h2>
+      <p class="note" style="margin:2px 0 0;">Placed active students &divide; active students in each branch<% if (selectedYear) { %> with the selected recorded expected graduation year<% } %>.</p>
+      <p class="note" style="margin:2px 0 0;">Only explicitly maintained expected graduation years are treated as verified. Students with an unknown year are excluded from batch calculations and reported separately.</p>
+      <p class="note" style="margin:2px 0 0;">Only students with a recorded expected graduation year are included in batch-specific calculations. Unknown-year students are not assigned to a batch.</p>
+    </div>
+  </div>
+
+  <form method="get" action="/admin/placement/statistics" class="actions" style="margin:12px 0;">
+    <label for="placement-department">Branch</label>
+    <select id="placement-department" name="dept_id">
+      <option value="">All branches</option>
+      <% (departments ?? []).forEach(department => { %>
+        <option value="<%= department.dept_id %>" <%= selectedDepartment === department.dept_id ? 'selected' : '' %>><%= department.dept_name %></option>
+      <% }) %>
+    </select>
+    <label for="placement-batch">Passing-out year / batch</label>
+    <select id="placement-batch" name="expected_graduation_year">
+      <option value="">All batches</option>
+      <% (years ?? []).forEach(batch => { %>
+        <option value="<%= batch.expected_graduation_year %>" <%= Number(selectedYear) === batch.expected_graduation_year ? 'selected' : '' %>>Batch <%= batch.expected_graduation_year %></option>
+      <% }) %>
+    </select>
+    <button class="btn secondary" type="submit">Filter</button>
+  </form>
+
+  <p class="note">Active students without a verified expected passing-out year in this branch scope: <strong><%= fmt.num(unassignedStudents ?? 0) %></strong>. They are not included in any batch-specific denominator.</p>
+
   <% if (!byDepartment.length) { %>
-    <div class="empty">No department data is available.</div>
+    <div class="empty">No branch data is available for this reporting scope.</div>
   <% } else { %>
-    <div class="stack">
+    <div class="stack" style="margin:16px 0;">
       <% byDepartment.forEach(d => { %>
         <div class="row">
-          <span><%= d.dept_name %></span>
+          <span style="font-weight:600;"><%= d.dept_name %></span>
           <div class="bar" role="img" aria-label="<%= d.dept_name %>: <%= d.placed_pct ?? 0 %>%">
             <i style="width:<%= d.bar_pct %>%"></i>
           </div>
@@ -62,79 +136,34 @@
         </div>
       <% }) %>
     </div>
-  <% } %>
-</section>
 
-<section class="card">
-  <h2>Accepted full-time package distribution</h2>
-  <p class="note">Accepted full-time offers counted once by LPA band; missing package values are excluded.</p>
-  <% if (!hasPackageData) { %>
-    <div class="empty">No accepted full-time package data is available.</div>
-  <% } else { %>
-    <div class="stack">
-      <% packageDistribution.forEach(b => { %>
-        <div class="row">
-          <span><%= b.label %></span>
-          <div class="bar" role="img" aria-label="<%= b.label %>: <%= b.offer_count %> offers">
-            <i style="width:<%= b.bar_pct %>%"></i>
-          </div>
-          <b><%= b.offer_count %></b>
-        </div>
-      <% }) %>
-    </div>
-  <% } %>
-</section>
-
-<section class="card">
-  <h2>By department</h2>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Department</th>
-          <th>Active students</th>
-          <th>Placed</th>
-          <th>Placed %</th>
-          <th>Highest LPA</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% byDepartment.forEach(d => { %>
-          <tr>
-            <td><%= d.dept_name %></td>
-            <td><%= d.active_students %></td>
-            <td><%= d.placed_students %></td>
-            <td><%= d.placed_pct != null ? fmt.num(d.placed_pct) + '%' : '–' %></td>
-            <td><%= d.highest_package_lpa != null ? fmt.num(d.highest_package_lpa) : '–' %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="card">
-  <h2>Company-wise offers</h2>
-  <% if (!companyOffers.length) { %>
-    <div class="empty">No offers have been recorded.</div>
-  <% } else { %>
-    <div class="table-wrap">
-      <table>
+    <div class="table-wrap" style="margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px;">
+      <table class="tnp-table">
         <thead>
           <tr>
-            <th>Company</th>
-            <th>Offers recorded</th>
-            <th>Accepted full-time</th>
-            <th>Accepted internships</th>
+            <th>Branch</th>
+            <th class="num"><%= selectedYear ? 'Active Students in Batch' : 'Active Students' %></th>
+            <th class="num">Placed Students</th>
+            <th class="num">Placed %</th>
+            <th class="num">Total Offers</th>
+            <th class="num">Accepted Full-Time</th>
+            <th class="num">Accepted Internships</th>
+            <th class="num">Unknown Expected Year (Branch)</th>
+            <th class="num">Highest LPA</th>
           </tr>
         </thead>
         <tbody>
-          <% companyOffers.forEach(c => { %>
+          <% byDepartment.forEach(d => { %>
             <tr>
-              <td><%= c.company_name %></td>
-              <td><%= c.total_offers %></td>
-              <td><%= c.accepted_fulltime %></td>
-              <td><%= c.accepted_internships %></td>
+              <td><strong><%= d.dept_name %></strong></td>
+              <td class="num"><%= fmt.num(d.active_students) %></td>
+              <td class="num"><%= fmt.num(d.placed_students) %></td>
+              <td class="num" style="font-weight:600;color:var(--green-text);"><%= d.placed_pct != null ? fmt.num(d.placed_pct) + '%' : '–' %></td>
+              <td class="num"><%= fmt.num(d.total_offers) %></td>
+              <td class="num"><%= fmt.num(d.accepted_fulltime_offers) %></td>
+              <td class="num"><%= fmt.num(d.accepted_internships) %></td>
+              <td class="num"><%= fmt.num(d.unverified_cohort_students) %></td>
+              <td class="num"><%= d.highest_package_lpa != null ? fmt.num(d.highest_package_lpa) + ' LPA' : '–' %></td>
             </tr>
           <% }) %>
         </tbody>
@@ -142,4 +171,123 @@
     </div>
   <% } %>
 </section>
+
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd">
+    <div>
+      <h2>Placement statistics by passing-out batch</h2>
+      <p class="note" style="margin:2px 0 0;">Batch membership uses only an explicitly recorded expected graduation year. Percentages use active students in that verified cohort.</p>
+    </div>
+  </div>
+  <% if (!batchStats.length) { %>
+    <div class="empty">No active students with a recorded expected passing-out year are available for this scope.</div>
+  <% } else { %>
+    <div class="table-wrap" style="margin-top:12px;">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Batch / Expected Passing-Out Year</th>
+            <th class="num">Active Verified Cohort</th>
+            <th class="num">Placed Students</th>
+            <th class="num">Placement %</th>
+            <th class="num">Total Offers</th>
+            <th class="num">Accepted Full-Time</th>
+            <th class="num">Accepted Internships</th>
+            <th class="num">Highest LPA</th>
+            <th class="num">Average LPA</th>
+            <th class="num">Median LPA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% batchStats.forEach(batch => { %>
+            <tr>
+              <td><strong>Batch <%= batch.expected_graduation_year %></strong></td>
+              <td class="num"><%= fmt.num(batch.active_students) %></td>
+              <td class="num"><%= fmt.num(batch.placed_students) %></td>
+              <td class="num"><%= fmt.num(batch.placed_pct) %>%</td>
+              <td class="num"><%= fmt.num(batch.total_offers) %></td>
+              <td class="num"><%= fmt.num(batch.accepted_fulltime_offers) %></td>
+              <td class="num"><%= fmt.num(batch.accepted_internships) %></td>
+              <td class="num"><%= batch.highest_package_lpa != null ? fmt.num(batch.highest_package_lpa) + ' LPA' : '–' %></td>
+              <td class="num"><%= batch.average_package_lpa != null ? fmt.num(batch.average_package_lpa) + ' LPA' : '–' %></td>
+              <td class="num"><%= batch.median_package_lpa != null ? fmt.num(batch.median_package_lpa) + ' LPA' : '–' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<!-- Package Distribution -->
+<section class="card" style="box-shadow:var(--shadow-xs);">
+  <div class="hd">
+    <div>
+      <h2>Accepted full-time package distribution</h2>
+      <p class="note" style="margin:2px 0 0;">Accepted full-time offers counted once by LPA band; missing package values are excluded.</p>
+    </div>
+  </div>
+
+  <% if (!hasPackageData) { %>
+    <div class="empty">No accepted full-time package data is available.</div>
+  <% } else { %>
+    <div class="stack" style="margin-top:16px;">
+      <% packageDistribution.forEach(b => { %>
+        <div class="row">
+          <span style="font-weight:500;"><%= b.label %></span>
+          <div class="bar" role="img" aria-label="<%= b.label %>: <%= b.offer_count %> offers">
+            <i style="width:<%= b.bar_pct %>%;background:var(--navy);"></i>
+          </div>
+          <b><%= b.offer_count %> offer<%= b.offer_count === 1 ? '' : 's' %></b>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<!-- Company-wise Offers -->
+<section class="tnp-table-card">
+  <div class="tnp-table-header">
+    <div class="tnp-table-title-wrap">
+      <h2 class="tnp-table-title">Company-wise offers</h2>
+      <span class="tnp-count-pill"><%= companyOffers.length %> companies</span>
+    </div>
+  </div>
+
+  <% if (!companyOffers.length) { %>
+    <div class="tnp-empty-state">
+      <div class="tnp-empty-icon"><%- include('../partials/icon', { name: 'building', size: 24 }) %></div>
+      <h3 class="tnp-empty-title">No Offers Recorded</h3>
+      <p class="tnp-empty-desc">When offers are issued by participating recruiting companies, breakdown reports will populate here.</p>
+    </div>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="tnp-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th class="num">Total Offers Recorded</th>
+            <th class="num">Accepted Full-Time</th>
+            <th class="num">Accepted Internships</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% companyOffers.forEach(c => { %>
+            <tr>
+              <td>
+                <div class="tnp-table-primary"><%= c.company_name %></div>
+              </td>
+              <td class="num">
+                <span class="tnp-count-pill" style="font-weight:700;"><%= c.total_offers %></span>
+              </td>
+              <td class="num" style="color:var(--green-text);font-weight:600;"><%= c.accepted_fulltime %></td>
+              <td class="num" style="color:var(--text-2);"><%= c.accepted_internships %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
 <%- include('../partials/layout-end') %>

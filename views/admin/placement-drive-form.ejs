@@ -1,13 +1,221 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1><%= isEdit?'Edit placement drive':'Create placement drive' %></h1><span class="sub">CGPA and backlog checks fail closed because this repository has no academic-standing source yet.</span></div>
-<% if(errors?.length){ %><div class="flash error"><ul><% errors.forEach(e=>{ %><li><%= e %></li><% }) %></ul></div><% } %>
-<form class="card form-grid" method="post" action="<%= action||'/admin/placement/drives' %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<label>Company<select name="company_id" required><option value="">Choose company</option><% companies.forEach(c=>{ %><option value="<%= c.company_id %>" <%= form.company_id==c.company_id?'selected':'' %>><%= c.company_name %></option><% }) %></select></label>
-<label>Drive type<select name="drive_type"><option value="FullTime" <%= form.drive_type==='FullTime'?'selected':'' %>>Full-time</option><option value="Internship" <%= form.drive_type==='Internship'?'selected':'' %>>Internship</option></select></label>
-<label>Drive title<input name="title" required maxlength="160" value="<%= form.title||'' %>"></label><label>Role title<input name="role_title" required maxlength="120" value="<%= form.role_title||'' %>"></label>
-<label>Package (LPA; full-time)<input name="package_lpa" type="number" min="0" step="0.01" value="<%= form.package_lpa||'' %>"></label><label>Monthly stipend (internship)<input name="stipend_monthly" type="number" min="0" step="0.01" value="<%= form.stipend_monthly||'' %>"></label>
-<label>Minimum study year<input name="min_year" type="number" min="1" max="6" value="<%= form.min_year||4 %>"></label><label>Minimum CGPA (requires T5)<input name="min_cgpa" type="number" min="0" max="10" step="0.01" value="<%= form.min_cgpa||'' %>"></label><label>Maximum active backlogs (requires T5)<input name="max_active_backlogs" type="number" min="0" value="<%= form.max_active_backlogs||'' %>"></label><label>Minimum attendance %<input name="min_attendance_pct" type="number" min="0" max="100" step="0.01" value="<%= form.min_attendance_pct||'' %>"></label>
-<label>Application opens<input name="opens_at" type="datetime-local" required value="<%= form.opens_at||'' %>"></label><label>Deadline<input name="deadline" type="datetime-local" required value="<%= form.deadline||'' %>"></label><label>Drive date<input name="drive_date" type="date" value="<%= form.drive_date||'' %>"></label><% if(!isEdit){ %><label>Status<select name="status"><option>Draft</option><option>Open</option></select></label><% } %>
-<label class="wide">Eligible program IDs (comma separated; blank means all)<input name="program_ids" value="<%= form.program_ids||'' %>" placeholder="e.g. CSE-BTECH, IT-BTECH"><small><% programs.forEach(p=>{ %><%= p.program_id %> — <%= p.program_name %> · <% }) %></small></label>
-<label class="wide">Description<textarea name="description" rows="4" maxlength="5000"><%= form.description||'' %></textarea></label><label class="wide">Location<input name="job_location" maxlength="120" value="<%= form.job_location||'' %>"></label><div class="wide"><button class="btn"><%= isEdit?'Save changes':'Create drive' %></button> <a class="btn secondary" href="<%= isEdit?`/admin/placement/drives/${form.drive_id}`:'/admin/placement' %>">Cancel</a></div></form>
+
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="/admin">Dashboard</a>
+  <span class="sep">/</span>
+  <a href="/admin/placement">Placement</a>
+  <span class="sep">/</span>
+  <span class="current"><%= isEdit ? 'Edit Drive' : 'Create Drive' %></span>
+</nav>
+
+<%- include('../partials/tnp-subnav', { activeTab: isEdit ? '' : 'create-drive' }) %>
+
+<div class="page-head">
+  <div>
+    <h1><%= isEdit ? 'Edit Placement Drive' : 'Create Placement Drive' %></h1>
+    <span class="sub">Configure recruitment drive parameters, eligibility criteria, compensation packages, and application deadlines.</span>
+  </div>
+  <% if (isEdit) { %>
+    <div class="actions">
+      <a class="btn secondary" href="/admin/placement/drives/<%= form.drive_id %>">
+        <%- include('../partials/icon', { name: 'arrow-left', size: 14 }) %>
+        <span>Back to Drive</span>
+      </a>
+    </div>
+  <% } %>
+</div>
+
+<% if (errors?.length) { %>
+  <div class="flash error" role="alert">
+    <strong>Please address the following validation errors:</strong>
+    <ul class="errors" style="margin-top:6px;">
+      <% errors.forEach(e => { %>
+        <li><%= e %></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<form class="tnp-form-card" method="post" action="<%= action || '/admin/placement/drives' %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <!-- Section 1: Basic Information -->
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'briefcase', size: 16 }) %>
+      <span>1. Basic Drive &amp; Role Details</span>
+    </h2>
+    <p class="tnp-form-section-desc">Select the participating company, recruitment format, and advertised job titles.</p>
+    
+    <div class="form-grid">
+      <div class="field">
+        <label for="company_id">Recruiting Company<span class="required-star">*</span></label>
+        <select id="company_id" name="company_id" required>
+          <option value="">Select a registered company</option>
+          <% companies.forEach(c => { %>
+            <option value="<%= c.company_id %>" <%= form.company_id == c.company_id ? 'selected' : '' %>>
+              <%= c.company_name %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="drive_type">Drive Type<span class="required-star">*</span></label>
+        <select id="drive_type" name="drive_type" required>
+          <option value="FullTime" <%= form.drive_type === 'FullTime' ? 'selected' : '' %>>Full-Time Recruitment</option>
+          <option value="Internship" <%= form.drive_type === 'Internship' ? 'selected' : '' %>>Internship Opportunity</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="title">Drive Title<span class="required-star">*</span></label>
+        <input id="title" name="title" required maxlength="160" placeholder="e.g. Acme Campus Recruitment 2026" value="<%= form.title || '' %>">
+      </div>
+
+      <div class="field">
+        <label for="role_title">Role / Designation<span class="required-star">*</span></label>
+        <input id="role_title" name="role_title" required maxlength="120" placeholder="e.g. Graduate Software Engineer" value="<%= form.role_title || '' %>">
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Compensation -->
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'wallet', size: 16 }) %>
+      <span>2. Compensation &amp; Remuneration</span>
+    </h2>
+    <p class="tnp-form-section-desc">Provide Package (LPA) for full-time drives OR Monthly Stipend for internships.</p>
+    
+    <div class="form-grid">
+      <div class="field">
+        <label for="package_lpa">Annual Package (LPA)</label>
+        <input id="package_lpa" name="package_lpa" type="number" min="0" step="0.01" placeholder="e.g. 14.50 (for Full-Time)" value="<%= form.package_lpa || '' %>">
+        <span class="hint">Annual Cost to Company in Lakhs Per Annum. Required for Full-Time.</span>
+      </div>
+
+      <div class="field">
+        <label for="stipend_monthly">Monthly Stipend (₹)</label>
+        <input id="stipend_monthly" name="stipend_monthly" type="number" min="0" step="0.01" placeholder="e.g. 45000 (for Internship)" value="<%= form.stipend_monthly || '' %>">
+        <span class="hint">Monthly stipend amount in INR. Required for Internship.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Eligibility Criteria -->
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'check', size: 16 }) %>
+      <span>3. Eligibility Criteria &amp; Academic Filters</span>
+    </h2>
+    <p class="tnp-form-section-desc">Criteria evaluated dynamically by PostgreSQL stored function <code>is_eligible(student_id, drive_id)</code>.</p>
+    
+    <div class="form-grid">
+      <div class="field">
+        <label for="min_year">Minimum Year of Study<span class="required-star">*</span></label>
+        <input id="min_year" name="min_year" type="number" min="1" max="6" value="<%= form.min_year || 4 %>" required>
+        <span class="hint">Usually Year 4 (BE/BTech final year) or Year 2 (ME/MTech).</span>
+      </div>
+
+      <div class="field">
+        <label for="min_cgpa">Minimum CGPA</label>
+        <input id="min_cgpa" name="min_cgpa" type="number" min="0" max="10" step="0.01" placeholder="Leave blank if not assessed" value="<%= form.min_cgpa || '' %>">
+        <span class="hint">Scale 0.0 - 10.0. Evaluated from academic exam summary.</span>
+      </div>
+
+      <div class="field">
+        <label for="max_active_backlogs">Maximum Active Backlogs</label>
+        <input id="max_active_backlogs" name="max_active_backlogs" type="number" min="0" placeholder="Leave blank if not assessed" value="<%= form.max_active_backlogs || '' %>">
+        <span class="hint">Maximum active live arrears permitted.</span>
+      </div>
+
+      <div class="field">
+        <label for="min_attendance_pct">Minimum Attendance %</label>
+        <input id="min_attendance_pct" name="min_attendance_pct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 75.0" value="<%= form.min_attendance_pct || '' %>">
+        <span class="hint">Evaluated against the student current session attendance view.</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:8px;">
+      <label for="program_ids">Eligible Academic Programs (comma-separated; leave blank for ALL programs)</label>
+      <input id="program_ids" name="program_ids" value="<%= form.program_ids || '' %>" placeholder="e.g. COMP-BTECH, IT-BTECH, ENTC-BTECH">
+      <div class="hint" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+        <span style="font-weight:600; color:var(--text-2);">Available Programs:</span>
+        <% programs.forEach(p => { %>
+          <button type="button" class="tnp-count-pill" style="cursor:pointer; background:var(--surface-2);" onclick="const input = document.getElementById('program_ids'); const ids = input.value.split(',').map(x=>x.trim()).filter(Boolean); if(!ids.includes('<%= p.program_id %>')) { ids.push('<%= p.program_id %>'); input.value = ids.join(', '); }">
+            + <%= p.program_id %> (<%= p.program_name %>)
+          </button>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Timelines & Status -->
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'calendar', size: 16 }) %>
+      <span>4. Application Window &amp; Schedule</span>
+    </h2>
+    <p class="tnp-form-section-desc">All times are in College Standard Time (IST).</p>
+    
+    <div class="form-grid">
+      <div class="field">
+        <label for="opens_at">Application Window Opens<span class="required-star">*</span></label>
+        <input id="opens_at" name="opens_at" type="datetime-local" required value="<%= form.opens_at || '' %>">
+      </div>
+
+      <div class="field">
+        <label for="deadline">Application Deadline<span class="required-star">*</span></label>
+        <input id="deadline" name="deadline" type="datetime-local" required value="<%= form.deadline || '' %>">
+      </div>
+
+      <div class="field">
+        <label for="drive_date">Recruitment / Assessment Date</label>
+        <input id="drive_date" name="drive_date" type="date" value="<%= form.drive_date || '' %>">
+      </div>
+
+      <% if (!isEdit) { %>
+        <div class="field">
+          <label for="status">Initial Drive Status<span class="required-star">*</span></label>
+          <select id="status" name="status" required>
+            <option value="Draft" <%= form.status === 'Draft' ? 'selected' : '' %>>Draft (Hidden from students)</option>
+            <option value="Open" <%= form.status === 'Open' ? 'selected' : '' %>>Open (Published &amp; sends notifications)</option>
+          </select>
+          <span class="hint">Open drives trigger notification alerts to eligible students.</span>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Section 5: Job Description & Location -->
+  <div class="tnp-form-section">
+    <h2 class="tnp-form-section-title">
+      <%- include('../partials/icon', { name: 'file-text', size: 16 }) %>
+      <span>5. Job Description &amp; Location</span>
+    </h2>
+    <div class="form-grid">
+      <div class="field" style="grid-column: 1 / -1;">
+        <label for="job_location">Work / Placement Location</label>
+        <input id="job_location" name="job_location" maxlength="120" placeholder="e.g. Pune / Bengaluru / Remote / Hybrid" value="<%= form.job_location || '' %>">
+      </div>
+
+      <div class="field" style="grid-column: 1 / -1;">
+        <label for="description">Detailed Job Description &amp; Selection Process</label>
+        <textarea id="description" name="description" rows="5" maxlength="5000" placeholder="Outline responsibilities, required skills, service agreement/bond details (if any), and selection stages..."><%= form.description || '' %></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:8px;">
+    <button class="btn primary" type="submit">
+      <%- include('../partials/icon', { name: 'check', size: 15 }) %>
+      <span><%= isEdit ? 'Save Changes' : 'Create Recruitment Drive' %></span>
+    </button>
+    <a class="btn secondary" href="<%= isEdit ? `/admin/placement/drives/${form.drive_id}` : '/admin/placement' %>">
+      Cancel
+    </a>
+  </div>
+</form>
+
 <%- include('../partials/layout-end') %>

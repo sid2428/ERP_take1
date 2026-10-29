@@ -1,5 +1,7 @@
 <%- include('../partials/layout-start') %>
-<div class="page-head"><h1>Students</h1><span class="sub"><%= fmt.num(pager.total) %> matching records</span></div>
+<div class="page-head"><h1>Students</h1><span class="sub"><%= fmt.num(pager.total) %> matching records</span>
+  <div class="actions"><a class="btn secondary" href="/admin/students/expected-graduation-year-submissions">Review expected-year submissions</a></div>
+</div>
 <form class="filters" method="get" action="/admin/students">
   <label class="sr-only" for="q">Search</label>
   <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Name, student no., admission no. or e-mail">
