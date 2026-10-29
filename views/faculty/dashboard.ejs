@@ -48,7 +48,7 @@
     <div class="facts">
       <div><small>Casual leave left</small><span id="heroFactCl"><%= (leaveBalances.find(b => b.leave_name === 'Casual Leave')?.balance_days || 12) %> of 12 days</span></div>
       <div><small>Pending requests</small><span id="heroFactPending"><%= pendingLeaves %></span></div>
-      <div><small>Latest payslip</small><span id="heroFactPayslip"><%= latestPayslip ? `${latestPayslip.period_text} · ${latestPayslip.payment_status}` : 'Aug 2026 · Paid' %></span></div>
+      <div><small>Latest payslip</small><span id="heroFactPayslip"><%= latestPayslip ? `${latestPayslip.period_text} · ${latestPayslip.status}` : 'Aug 2026 · Paid' %></span></div>
       <div><small>PostgreSQL Status</small><span style="color:#9BE8C8">● Connected (Live)</span></div>
     </div>
   </div>

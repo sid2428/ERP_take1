@@ -160,9 +160,10 @@ describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
       faculty_id: String(fac!.faculty_id),
     });
     expect(res.status).toBe(302);
+    expect(res.headers.location).toBeDefined();
     expect(res.headers.location).toContain(`faculty_id=${fac!.faculty_id}`);
 
-    const verify = await adminAgent.get(res.headers.location);
+    const verify = await adminAgent.get(String(res.headers.location));
     expect(verify.status).toBe(200);
     expect(verify.text).toContain('FAC-CSE-074');
   });

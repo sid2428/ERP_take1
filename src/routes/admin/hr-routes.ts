@@ -132,10 +132,13 @@ hrAdminRouter.post('/payroll/generate', async (req, res) => {
 hrAdminRouter.post('/payroll/:id/status', async (req, res) => {
   const payrollId = idParam(req.params.id);
   const status = String(req.body.status || '').toUpperCase();
+  const back = typeof req.body.back === 'string' && req.body.back.startsWith('/admin/payroll')
+    ? req.body.back
+    : '/admin/payroll';
 
   if (!['APPROVED', 'PAID'].includes(status)) {
     flash(req, 'error', 'Invalid status. Can only set to APPROVED or PAID.');
-    return res.redirect('/admin/payroll');
+    return res.redirect(back);
   }
 
   try {
@@ -144,7 +147,7 @@ hrAdminRouter.post('/payroll/:id/status', async (req, res) => {
   } catch (err: any) {
     flash(req, 'error', friendlyDbError(err) ?? (err.message || 'Could not update payroll status.'));
   }
-  res.redirect('/admin/payroll');
+  res.redirect(back);
 });
 
 hrAdminRouter.get('/payroll/:id', async (req, res) => {

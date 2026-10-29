@@ -151,7 +151,14 @@
                   <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="hidden" name="status" value="APPROVED">
-                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px">Approve</button>
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small" style="padding:4px 8px;font-size:12px" title="Approve salary computation without marking as disbursed">Approve</button>
+                  </form>
+                  <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="status" value="PAID">
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)" title="Approve and disburse salary (shows as Paid to faculty)">Mark Paid</button>
                   </form>
                   <form method="post" action="/admin/payroll/generate" style="margin:0">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -164,7 +171,8 @@
                   <form method="post" action="/admin/payroll/<%= p.payroll_id %>/status" style="margin:0">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="hidden" name="status" value="PAID">
-                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)">Mark Paid</button>
+                    <input type="hidden" name="back" value="/admin/payroll?month=<%= p.payroll_month %>&year=<%= p.payroll_year %><%= typeof searchQuery !== 'undefined' && searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : '' %>">
+                    <button type="submit" class="btn small primary" style="padding:4px 8px;font-size:12px;background:var(--green);border-color:var(--green)" title="Confirm disbursement to faculty">Mark Paid</button>
                   </form>
                 <% } %>
               </div>
