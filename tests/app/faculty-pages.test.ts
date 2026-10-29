@@ -135,5 +135,35 @@ describe.skipIf(!hasAppEnv)('Faculty HTML Pages & Backend Actions', () => {
     expect(res.text).toContain('Faculty Payroll Administration');
     expect(res.text).toContain('Generate Monthly Payroll');
     expect(res.text).toContain('Payroll Records');
+    expect(res.text).toContain('Target Faculty Member');
+    expect(res.text).toContain('Search Faculty');
+  });
+
+  it('11. GET /admin/payroll?q=FAC-CSE-074 filters by faculty search query', async () => {
+    const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
+    const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
+    const res = await adminAgent.get('/admin/payroll?q=FAC-CSE-074');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('FAC-CSE-074');
+    expect(res.text).toContain('Filtered by: "FAC-CSE-074"');
+  });
+
+  it('12. POST /admin/payroll/generate computes payroll for a specific faculty member', async () => {
+    const adminPassword = process.env.ADMIN_PASSWORD || DEMO;
+    const adminAgent = (await signIn(app, 'admin', adminPassword)).agent;
+    const fac = await queryOne!<{ faculty_id: number }>('SELECT faculty_id FROM faculty WHERE faculty_code = $1', ['FAC-CSE-074']);
+    expect(fac).toBeDefined();
+
+    const res = await postForm(adminAgent, '/admin/payroll', '/admin/payroll/generate', {
+      month: '11',
+      year: '2026',
+      faculty_id: String(fac!.faculty_id),
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain(`faculty_id=${fac!.faculty_id}`);
+
+    const verify = await adminAgent.get(res.headers.location);
+    expect(verify.status).toBe(200);
+    expect(verify.text).toContain('FAC-CSE-074');
   });
 });
