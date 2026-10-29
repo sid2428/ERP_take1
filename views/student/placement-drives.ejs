@@ -171,7 +171,7 @@
 <% } %>
 
 <!-- Pagination -->
-<% if (totalPages > 1) { 
+<% if (totalPages > 1) {
   const pageLink = (target) => `?q=${encodeURIComponent(filters.q)}&type=${encodeURIComponent(filters.type)}&eligible=${encodeURIComponent(filters.eligible)}&page_size=${pageSize}&page=${target}`;
 %>
   <nav class="pager" aria-label="Placement drive pages" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-top:16px;">

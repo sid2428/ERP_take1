@@ -46,7 +46,7 @@
           <%= isPlaced ? 'Placed Student — Congratulations!' : 'Active Placement Candidate' %>
         </div>
         <div class="tnp-hero-desc">
-          <%= isPlaced 
+          <%= isPlaced
             ? `You have an accepted full-time offer. Under institutional placement rules, you remain eligible for full-time drives paying at least 1.5× (${(bestLpa * 1.5).toFixed(2)} LPA) or any internship drive.`
             : 'Explore open campus recruitment drives, verify your academic criteria, and submit applications before deadlines.' %>
         </div>
@@ -130,7 +130,7 @@
       <h2>Placement Cell Guidelines &amp; Institutional Policy</h2>
     </div>
     <p class="note">Standards enforced programmatically by the ERP database for fair campus placement.</p>
-    
+
     <div class="stack" style="gap:12px;font-size:13px;line-height:1.5;color:var(--text-2);">
       <div style="display:flex;gap:10px;align-items:flex-start;">
         <div style="color:var(--link);flex:none;margin-top:2px;"><%- include('../partials/icon', { name: 'check', size: 16 }) %></div>
